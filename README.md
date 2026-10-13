@@ -106,7 +106,11 @@ dotnet build InstagramStoryViewer.sln
 dotnet test tests/InstagramStoryViewer.Tests
 dotnet publish src/InstagramStoryViewer.Gui -c Release -r win-x64 -o out
 ```
-To publish a new version: bump `<Version>` in `InstagramStoryViewer.Gui.csproj`, then push a tag such as `v2.3.0`. GitHub Actions builds the exe and adds it to Releases.
+To publish a new version, bump `<Version>` in `InstagramStoryViewer.Gui.csproj`, then use either of these:
+- Push a tag such as `v2.3.0`.
+- Or, from the **Actions** page, open **build** and click **Run workflow** with **release** ticked. GitHub creates the tag itself.
+
+In both cases, GitHub Actions builds the exe and adds it to Releases.
 
 ## Instagram endpoints used
 | Purpose | Endpoint |
