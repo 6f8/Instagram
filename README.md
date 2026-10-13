@@ -10,7 +10,19 @@ A .NET 8 console program for viewing Instagram stories with **your own account's
 - Handles Instagram's responses: expired session, account verification (checkpoint), rate limits (429), private accounts, and non-JSON responses
 - Automatic retries with exponential backoff, plus a delay between requests to avoid getting blocked
 
-## Requirements
+## Download (Windows)
+A ready-to-run executable is at [`release/win-x64/InstagramStoryViewer.exe`](release/win-x64/InstagramStoryViewer.exe). It is a single self-contained file, so .NET does **not** need to be installed. Double-click it, or run it from a terminal:
+```powershell
+.\InstagramStoryViewer.exe --user natgeo --download
+```
+
+To rebuild the exe yourself:
+```bash
+cd src/InstagramStoryViewer
+dotnet publish -c Release -r win-x64 -o ../../release/win-x64
+```
+
+## Requirements (to build from source)
 - [.NET 8 SDK](https://dotnet.microsoft.com/download)
 
 ## Getting your session (sessionid)
