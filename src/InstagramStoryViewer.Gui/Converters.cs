@@ -13,7 +13,18 @@ namespace InstagramStoryViewer.Gui;
 /// </summary>
 public sealed class ImageSourceConverter : IValueConverter
 {
+    private const int MaxCached = 400;
     private static readonly ConcurrentDictionary<string, BitmapImage> Cache = new();
+    private static readonly ConcurrentQueue<string> CacheOrder = new();
+
+    /// <summary>Evicts the oldest entries instead of dropping the whole cache at once.</summary>
+    private static void Remember(string key, BitmapImage bmp)
+    {
+        Cache[key] = bmp;
+        CacheOrder.Enqueue(key);
+        while (Cache.Count > MaxCached && CacheOrder.TryDequeue(out var oldest))
+            Cache.TryRemove(oldest, out _);
+    }
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
@@ -32,9 +43,11 @@ public sealed class ImageSourceConverter : IValueConverter
             // OnLoad releases local files right away so they can be deleted or moved.
             bmp.CacheOption = BitmapCacheOption.OnLoad;
             bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
+            // A failed download must not stay cached forever (it would leave the image blank until restart).
+            bmp.DownloadFailed += (_, _) => Cache.TryRemove(key, out _);
+            bmp.DecodeFailed += (_, _) => Cache.TryRemove(key, out _);
             bmp.EndInit();
-            if (Cache.Count > 600) Cache.Clear();
-            Cache[key] = bmp;
+            Remember(key, bmp);
             return bmp;
         }
         catch (Exception ex) when (ex is IOException or NotSupportedException or UriFormatException or ArgumentException)
@@ -88,6 +101,18 @@ public sealed class EnumToBoolConverter : IValueConverter
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         value is true && parameter is string p ? Enum.Parse(targetType, p) : Binding.DoNothing;
+}
+
+/// <summary>Two-way bridge between a numeric/string property and a RadioButton (ConverterParameter = value).</summary>
+public sealed class ValueToBoolConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        string.Equals(System.Convert.ToString(value, CultureInfo.InvariantCulture), parameter?.ToString(), StringComparison.Ordinal);
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is true && parameter is string p
+            ? System.Convert.ChangeType(p, Nullable.GetUnderlyingType(targetType) ?? targetType, CultureInfo.InvariantCulture)
+            : Binding.DoNothing;
 }
 
 /// <summary>Picks a stable colour for an avatar placeholder from the username.</summary>

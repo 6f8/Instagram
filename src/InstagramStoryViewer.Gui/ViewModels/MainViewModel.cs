@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using InstagramStoryViewer.Api;
+using InstagramStoryViewer.Diagnostics;
 using InstagramStoryViewer.Gui.Services;
 using InstagramStoryViewer.Services;
 
@@ -20,7 +21,8 @@ public interface IDialogService
     /// Opens each story URL in the embedded browser so Instagram records a real view.
     /// Returns how many stories were shown (in order).
     /// </summary>
-    Task<int> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls);
+    /// <param name="background">Run in the small corner window without stealing focus (auto-watch).</param>
+    Task<int> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls, bool background);
 }
 
 public sealed partial class MainViewModel : ObservableObject, IDisposable
@@ -29,10 +31,17 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private readonly AppSettings _settings;
     private readonly DispatcherTimer _trayTimer;
     private readonly DispatcherTimer _toastTimer;
+    private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
     private InstagramClient? _client;
     private StoryDownloader? _downloader;
+    private readonly DispatcherTimer _autoWatchPreviewTimer;
+    private readonly DispatcherTimer _saveCookiesTimer;
+    private readonly DispatcherTimer _statsTimer;
     private CancellationTokenSource _storiesCts = new();
-    private string? _sessionCookieHeader;
+    private CancellationTokenSource _lifetimeCts = new();
+    private bool _persistSession;
+    private bool _isWindowActive = true;
+    private DateTime _lastTrayRefresh = DateTime.MinValue;
 
     public MainViewModel(IDialogService dialogs)
     {
@@ -41,9 +50,34 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _downloadFolder = _settings.DownloadFolder;
         _confirmBeforeMarkSeen = _settings.ConfirmBeforeMarkSeen;
         _autoPlayVideos = _settings.AutoPlayVideos;
+        _autoWatchOnPreview = _settings.AutoWatchOnPreview;
+        _autoWatchNew = _settings.AutoWatchNew;
+        _autoWatchDailyLimit = _settings.AutoWatchDailyLimit;
+        _maxRequestsPerHour = _settings.MaxRequestsPerHour;
 
-        _trayTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
-        _trayTimer.Tick += async (_, _) => await RefreshTrayAsync(silent: true);
+        _trayTimer = new DispatcherTimer();
+        _trayTimer.Tick += async (_, _) => await SafeAsync(async () =>
+        {
+            _trayTimer.Stop();
+            await RefreshTrayAsync(silent: true);
+            ScheduleTrayRefresh();
+        });
+        _autoWatchPreviewTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+        _autoWatchPreviewTimer.Tick += async (_, _) => await SafeAsync(async () =>
+        {
+            _autoWatchPreviewTimer.Stop();
+            await AutoWatchSelectedAsync();
+        });
+        // Instagram rotates cookies in bursts; save once things settle instead of on every response.
+        _saveCookiesTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _saveCookiesTimer.Tick += (_, _) =>
+        {
+            _saveCookiesTimer.Stop();
+            PersistCookies();
+        };
+        _statsTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
+        _statsTimer.Tick += (_, _) => OnPropertyChanged(nameof(RequestsLastHour));
+        _statsTimer.Start();
         _toastTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
         _toastTimer.Tick += (_, _) => { _toastTimer.Stop(); Toast = null; };
 
@@ -98,6 +132,31 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private string _downloadFolder;
     [ObservableProperty] private bool _confirmBeforeMarkSeen;
     [ObservableProperty] private bool _autoPlayVideos;
+    [ObservableProperty] private bool _autoWatchOnPreview;
+    [ObservableProperty] private bool _autoWatchNew;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(AutoWatchStatus))] private int _autoWatchDailyLimit;
+    [ObservableProperty] private int _maxRequestsPerHour;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(AutoWatchStatus))] private bool _isAutoWatching;
+
+    public int RequestsLastHour => _client?.RequestsLastHour ?? 0;
+    public bool DisclaimerAccepted => _settings.AcceptedDisclaimer;
+
+    public void AcceptDisclaimer()
+    {
+        _settings.AcceptedDisclaimer = true;
+        SaveSettings();
+    }
+    public string AutoWatchStatus =>
+        $"شوهد تلقائياً اليوم: {AutoWatchedToday} من {AutoWatchDailyLimit}" + (IsAutoWatching ? " · جارٍ الآن..." : "");
+
+    private int AutoWatchedToday
+    {
+        get
+        {
+            ResetDailyCounterIfNeeded();
+            return _settings.AutoWatchedToday;
+        }
+    }
 
     public bool HasCurrentUser => CurrentUsername is not null;
     public bool ShowEmpty => Stories.Count == 0 && !IsLoadingStories;
@@ -128,6 +187,40 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SaveSettings();
     }
 
+    partial void OnAutoWatchOnPreviewChanged(bool value)
+    {
+        _settings.AutoWatchOnPreview = value;
+        SaveSettings();
+    }
+
+    partial void OnAutoWatchNewChanged(bool value)
+    {
+        _settings.AutoWatchNew = value;
+        SaveSettings();
+        ScheduleTrayRefresh();
+        if (value) _ = SafeAsync(() => RunAutoWatchAsync());
+    }
+
+    partial void OnAutoWatchDailyLimitChanged(int value)
+    {
+        _settings.AutoWatchDailyLimit = value;
+        SaveSettings();
+    }
+
+    partial void OnMaxRequestsPerHourChanged(int value)
+    {
+        _settings.MaxRequestsPerHour = value;
+        if (_client is not null) _client.MaxRequestsPerHour = value;
+        SaveSettings();
+    }
+
+    partial void OnSelectedStoryChanged(StoryRowViewModel? value)
+    {
+        _autoWatchPreviewTimer.Stop();
+        if (AutoWatchOnPreview && value is { MarkedSeen: false } && IsLoggedIn)
+            _autoWatchPreviewTimer.Start(); // only if the user stays on it for a moment
+    }
+
     partial void OnIsLoadingStoriesChanged(bool value) => OnPropertyChanged(nameof(ShowEmpty));
 
     partial void OnPageChanged(AppPage value)
@@ -156,7 +249,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             Directory.CreateDirectory(VideoCacheFolder);
-            await _client.DownloadAsync(row.MediaUrl, path, ct);
+            try
+            {
+                await _client.DownloadAsync(row.MediaUrl, path, ct);
+            }
+            catch (InstagramApiException ex) when (ex.Kind == InstagramErrorKind.MediaExpired)
+            {
+                if (!await RefreshRowAsync(row, ct)) throw;
+                await _client.DownloadAsync(row.MediaUrl!, path, ct);
+            }
             return path;
         }
         catch (OperationCanceledException)
@@ -194,7 +295,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         RefreshDownloads();
         var saved = SettingsStore.Unprotect(_settings.ProtectedSession);
         if (saved is not null)
-            await TryLoginAsync(saved, persist: false);
+            await TryLoginAsync(saved, persist: true);
     }
 
     [RelayCommand]
@@ -234,7 +335,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             var cookies = SessionCookies.Parse(cookieText);
-            var client = new InstagramClient(cookies, msg => ShowToast(msg));
+            var client = new InstagramClient(cookies, msg => ShowToast(msg)) { MaxRequestsPerHour = MaxRequestsPerHour };
 
             // The tray doubles as a session check. If only the tray endpoint misbehaves, fall back to
             // the account-info endpoint so the user can still log in and search for accounts.
@@ -254,19 +355,24 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             _client?.Dispose();
             _client = client;
-            _sessionCookieHeader = cookies.ToHeader(); // normalised "name=value; ..." form
             _downloader = new StoryDownloader(client, DownloadFolder);
 
-            if (persist)
+            // Instagram rotates cookies while the session is used; keep the saved copy current so the
+            // stored login does not go stale.
+            _persistSession = persist;
+            cookies.Changed += (_, _) => _dispatcher.BeginInvoke(() =>
             {
-                _settings.ProtectedSession = SettingsStore.Protect(cookieText.Trim());
-                SaveSettings();
-            }
+                _saveCookiesTimer.Stop();
+                _saveCookiesTimer.Start();
+            });
+            if (persist) PersistCookies();
 
             IsLoggedIn = true;
             OnPropertyChanged(nameof(ViewerId));
             ApplyTray(tray);
-            _trayTimer.Start();
+            _lastTrayRefresh = DateTime.UtcNow;
+            ScheduleTrayRefresh();
+            if (AutoWatchNew) _ = SafeAsync(() => RunAutoWatchAsync());
             if (trayError is null) ShowToast("تم تسجيل الدخول بنجاح");
             else ShowToast($"تم تسجيل الدخول، لكن تعذّر جلب ستوريات من تتابعهم. يمكنك البحث عن أي حساب.\n{DiagnosticsHint}", isError: true);
         }
@@ -299,10 +405,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private void SignOut(string? reason)
     {
         _trayTimer.Stop();
+        _autoWatchPreviewTimer.Stop();
+        _saveCookiesTimer.Stop();
         _storiesCts.Cancel();
+        _lifetimeCts.Cancel();
+        _lifetimeCts = new CancellationTokenSource();
         _client?.Dispose();
         _client = null;
         _downloader = null;
+        _persistSession = false;
         _settings.ProtectedSession = null;
         _settings.ClearBrowserOnNextLogin = reason is null; // explicit logout → forget browser login too
         SaveSettings();
@@ -329,7 +440,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             ApplyTray(await _client.GetStoriesTrayAsync());
+            _lastTrayRefresh = DateTime.UtcNow;
             if (!silent) ShowToast("تم تحديث القائمة");
+            if (AutoWatchNew) _ = SafeAsync(() => RunAutoWatchAsync());
         }
         catch (InstagramApiException ex)
         {
@@ -416,8 +529,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             foreach (var item in reel.Items)
             {
                 var row = new StoryRowViewModel(item, username, userId, ++i);
-                var path = _downloader!.GetPath(username, item);
-                if (File.Exists(path))
+                var path = _downloader!.FindExistingPath(username, item);
+                if (path is not null)
                 {
                     row.LocalPath = path;
                     row.SizeText = Format.Size(new FileInfo(path).Length);
@@ -479,13 +592,28 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             var progress = new Progress<double>(p => row.Progress = p * 100);
-            var path = await _downloader.DownloadAsync(row.Username, row.Item, CancellationToken.None, progress);
+            string path;
+            try
+            {
+                path = await _downloader.DownloadAsync(row.Username, row.Item, _lifetimeCts.Token, progress);
+            }
+            catch (InstagramApiException ex) when (ex.Kind == InstagramErrorKind.MediaExpired)
+            {
+                // The CDN link expired while the list was open: fetch a fresh one and retry once.
+                if (!await RefreshRowAsync(row, _lifetimeCts.Token)) throw;
+                path = await _downloader.DownloadAsync(row.Username, row.Item, _lifetimeCts.Token, progress);
+            }
             row.LocalPath = path;
             row.SizeText = Format.Size(new FileInfo(path).Length);
             row.State = DownloadState.Done;
             return true;
         }
-        catch (Exception ex) when (ex is InstagramApiException or HttpRequestException or IOException or TaskCanceledException
+        catch (OperationCanceledException)
+        {
+            row.State = DownloadState.None; // cancelled by sign-out / exit, not a failure
+            return false;
+        }
+        catch (Exception ex) when (ex is InstagramApiException or HttpRequestException or IOException
                                        or UnauthorizedAccessException)
         {
             row.State = DownloadState.Failed;
@@ -495,31 +623,35 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    public void RefreshDownloads()
+    private int _downloadsScanVersion;
+
+    /// <summary>Rescans the download folder on a worker thread so large folders do not freeze the window.</summary>
+    public async void RefreshDownloads()
     {
-        Downloads.Clear();
-        long total = 0;
+        var version = ++_downloadsScanVersion;
+        var folder = DownloadFolder;
         try
         {
-            if (Directory.Exists(DownloadFolder))
+            var files = await Task.Run(() =>
             {
-                var root = new DirectoryInfo(DownloadFolder);
-                var files = root.EnumerateFiles("*.*", SearchOption.AllDirectories)
+                if (!Directory.Exists(folder)) return new List<DownloadedFileViewModel>();
+                return new DirectoryInfo(folder).EnumerateFiles("*.*", SearchOption.AllDirectories)
                     .Where(f => f.Extension is ".jpg" or ".mp4")
-                    .OrderByDescending(f => f.LastWriteTimeUtc);
-                foreach (var f in files)
-                {
-                    Downloads.Add(new DownloadedFileViewModel(f, DownloadFolder));
-                    total += f.Length;
-                }
-            }
+                    .OrderByDescending(f => f.LastWriteTimeUtc)
+                    .Select(f => new DownloadedFileViewModel(f, folder))
+                    .ToList();
+            });
+            if (version != _downloadsScanVersion) return; // a newer scan superseded this one
+
+            Downloads.Clear();
+            foreach (var f in files) Downloads.Add(f);
+            DownloadedCount = files.Count;
+            DownloadedSize = Format.Size(files.Sum(f => f.SizeBytes));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             ShowToast($"تعذّر قراءة مجلد التنزيل: {ex.Message}", isError: true);
         }
-        DownloadedCount = Downloads.Count;
-        DownloadedSize = Format.Size(total);
     }
 
     [RelayCommand]
@@ -593,20 +725,174 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (CurrentUsername is not null) UpdateTraySeen(CurrentUsername);
     }
 
-    private async Task<int> WatchRowsAsync(IReadOnlyList<StoryRowViewModel> rows)
+    private async Task<int> WatchRowsAsync(IReadOnlyList<StoryRowViewModel> rows, bool background = false)
     {
-        if (_sessionCookieHeader is null) return 0;
+        if (_client is null) return 0;
         var urls = rows.Select(r => StoryUrl(r)).ToList();
-        var watched = await _dialogs.WatchStoriesAsync(_sessionCookieHeader, urls);
+        var watched = await _dialogs.WatchStoriesAsync(_client.Cookies.ToHeader(), urls, background);
         for (var i = 0; i < Math.Min(watched, rows.Count); i++)
             rows[i].MarkedSeen = true;
         return watched;
     }
 
-    private static string StoryUrl(StoryRowViewModel row)
+    private static string StoryUrl(StoryRowViewModel row) => StoryUrl(row.Username, row.Item);
+
+    private static string StoryUrl(string username, Models.StoryItem item)
     {
-        var pk = row.Item.Pk ?? row.Item.Id?.Split('_')[0];
-        return $"https://www.instagram.com/stories/{Uri.EscapeDataString(row.Username)}/{pk}/";
+        var pk = item.Pk ?? item.Id?.Split('_')[0];
+        return $"https://www.instagram.com/stories/{Uri.EscapeDataString(username)}/{pk}/";
+    }
+
+    // ================================================================== auto-watch
+
+    private void ResetDailyCounterIfNeeded()
+    {
+        var today = DateTime.Now.ToString("yyyy-MM-dd");
+        if (_settings.AutoWatchDay == today) return;
+        _settings.AutoWatchDay = today;
+        _settings.AutoWatchedToday = 0;
+    }
+
+    private int AutoWatchBudget => Math.Max(0, AutoWatchDailyLimit - AutoWatchedToday);
+
+    private void CountAutoWatched(int n)
+    {
+        if (n <= 0) return;
+        ResetDailyCounterIfNeeded();
+        _settings.AutoWatchedToday += n;
+        SaveSettings();
+        OnPropertyChanged(nameof(AutoWatchStatus));
+    }
+
+    /// <summary>"Watch on preview": the user lingered on an unwatched story.</summary>
+    private async Task AutoWatchSelectedAsync()
+    {
+        var row = SelectedStory;
+        if (row is null || row.MarkedSeen || !AutoWatchOnPreview || IsAutoWatching || AutoWatchBudget == 0) return;
+        var n = await WatchRowsAsync([row], background: true);
+        CountAutoWatched(n);
+        UpdateTraySeen(row.Username);
+    }
+
+    /// <summary>
+    /// Background auto-watch: plays the unseen stories of followed accounts in the corner window, within
+    /// the daily limit. Stories newer than the reel's "seen" marker are the unseen ones.
+    /// </summary>
+    private async Task RunAutoWatchAsync()
+    {
+        if (!AutoWatchNew || IsAutoWatching || _client is null) return;
+        var budget = AutoWatchBudget;
+        if (budget == 0) return;
+
+        var targets = TrayUsers.Where(u => u.HasUnseen).Take(20).ToList();
+        if (targets.Count == 0) return;
+
+        IsAutoWatching = true;
+        try
+        {
+            var reels = await _client.GetStoriesForUsersAsync(targets.Select(t => t.UserId), _lifetimeCts.Token);
+            var queue = new List<(TrayUserViewModel User, string Url)>();
+            foreach (var reel in reels)
+            {
+                var user = targets.FirstOrDefault(t => t.UserId == (reel.User?.Pk ?? reel.Id));
+                if (user is null) continue;
+                var seen = reel.Seen ?? 0;
+                foreach (var item in reel.Items!.Where(i => i.TakenAt > seen))
+                    queue.Add((user, StoryUrl(user.Username, item)));
+            }
+            queue = queue.Take(budget).ToList();
+            if (queue.Count == 0) return;
+
+            var watched = await _dialogs.WatchStoriesAsync(_client.Cookies.ToHeader(), queue.Select(q => q.Url).ToList(), background: true);
+            CountAutoWatched(watched);
+
+            // Accounts whose every queued story was shown are now fully seen.
+            foreach (var group in queue.Take(watched).GroupBy(q => q.User))
+                if (queue.Count(q => q.User == group.Key) == group.Count())
+                    group.Key.HasUnseen = false;
+            UnseenAccounts = TrayUsers.Count(u => u.HasUnseen);
+            if (watched > 0) ShowToast($"المشاهدة التلقائية: شوهد {watched} ستوري");
+        }
+        catch (InstagramApiException ex)
+        {
+            await HandleErrorAsync(ex, silent: true);
+        }
+        catch (OperationCanceledException)
+        {
+            // signed out
+        }
+        finally
+        {
+            IsAutoWatching = false;
+        }
+    }
+
+    // ================================================================== activity-aware refresh
+
+    /// <summary>Called by the window when it is activated, deactivated, minimised or restored.</summary>
+    public void SetWindowActive(bool active)
+    {
+        if (_isWindowActive == active) return;
+        _isWindowActive = active;
+        if (active && IsLoggedIn && DateTime.UtcNow - _lastTrayRefresh > TimeSpan.FromMinutes(10))
+            _ = SafeAsync(() => RefreshTrayAsync(silent: true));
+        ScheduleTrayRefresh();
+    }
+
+    /// <summary>
+    /// Refreshes at irregular intervals, and only while the window is in use (or auto-watch is on, at a much
+    /// slower pace). A fixed 5-minute loop running all day is a classic bot signature.
+    /// </summary>
+    private void ScheduleTrayRefresh()
+    {
+        _trayTimer.Stop();
+        if (!IsLoggedIn) return;
+        double minutes;
+        if (_isWindowActive) minutes = 6 + Random.Shared.NextDouble() * 4;        // 6–10 min
+        else if (AutoWatchNew) minutes = 20 + Random.Shared.NextDouble() * 10;    // 20–30 min
+        else return;                                                               // idle: no traffic
+        _trayTimer.Interval = TimeSpan.FromMinutes(minutes);
+        _trayTimer.Start();
+    }
+
+    // ================================================================== session persistence
+
+    private void PersistCookies()
+    {
+        if (!_persistSession || _client is null || _client.Cookies.IsRevoked) return;
+        _settings.ProtectedSession = SettingsStore.Protect(_client.Cookies.ToHeader());
+        SaveSettings();
+    }
+
+    /// <summary>Re-fetches a story whose CDN link expired and swaps in the fresh item.</summary>
+    private async Task<bool> RefreshRowAsync(StoryRowViewModel row, CancellationToken ct)
+    {
+        if (_client is null) return false;
+        try
+        {
+            var reel = await _client.GetUserStoriesAsync(row.OwnerId, ct);
+            var fresh = reel?.Items?.FirstOrDefault(i => i.Pk == row.Item.Pk);
+            if (fresh is null) return false;
+            row.ReplaceItem(fresh);
+            return true;
+        }
+        catch (InstagramApiException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Runs fire-and-forget UI work without letting an unexpected exception crash the app.</summary>
+    private async Task SafeAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            ShowToast($"خطأ غير متوقع: {ex.Message}", isError: true);
+        }
     }
 
     private void UpdateTraySeen(string username)
@@ -632,9 +918,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         try
         {
             Directory.CreateDirectory(SettingsStore.AppDataFolder);
+            // Tokens and account ids are masked so the file is safe to share.
             File.WriteAllText(DiagnosticsPath,
-                $"Time: {DateTime.Now:u}\nRequest: {ex.RequestPath}\nStatus: {(int?)ex.StatusCode}\nContent-Type: {ex.ContentType}\n" +
-                $"Error: {ex.Message}\n\n----- response body -----\n{ex.ResponseBody}");
+                $"Time: {DateTime.Now:u}\nRequest: {DiagnosticsSanitizer.Sanitize(ex.RequestPath)}\nStatus: {(int?)ex.StatusCode}\n" +
+                $"Content-Type: {ex.ContentType}\nError: {DiagnosticsSanitizer.Sanitize(ex.Message)}\n\n" +
+                $"----- response body (sensitive values masked) -----\n{DiagnosticsSanitizer.Sanitize(ex.ResponseBody)}");
             return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -715,6 +1003,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _trayTimer.Stop();
+        _statsTimer.Stop();
+        _autoWatchPreviewTimer.Stop();
+        if (_saveCookiesTimer.IsEnabled)
+        {
+            _saveCookiesTimer.Stop();
+            PersistCookies(); // flush a pending cookie rotation before exit
+        }
+        _lifetimeCts.Cancel();
         _storiesCts.Cancel();
         _storiesCts.Dispose();
         _client?.Dispose();

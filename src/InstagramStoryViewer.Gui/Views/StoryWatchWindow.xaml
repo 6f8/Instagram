@@ -3,25 +3,28 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wv="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="مشاهدة الستوري"
-        Width="440" Height="800"
-        WindowStartupLocation="CenterOwner"
+        Width="300" Height="560"
+        WindowStartupLocation="Manual"
+        ResizeMode="NoResize"
+        WindowStyle="ToolWindow"
+        ShowActivated="False"
+        ShowInTaskbar="False"
         FlowDirection="RightToLeft"
         FontFamily="{StaticResource AppFont}"
         Foreground="{StaticResource TextBrush}"
-        Background="{StaticResource BgBrush}"
-        ShowInTaskbar="False">
+        Background="{StaticResource BgBrush}">
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="16,10">
+        <Border Background="{StaticResource PanelBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="10,6">
             <DockPanel>
-                <Button DockPanel.Dock="Right" Content="إيقاف" Click="Stop_Click" Padding="12,4" />
+                <Button DockPanel.Dock="Right" Content="إيقاف" Click="Stop_Click" Padding="10,2" FontSize="12" />
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Style="{StaticResource Icon}" Text="&#xE8F4;" Foreground="{StaticResource PinkBrush}" Margin="0,0,10,0" />
-                    <TextBlock x:Name="StatusText" Text="جاري فتح الستوري..." Style="{StaticResource Muted}" FontSize="13" />
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE8F4;" FontSize="14" Foreground="{StaticResource PinkBrush}" Margin="0,0,8,0" />
+                    <TextBlock x:Name="StatusText" Text="جاري التحضير..." Style="{StaticResource Muted}" FontSize="12" />
                 </StackPanel>
             </DockPanel>
         </Border>

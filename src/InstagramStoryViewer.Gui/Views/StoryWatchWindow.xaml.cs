@@ -6,8 +6,9 @@ using Microsoft.Web.WebView2.Core;
 namespace InstagramStoryViewer.Gui.Views;
 
 /// <summary>
-/// Plays stories in the embedded browser so Instagram records a genuine view. Instagram's web app shows a
-/// "View story" confirmation before playing a story opened by URL; this window presses it automatically.
+/// Small corner window that plays stories in the embedded browser so Instagram records a genuine view.
+/// Instagram's web app shows a "View story" confirmation before playing a story opened by URL; this window
+/// presses it automatically. One instance is reused for every batch (manual and automatic).
 /// </summary>
 public partial class StoryWatchWindow : Window
 {
@@ -28,80 +29,102 @@ public partial class StoryWatchWindow : Window
         })()
         """;
 
-    private readonly string _cookieHeader;
-    private readonly IReadOnlyList<string> _urls;
-    private readonly CancellationTokenSource _cts = new();
+    private CancellationTokenSource _batchCts = new();
+    private Task? _init;
+    private bool _closed;
 
-    public int WatchedCount { get; private set; }
-
-    public StoryWatchWindow(string cookieHeader, IReadOnlyList<string> storyUrls)
+    public StoryWatchWindow()
     {
         InitializeComponent();
-        _cookieHeader = cookieHeader;
-        _urls = storyUrls;
-        Loaded += async (_, _) => await RunAsync();
         Closed += (_, _) =>
         {
-            _cts.Cancel();
+            _closed = true;
+            _batchCts.Cancel();
             Web.Dispose();
         };
     }
 
-    private void Stop_Click(object sender, RoutedEventArgs e) => Close();
+    public bool IsAlive => !_closed;
 
-    private async Task RunAsync()
+    /// <summary>Places the window in the bottom-left corner of the owner's screen work area.</summary>
+    public void PlaceInCorner()
     {
-        try
-        {
-            Directory.CreateDirectory(SettingsStore.WebViewDataFolder);
-            var env = await CoreWebView2Environment.CreateAsync(null, SettingsStore.WebViewDataFolder);
-            await Web.EnsureCoreWebView2Async(env);
-        }
-        catch (Exception ex) when (ex is WebView2RuntimeNotFoundException or InvalidOperationException
-                                       or System.Runtime.InteropServices.COMException or UnauthorizedAccessException or IOException)
-        {
-            ConfirmDialog.Info(this, ex is WebView2RuntimeNotFoundException
-                ? "مكوّن Microsoft Edge WebView2 غير مثبت. ثبّته من موقع مايكروسوفت (Evergreen Runtime)."
-                : $"تعذّر تشغيل المتصفح المدمج: {ex.Message}");
-            Close();
-            return;
-        }
+        var area = SystemParameters.WorkArea;
+        Left = area.Left + 16;
+        Top = area.Bottom - Height - 16;
+    }
 
-        var core = Web.CoreWebView2;
-        core.IsMuted = true;
-        core.Settings.AreDevToolsEnabled = false;
-        ApplySessionCookies(core);
+    private void Stop_Click(object sender, RoutedEventArgs e) => _batchCts.Cancel();
+
+    /// <summary>Plays the given stories in order. Returns how many were shown.</summary>
+    public async Task<int> PlayAsync(string cookieHeader, IReadOnlyList<string> urls)
+    {
+        _batchCts = new CancellationTokenSource();
+        var ct = _batchCts.Token;
+        var watched = 0;
 
         try
         {
-            for (var i = 0; i < _urls.Count; i++)
+            _init ??= InitializeBrowserAsync();
+            await _init;
+            if (_closed) return 0;
+
+            var core = Web.CoreWebView2;
+            ApplySessionCookies(core, cookieHeader);
+
+            for (var i = 0; i < urls.Count; i++)
             {
-                StatusText.Text = _urls.Count == 1 ? "جاري مشاهدة الستوري..." : $"جاري مشاهدة الستوري {i + 1} من {_urls.Count}...";
-                Progress.Value = (double)i / _urls.Count;
+                StatusText.Text = urls.Count == 1 ? "جاري مشاهدة الستوري..." : $"مشاهدة {i + 1} من {urls.Count}...";
+                Progress.Value = (double)i / urls.Count;
 
-                var result = await PlayAsync(core, _urls[i], _cts.Token);
+                var result = await PlayOneAsync(core, urls[i], ct);
                 if (result == "login")
                 {
-                    ConfirmDialog.Info(this, "المتصفح المدمج غير مسجّل الدخول في إنستجرام. سجّل الخروج من البرنامج ثم ادخل عبر زر \"تسجيل الدخول عبر إنستجرام\".");
+                    StatusText.Text = "المتصفح غير مسجّل الدخول";
                     break;
                 }
                 if (result is not ("clicked" or "playing")) continue; // story unavailable (expired/deleted)
 
-                await Task.Delay(ViewDuration, _cts.Token);
-                WatchedCount = i + 1;
+                // Vary the dwell time slightly, like a person would.
+                await Task.Delay(ViewDuration + TimeSpan.FromMilliseconds(Random.Shared.Next(0, 1500)), ct);
+                watched = i + 1;
             }
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or InvalidOperationException
                                        or System.Runtime.InteropServices.COMException)
         {
-            // stopped by the user (closing the window disposes the browser mid-call)
+            // stopped by the user, or the window was closed mid-call
+        }
+        catch (Exception ex) when (ex is WebView2RuntimeNotFoundException or UnauthorizedAccessException or IOException)
+        {
+            ConfirmDialog.Info(this, ex is WebView2RuntimeNotFoundException
+                ? "مكوّن Microsoft Edge WebView2 غير مثبت. ثبّته من موقع مايكروسوفت (Evergreen Runtime)."
+                : $"تعذّر تشغيل المتصفح المدمج: {ex.Message}");
+            Close();
         }
 
-        if (IsLoaded) Close();
+        if (!_closed)
+        {
+            Progress.Value = 1;
+            StatusText.Text = $"تمت مشاهدة {watched}";
+            // Park on a blank page so nothing keeps playing between batches.
+            try { Web.CoreWebView2?.Navigate("about:blank"); }
+            catch (InvalidOperationException) { }
+        }
+        return watched;
+    }
+
+    private async Task InitializeBrowserAsync()
+    {
+        Directory.CreateDirectory(SettingsStore.WebViewDataFolder);
+        var env = await CoreWebView2Environment.CreateAsync(null, SettingsStore.WebViewDataFolder);
+        await Web.EnsureCoreWebView2Async(env);
+        Web.CoreWebView2.IsMuted = true;
+        Web.CoreWebView2.Settings.AreDevToolsEnabled = false;
     }
 
     /// <summary>Navigates to a story and waits until it is playing. Returns the script's last state.</summary>
-    private static async Task<string> PlayAsync(CoreWebView2 core, string url, CancellationToken ct)
+    private static async Task<string> PlayOneAsync(CoreWebView2 core, string url, CancellationToken ct)
     {
         var navigated = new TaskCompletionSource();
         void OnCompleted(object? s, CoreWebView2NavigationCompletedEventArgs e) => navigated.TrySetResult();
@@ -141,10 +164,10 @@ public partial class StoryWatchWindow : Window
         return clicked ? "clicked" : state;
     }
 
-    /// <summary>Puts the app's session into the browser, so pasting a cookie also works here.</summary>
-    private void ApplySessionCookies(CoreWebView2 core)
+    /// <summary>Puts the app's current session into the browser, so pasting a cookie also works here.</summary>
+    private static void ApplySessionCookies(CoreWebView2 core, string cookieHeader)
     {
-        foreach (var part in _cookieHeader.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        foreach (var part in cookieHeader.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             var eq = part.IndexOf('=');
             if (eq <= 0) continue;

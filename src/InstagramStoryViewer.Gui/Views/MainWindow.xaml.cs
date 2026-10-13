@@ -18,9 +18,49 @@ public partial class MainWindow : Window, IDialogService
         DataContext = _vm;
         _vm.PropertyChanged += OnViewModelPropertyChanged;
 
-        StateChanged += (_, _) => UpdateMaximizedState();
-        Loaded += async (_, _) => await _vm.InitializeAsync();
-        Closed += (_, _) => _vm.Dispose();
+        StateChanged += (_, _) =>
+        {
+            UpdateMaximizedState();
+            // Minimised = not in use: the view model slows or stops background refreshes.
+            _vm.SetWindowActive(WindowState != WindowState.Minimized);
+        };
+        Loaded += async (_, _) => await OnLoadedAsync();
+        Closed += (_, _) =>
+        {
+            if (_watcher is { IsAlive: true }) _watcher.Close();
+            _vm.Dispose();
+        };
+    }
+
+    private async Task OnLoadedAsync()
+    {
+        if (!ShowDisclaimerIfNeeded())
+        {
+            Close();
+            return;
+        }
+        try
+        {
+            await _vm.InitializeAsync();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _vm.ShowToast($"تعذّر بدء البرنامج بشكل كامل: {ex.Message}", isError: true);
+        }
+    }
+
+    /// <summary>First start only: explains the risks of using unofficial Instagram endpoints.</summary>
+    private bool ShowDisclaimerIfNeeded()
+    {
+        if (_vm.DisclaimerAccepted) return true;
+        var ok = ConfirmDialog.Show(this,
+            "تنبيه قبل البدء:\n\n" +
+            "• هذا البرنامج غير تابع لإنستجرام ويستخدم واجهاته غير الرسمية، وقد يخالف ذلك شروط الاستخدام.\n" +
+            "• الإفراط في الاستخدام قد يؤدي إلى تقييد حسابك مؤقتاً؛ البرنامج يحدّ عدد الطلبات تلقائياً لتقليل ذلك.\n" +
+            "• احترم خصوصية الآخرين ولا تعِد نشر محتواهم دون إذن.\n\n" +
+            "باستخدامك البرنامج فأنت تتحمّل مسؤولية ذلك. هل تريد المتابعة؟");
+        if (ok) _vm.AcceptDisclaimer();
+        return ok;
     }
 
     // ================================================================== window chrome
@@ -51,6 +91,18 @@ public partial class MainWindow : Window, IDialogService
     private CancellationTokenSource? _previewCts;
 
     private async void UpdatePlayer()
+    {
+        try
+        {
+            await UpdatePlayerAsync();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _vm.ShowToast($"تعذّر عرض المعاينة: {ex.Message}", isError: true);
+        }
+    }
+
+    private async Task UpdatePlayerAsync()
     {
         _previewCts?.Cancel();
         var cts = _previewCts = new CancellationTokenSource();
@@ -141,8 +193,15 @@ public partial class MainWindow : Window, IDialogService
 
     private async void SubmitCookie()
     {
-        await _vm.LoginWithCookieCommand.ExecuteAsync(CookieBox.Password);
-        if (_vm.IsLoggedIn) CookieBox.Clear();
+        try
+        {
+            await _vm.LoginWithCookieCommand.ExecuteAsync(CookieBox.Password);
+            if (_vm.IsLoggedIn) CookieBox.Clear();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            _vm.ShowToast($"تعذّر تسجيل الدخول: {ex.Message}", isError: true);
+        }
     }
 
     // ================================================================== downloads page
@@ -165,11 +224,39 @@ public partial class MainWindow : Window, IDialogService
         return Task.FromResult(dialog.ShowDialog() == true ? dialog.CookieHeader : null);
     }
 
-    public Task<int> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls)
+    private readonly SemaphoreSlim _watchGate = new(1, 1);
+    private StoryWatchWindow? _watcher;
+
+    /// <summary>
+    /// Plays stories in the small corner window. Batches (manual and automatic) run one after another in the
+    /// same window. It has no Owner on purpose, so background watching keeps working while this window is
+    /// minimised.
+    /// </summary>
+    public async Task<int> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls, bool background)
     {
-        var dialog = new StoryWatchWindow(cookieHeader, storyUrls) { Owner = this };
-        dialog.ShowDialog();
-        return Task.FromResult(dialog.WatchedCount);
+        await _watchGate.WaitAsync();
+        try
+        {
+            if (_watcher is not { IsAlive: true })
+            {
+                _watcher = new StoryWatchWindow();
+                _watcher.PlaceInCorner();
+            }
+            if (!_watcher.IsVisible) _watcher.Show();
+            if (!background) _watcher.Activate();
+
+            return await _watcher.PlayAsync(cookieHeader, storyUrls);
+        }
+        finally
+        {
+            // Close when nothing else is queued, so the browser does not linger in memory.
+            if (_watchGate.CurrentCount == 0 && _watcher is { IsAlive: true } w)
+                _ = Dispatcher.BeginInvoke(() =>
+                {
+                    if (_watchGate.CurrentCount == 1 && w.IsAlive) w.Close();
+                }, System.Windows.Threading.DispatcherPriority.Background);
+            _watchGate.Release();
+        }
     }
 
     public string? PickFolder(string initial)

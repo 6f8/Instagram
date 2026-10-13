@@ -49,7 +49,14 @@ public sealed partial class StoryRowViewModel : ObservableObject
         TypeText = item.IsVideo ? $"فيديو {Format.Duration(item.VideoDuration)}".Trim() : "صورة";
     }
 
-    public StoryItem Item { get; }
+    public StoryItem Item { get; private set; }
+
+    /// <summary>Swaps in a freshly fetched copy of the story (new, unexpired media links).</summary>
+    public void ReplaceItem(StoryItem fresh)
+    {
+        Item = fresh;
+        OnPropertyChanged(string.Empty); // every derived property may have changed
+    }
     public string Username { get; }
     public string OwnerId { get; }
     public int Index { get; }

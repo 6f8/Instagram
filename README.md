@@ -7,6 +7,8 @@ A Windows desktop app (WPF, .NET 8) for viewing and downloading Instagram storie
 ## Download
 Get [`release/win-x64/InstagramStoryViewer.exe`](release/win-x64/InstagramStoryViewer.exe) and double-click it.
 It's a single self-contained file, so .NET doesn't need to be installed (Windows 10/11, 64-bit).
+To make sure the file wasn't changed, compare its SHA256 fingerprint (`Get-FileHash InstagramStoryViewer.exe` in PowerShell) with [`InstagramStoryViewer.exe.sha256`](release/win-x64/InstagramStoryViewer.exe.sha256).
+The file isn't digitally signed, so Windows SmartScreen may warn you the first time: click **More info**, then **Run anyway**.
 
 ## Features
 - **Dashboard:** stats (accounts with stories, new stories, downloads, session status), a table of the selected account's stories, and a preview panel that plays images and videos.
@@ -15,7 +17,15 @@ It's a single self-contained file, so .NET doesn't need to be installed (Windows
 - **Downloads** at the highest available quality with a progress bar. Each file is saved to `<download folder>/<username>/`.
 - **Mark as seen** for one story or for all of them. The app opens the story in the embedded browser and plays it for a few seconds, so Instagram records a real view. It asks first, because your name will appear in the story owner's viewers list.
 - **Downloads page** lists every downloaded file. You can open a file or show it in its folder.
-- **Settings:** download folder, confirm before marking as seen, video autoplay, and log out.
+- **Auto-watch:**
+  - Optionally mark a story as seen automatically when you preview it.
+  - Optionally watch your followed accounts' new stories in the background.
+  - Watching happens in a small corner window that doesn't steal focus, with a daily limit you choose (100/200/400).
+- **Account protection:**
+  - A cap on Instagram requests per hour (120/180/300).
+  - Refreshes happen at irregular intervals and stop when the app is minimized.
+  - Cookies that Instagram rotates are saved automatically, and a session that Instagram ends is detected immediately.
+- **Settings:** download folder, confirm before marking as seen, video autoplay, auto-watch, the request cap, and log out.
 
 | Following | Downloads |
 |---|---|
@@ -42,6 +52,8 @@ src/
 │   ├── Themes/Theme.xaml        # colors and styles
 │   └── Fonts/                   # Cairo + Material Icons (embedded in the app)
 └── InstagramStoryViewer/        # command-line version (InstagramStoryViewer.Cli)
+tests/InstagramStoryViewer.Tests/ # xUnit tests for the core library
+.github/workflows/build.yml      # CI: tests + exe build; tags v* publish a GitHub Release
 designs/                         # the five proposed interface designs
 ```
 
@@ -49,6 +61,9 @@ designs/                         # the five proposed interface designs
 ```bash
 # development build
 dotnet build InstagramStoryViewer.sln
+
+# tests
+dotnet test tests/InstagramStoryViewer.Tests
 
 # single-file exe
 dotnet publish src/InstagramStoryViewer.Gui -c Release -r win-x64 -o release/win-x64
@@ -64,6 +79,7 @@ Building needs the .NET 8 SDK. It works on Windows, and also on Linux/macOS thro
 | Username to id | `GET /api/v1/users/web_profile_info/?username=` |
 | Stories of followed accounts | `GET /api/v1/feed/reels_tray/` |
 | A user's stories | `GET /api/v1/feed/reels_media/?reel_ids=` |
+| Stories of several accounts at once (auto-watch) | `GET /api/v1/feed/reels_media/?reel_ids=..&reel_ids=..` |
 | Mark as seen | Opens the story in the embedded browser (`/stories/<user>/<id>/`) and presses "View story". Instagram retired the old REST endpoint, which now returns 404 |
 
 ## Important notes

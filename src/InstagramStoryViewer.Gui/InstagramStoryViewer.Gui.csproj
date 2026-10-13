@@ -11,8 +11,12 @@
     <RootNamespace>InstagramStoryViewer.Gui</RootNamespace>
     <AssemblyName>InstagramStoryViewer</AssemblyName>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>2.0.0</Version>
+    <Version>2.1.0</Version>
     <Product>IG Story Viewer Pro</Product>
+    <!-- File metadata shown in Explorer's Properties; unsigned binaries without it look more suspicious to AV/SmartScreen. -->
+    <Company>IG Story Viewer Pro</Company>
+    <Description>Instagram story viewer and downloader for Windows</Description>
+    <Copyright>Copyright © 2026</Copyright>
   </PropertyGroup>
 
   <!-- dotnet publish -c Release -r win-x64 → single self-contained .exe (no .NET install needed) -->

@@ -17,6 +17,25 @@ public sealed class AppSettings
 
     /// <summary>Set by logout so the embedded browser does not silently log back in.</summary>
     public bool ClearBrowserOnNextLogin { get; set; }
+
+    /// <summary>The user acknowledged the terms-of-use notice shown on first start.</summary>
+    public bool AcceptedDisclaimer { get; set; }
+
+    /// <summary>Safety cap on Instagram API calls per hour.</summary>
+    public int MaxRequestsPerHour { get; set; } = 180;
+
+    /// <summary>Watch a story automatically when it is selected in the table.</summary>
+    public bool AutoWatchOnPreview { get; set; }
+
+    /// <summary>Watch new stories of followed accounts in the background.</summary>
+    public bool AutoWatchNew { get; set; }
+
+    public int AutoWatchDailyLimit { get; set; } = 200;
+
+    /// <summary>Local date (yyyy-MM-dd) that <see cref="AutoWatchedToday"/> counts for.</summary>
+    public string? AutoWatchDay { get; set; }
+
+    public int AutoWatchedToday { get; set; }
 }
 
 /// <summary>Persists settings to %AppData%\InstagramStoryViewer\settings.json.</summary>
@@ -29,27 +48,47 @@ public static class SettingsStore
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "InstagramStoryViewer", "WebView2");
 
     private static string FilePath => Path.Combine(AppDataFolder, "settings.json");
+    private static string BackupPath => FilePath + ".bak";
 
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
+    private static readonly object Gate = new();
 
     public static AppSettings Load()
     {
+        // Fall back to the backup when the main file is missing or corrupt (e.g. a crash mid-write in an
+        // older version), so a damaged file never silently throws away the saved session.
+        return TryRead(FilePath) ?? TryRead(BackupPath) ?? new AppSettings();
+    }
+
+    private static AppSettings? TryRead(string path)
+    {
         try
         {
-            if (File.Exists(FilePath))
-                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath)) ?? new AppSettings();
+            if (!File.Exists(path)) return null;
+            return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path));
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
-            // A corrupt or unreadable file falls back to defaults instead of crashing on startup.
+            return null;
         }
-        return new AppSettings();
     }
 
+    /// <summary>
+    /// Writes atomically: the new content goes to a temp file which then replaces settings.json in one
+    /// step (keeping the previous version as .bak). A crash can no longer leave a half-written file.
+    /// </summary>
     public static void Save(AppSettings settings)
     {
-        Directory.CreateDirectory(AppDataFolder);
-        File.WriteAllText(FilePath, JsonSerializer.Serialize(settings, Options));
+        lock (Gate)
+        {
+            Directory.CreateDirectory(AppDataFolder);
+            var tmp = FilePath + ".tmp";
+            File.WriteAllText(tmp, JsonSerializer.Serialize(settings, Options));
+            if (File.Exists(FilePath))
+                File.Replace(tmp, FilePath, BackupPath, ignoreMetadataErrors: true);
+            else
+                File.Move(tmp, FilePath);
+        }
     }
 
     public static string Protect(string plain) =>

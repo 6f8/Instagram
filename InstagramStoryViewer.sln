@@ -11,6 +11,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InstagramStoryViewer", "src
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InstagramStoryViewer.Gui", "src\InstagramStoryViewer.Gui\InstagramStoryViewer.Gui.csproj", "{A42933E6-91D2-4607-B758-0B1B53CD6727}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{9107D222-F2B8-4823-A4C7-C7915763F2BA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InstagramStoryViewer.Tests", "tests\InstagramStoryViewer.Tests\InstagramStoryViewer.Tests.csproj", "{075F240A-F8EB-4718-91A9-D4C63AFEB245}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -32,10 +36,15 @@ Global
 		{A42933E6-91D2-4607-B758-0B1B53CD6727}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A42933E6-91D2-4607-B758-0B1B53CD6727}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A42933E6-91D2-4607-B758-0B1B53CD6727}.Release|Any CPU.Build.0 = Release|Any CPU
+		{075F240A-F8EB-4718-91A9-D4C63AFEB245}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{075F240A-F8EB-4718-91A9-D4C63AFEB245}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{075F240A-F8EB-4718-91A9-D4C63AFEB245}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{075F240A-F8EB-4718-91A9-D4C63AFEB245}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{7976884E-BDD4-48FA-9089-D110CC853E25} = {82AC8A1B-6BA3-4988-B5BF-E81492343E89}
 		{7E0105FD-0200-4822-8F1E-21B4D384825F} = {82AC8A1B-6BA3-4988-B5BF-E81492343E89}
 		{A42933E6-91D2-4607-B758-0B1B53CD6727} = {82AC8A1B-6BA3-4988-B5BF-E81492343E89}
+		{075F240A-F8EB-4718-91A9-D4C63AFEB245} = {9107D222-F2B8-4823-A4C7-C7915763F2BA}
 	EndGlobalSection
 EndGlobal

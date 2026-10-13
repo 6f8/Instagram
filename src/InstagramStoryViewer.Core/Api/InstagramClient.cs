@@ -33,7 +33,10 @@ public sealed class InstagramClient : IDisposable
 
     private const int MaxRetries = 3;
     private const int MaxSavedBody = 256 * 1024;
+
+    // Requests are spaced by a random delay so traffic does not look machine-generated.
     private static readonly TimeSpan MinDelayBetweenRequests = TimeSpan.FromMilliseconds(1200);
+    private static readonly TimeSpan MaxDelayBetweenRequests = TimeSpan.FromMilliseconds(2600);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -44,26 +47,61 @@ public sealed class InstagramClient : IDisposable
     private readonly HttpClient _http;
     private readonly SessionCookies _cookies;
     private readonly SemaphoreSlim _throttle = new(1, 1);
-    private DateTime _lastRequest = DateTime.MinValue;
+    private DateTime _nextRequestAt = DateTime.MinValue;
+    private readonly Queue<DateTime> _requestLog = new();
     private int _preferredProfile;
-    private int _seenVariant;
     private string _wwwClaim = "0";
+    private readonly Func<TimeSpan, CancellationToken, Task> _delay;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task> _inflightDownloads =
+        new(StringComparer.OrdinalIgnoreCase);
 
     private readonly Action<string>? _log;
 
     /// <param name="log">Receives status messages such as retry notices (optional).</param>
     public InstagramClient(SessionCookies cookies, Action<string>? log = null)
-    {
-        _cookies = cookies;
-        _log = log;
-        var handler = new HttpClientHandler
+        : this(cookies, log, new HttpClientHandler
         {
             UseCookies = false, // cookies are sent manually so we control exactly what goes out
             AllowAutoRedirect = false, // a redirect to /accounts/login means the session is dead
             AutomaticDecompression = DecompressionMethods.All
-        };
-        _http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
+        }, Task.Delay)
+    {
     }
+
+    /// <summary>For tests: inject the HTTP handler and a fake delay so nothing actually waits.</summary>
+    internal InstagramClient(SessionCookies cookies, Action<string>? log, HttpMessageHandler handler,
+        Func<TimeSpan, CancellationToken, Task> delay)
+    {
+        _cookies = cookies;
+        _log = log;
+        _delay = delay;
+        // Downloads stream large videos; the per-call timeout is applied separately for API requests.
+        _http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
+    }
+
+    private static readonly TimeSpan ApiTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Safety cap on API calls per rolling hour. Bursts beyond this look like automation to Instagram and
+    /// risk restrictions on the account, so the client refuses (RateLimited) rather than sending them.
+    /// </summary>
+    public int MaxRequestsPerHour { get; set; } = 180;
+
+    /// <summary>API calls made in the last hour (for display).</summary>
+    public int RequestsLastHour
+    {
+        get
+        {
+            lock (_requestLog)
+            {
+                PruneRequestLog();
+                return _requestLog.Count;
+            }
+        }
+    }
+
+    /// <summary>The session cookies; subscribe to <see cref="SessionCookies.Changed"/> to persist rotations.</summary>
+    public SessionCookies Cookies => _cookies;
 
     /// <summary>Name of the host profile that last returned valid JSON (for diagnostics).</summary>
     public string ActiveProfile => Profiles[_preferredProfile].Name;
@@ -116,111 +154,110 @@ public sealed class InstagramClient : IDisposable
         return reel;
     }
 
-    /// <summary>Marks a single story item as seen (the owner will see you in the viewers list).</summary>
-    /// <remarks>
-    /// Instagram has moved this call around several times, so a few known variants are tried in turn.
-    /// A rejection from one variant (even "login_required") says nothing about the session as a whole,
-    /// so failures here are always reported as <see cref="InstagramErrorKind.Unknown"/>.
-    /// </remarks>
-    public async Task MarkAsSeenAsync(StoryItem item, string ownerId, string? ownerUsername = null, CancellationToken ct = default)
+    /// <summary>Current stories of several users in one request (up to 20 ids per call).</summary>
+    public async Task<List<Reel>> GetStoriesForUsersAsync(IEnumerable<string> userIds, CancellationToken ct = default)
     {
-        if (string.IsNullOrEmpty(_cookies.CsrfToken))
-            throw new InstagramApiException(InstagramErrorKind.Unknown,
-                "تعليم الستوري كمشاهَد يحتاج csrftoken. سجّل الدخول عبر زر إنستجرام أو الصق الكوكيز كاملة.");
-
-        var mediaPk = item.Pk ?? item.Id?.Split('_')[0]
-            ?? throw new InstagramApiException(InstagramErrorKind.InvalidResponse, "الستوري لا يحتوي على معرّف.");
-
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var seenAt = Math.Max(now, item.TakenAt);
-
-        // instagram.com's web app
-        var webFields = new Dictionary<string, string>
+        var result = new List<Reel>();
+        foreach (var chunk in userIds.Distinct().Chunk(20))
         {
-            ["reelMediaId"] = mediaPk,
-            ["reelMediaOwnerId"] = ownerId,
-            ["reelId"] = ownerId,
-            ["reelMediaTakenAt"] = item.TakenAt.ToString(),
-            ["viewSeenAt"] = seenAt.ToString()
-        };
-
-        var variants = new (EndpointProfile Profile, string Path, Func<HttpContent> Body)[]
-        {
-            (Profiles[0], "/stories/reel/seen", () => new FormUrlEncodedContent(webFields)),
-            (Profiles[0], "/api/v1/stories/reel/seen", () => new FormUrlEncodedContent(webFields))
-            // The mobile /api/v2/media/seen/ call is deliberately not used: sending app-signed requests with a
-            // browser session looks suspicious to Instagram and may get the session revoked.
-        };
-
-        var referer = ownerUsername is null ? null : $"https://www.instagram.com/stories/{ownerUsername}/{mediaPk}/";
-
-        // Remember which variant worked so later calls go straight to it.
-        var start = _seenVariant;
-        var attempts = new List<string>();
-        var diagnostics = new System.Text.StringBuilder();
-        for (var i = 0; i < variants.Length; i++)
-        {
-            var index = (start + i) % variants.Length;
-            var v = variants[index];
-            try
+            var query = string.Join("&", chunk.Select(id => "reel_ids=" + Uri.EscapeDataString(id)));
+            var res = await SendAsync<ReelsMediaResponse>(HttpMethod.Get, "/api/v1/feed/reels_media/?" + query, null, ct);
+            var reels = res.ReelsMedia ?? res.Reels?.Values.ToList() ?? new List<Reel>();
+            foreach (var reel in reels.Where(r => r.Items is { Count: > 0 }))
             {
-                await SendWithProfileAsync<ApiResponseBase>(v.Profile, HttpMethod.Post, v.Path, v.Body, ct, referer);
-                _seenVariant = index;
-                return;
-            }
-            catch (InstagramApiException ex) when (ex.Kind is not (InstagramErrorKind.Network or InstagramErrorKind.RateLimited))
-            {
-                attempts.Add($"{v.Path} → HTTP {(int?)ex.StatusCode}");
-                diagnostics.AppendLine($"===== {v.Profile.Name} POST {v.Path} → HTTP {(int?)ex.StatusCode} {ex.ContentType} ({ex.Kind})")
-                    .AppendLine(ex.Message)
-                    .AppendLine(ex.ResponseBody)
-                    .AppendLine();
+                reel.Items!.Sort((a, b) => a.TakenAt.CompareTo(b.TakenAt));
+                result.Add(reel);
             }
         }
-
-        throw new InstagramApiException(InstagramErrorKind.Unknown,
-            $"تعذّر تعليم الستوري كمشاهَد (جلستك ما زالت صالحة).\nالمسارات التي جُرّبت: {string.Join("، ", attempts)}")
-        {
-            ResponseBody = diagnostics.ToString(),
-            RequestPath = "mark-as-seen"
-        };
+        return result;
     }
 
-    /// <summary>Downloads raw media bytes from Instagram's CDN.</summary>
+    /// <summary>
+    /// Downloads raw media bytes from Instagram's CDN. Concurrent calls for the same file share one
+    /// download, partial files never replace a complete one, and transient failures are retried.
+    /// </summary>
     /// <param name="progress">Reports 0..1 when the server sends Content-Length.</param>
-    public async Task DownloadAsync(string url, string filePath, CancellationToken ct = default, IProgress<double>? progress = null)
+    public Task DownloadAsync(string url, string filePath, CancellationToken ct = default, IProgress<double>? progress = null)
     {
-        using var req = new HttpRequestMessage(HttpMethod.Get, url);
-        using var res = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
-        if (!res.IsSuccessStatusCode)
-            throw new InstagramApiException(InstagramErrorKind.Unknown,
-                $"فشل تنزيل الملف (HTTP {(int)res.StatusCode}).", res.StatusCode);
+        var key = Path.GetFullPath(filePath);
+        // The shared download is not tied to the first caller's token: a cancelled preview must not abort a
+        // download another caller is waiting for. Each caller can still stop waiting via its own token.
+        var task = _inflightDownloads.GetOrAdd(key, _ => DownloadCoreAsync(url, key, progress, CancellationToken.None));
+        // Remove the entry once finished (successfully or not) so a later retry starts fresh.
+        task.ContinueWith(t => _inflightDownloads.TryRemove(new KeyValuePair<string, Task>(key, task)),
+            CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return task.WaitAsync(ct);
+    }
 
-        var total = res.Content.Headers.ContentLength;
-        var tmp = filePath + ".part";
-        try
+    private async Task DownloadCoreAsync(string url, string filePath, IProgress<double>? progress, CancellationToken ct)
+    {
+        for (var attempt = 1; ; attempt++)
         {
-            await using (var src = await res.Content.ReadAsStreamAsync(ct))
-            await using (var fs = File.Create(tmp))
+            // Unique temp name: two writers can never collide on the same ".part" file.
+            var tmp = $"{filePath}.{Guid.NewGuid():N}.part";
+            try
             {
-                var buffer = new byte[81920];
-                long read = 0;
-                int n;
-                while ((n = await src.ReadAsync(buffer, ct)) > 0)
+                using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                req.Headers.TryAddWithoutValidation("User-Agent", ChromeUserAgent);
+                using var headersCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                headersCts.CancelAfter(ApiTimeout);
+                using var res = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, headersCts.Token);
+                if (!res.IsSuccessStatusCode)
                 {
-                    await fs.WriteAsync(buffer.AsMemory(0, n), ct);
-                    read += n;
-                    if (total is > 0) progress?.Report((double)read / total.Value);
+                    var kind = res.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.Gone or HttpStatusCode.NotFound
+                        ? InstagramErrorKind.MediaExpired
+                        : InstagramErrorKind.Unknown;
+                    if (kind == InstagramErrorKind.Unknown && (int)res.StatusCode >= 500 && attempt < MaxRetries)
+                    {
+                        await BackoffAsync(attempt, res.Headers.RetryAfter, $"HTTP {(int)res.StatusCode}", ct);
+                        continue;
+                    }
+                    throw new InstagramApiException(kind,
+                        kind == InstagramErrorKind.MediaExpired
+                            ? "انتهت صلاحية رابط الملف (HTTP " + (int)res.StatusCode + ")."
+                            : $"فشل تنزيل الملف (HTTP {(int)res.StatusCode}).", res.StatusCode);
                 }
+
+                var total = res.Content.Headers.ContentLength;
+                long read = 0;
+                await using (var src = await res.Content.ReadAsStreamAsync(ct))
+                await using (var fs = File.Create(tmp))
+                {
+                    var buffer = new byte[81920];
+                    int n;
+                    while ((n = await src.ReadAsync(buffer, ct)) > 0)
+                    {
+                        await fs.WriteAsync(buffer.AsMemory(0, n), ct);
+                        read += n;
+                        if (total is > 0) progress?.Report((double)read / total.Value);
+                    }
+                }
+
+                if (read == 0 || (total is > 0 && read != total))
+                    throw new IOException($"الملف وصل ناقصاً ({read} من {total} بايت).");
+
+                File.Move(tmp, filePath, overwrite: true);
+                progress?.Report(1);
+                return;
             }
-            File.Move(tmp, filePath, overwrite: true);
-            progress?.Report(1);
+            catch (Exception ex) when (attempt < MaxRetries && !ct.IsCancellationRequested
+                                       && ex is HttpRequestException or IOException or TaskCanceledException)
+            {
+                TryDelete(tmp);
+                await BackoffAsync(attempt, null, $"إعادة محاولة التنزيل: {ex.Message}", ct);
+            }
+            catch
+            {
+                TryDelete(tmp);
+                throw;
+            }
         }
-        catch
-        {
-            try { File.Delete(tmp); } catch (IOException) { }
-            throw;
-        }
+    }
+
+    private static void TryDelete(string path)
+    {
+        try { File.Delete(path); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
     // ------------------------------------------------------------------ plumbing
@@ -269,6 +306,7 @@ public sealed class InstagramClient : IDisposable
     {
         for (var attempt = 1; ; attempt++)
         {
+            ThrowIfRevoked();
             await ThrottleAsync(ct);
 
             using var req = BuildRequest(profile, method, path, referer);
@@ -278,7 +316,9 @@ public sealed class InstagramClient : IDisposable
             HttpResponseMessage res;
             try
             {
-                res = await _http.SendAsync(req, ct);
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(ApiTimeout);
+                res = await _http.SendAsync(req, timeout.Token);
             }
             catch (HttpRequestException ex)
             {
@@ -298,6 +338,7 @@ public sealed class InstagramClient : IDisposable
             using (res)
             {
                 _cookies.UpdateFrom(res);
+                ThrowIfRevoked();
                 // instagram.com's JS echoes this value back on later requests; so do we.
                 if (res.Headers.TryGetValues("x-ig-set-www-claim", out var claims) && claims.FirstOrDefault() is { Length: > 0 } claim)
                     _wwwClaim = claim;
@@ -448,14 +489,42 @@ public sealed class InstagramClient : IDisposable
         return text.Length > 120 ? text[..120] + "…" : text.Length == 0 ? "(فارغة)" : text;
     }
 
+    private void ThrowIfRevoked()
+    {
+        if (_cookies.IsRevoked)
+            throw new InstagramApiException(InstagramErrorKind.LoginRequired,
+                "أنهى إنستجرام هذه الجلسة (حذف ملف تعريف الجلسة). سجّل الدخول من جديد.");
+    }
+
+    private void PruneRequestLog()
+    {
+        var cutoff = DateTime.UtcNow.AddHours(-1);
+        while (_requestLog.Count > 0 && _requestLog.Peek() < cutoff)
+            _requestLog.Dequeue();
+    }
+
     private async Task ThrottleAsync(CancellationToken ct)
     {
         await _throttle.WaitAsync(ct);
         try
         {
-            var wait = _lastRequest + MinDelayBetweenRequests - DateTime.UtcNow;
-            if (wait > TimeSpan.Zero) await Task.Delay(wait, ct);
-            _lastRequest = DateTime.UtcNow;
+            lock (_requestLog)
+            {
+                PruneRequestLog();
+                if (_requestLog.Count >= MaxRequestsPerHour)
+                {
+                    var freeAt = _requestLog.Peek().AddHours(1).ToLocalTime();
+                    throw new InstagramApiException(InstagramErrorKind.RateLimited,
+                        $"وصل البرنامج إلى حد الأمان ({MaxRequestsPerHour} طلب في الساعة) لحماية حسابك. حاول بعد {freeAt:HH:mm}.");
+                }
+            }
+
+            var wait = _nextRequestAt - DateTime.UtcNow;
+            if (wait > TimeSpan.Zero) await _delay(wait, ct);
+
+            var jitter = Random.Shared.NextDouble() * (MaxDelayBetweenRequests - MinDelayBetweenRequests).TotalMilliseconds;
+            _nextRequestAt = DateTime.UtcNow + MinDelayBetweenRequests + TimeSpan.FromMilliseconds(jitter);
+            lock (_requestLog) _requestLog.Enqueue(DateTime.UtcNow);
         }
         finally { _throttle.Release(); }
     }
@@ -465,7 +534,7 @@ public sealed class InstagramClient : IDisposable
         var delay = retryAfter?.Delta ?? TimeSpan.FromSeconds(Math.Pow(2, attempt) * 2);
         if (delay > TimeSpan.FromMinutes(2)) delay = TimeSpan.FromMinutes(2);
         _log?.Invoke($"{reason} — إعادة المحاولة بعد {delay.TotalSeconds:0} ثانية ({attempt}/{MaxRetries - 1})...");
-        await Task.Delay(delay, ct);
+        await _delay(delay, ct);
     }
 
     public void Dispose()

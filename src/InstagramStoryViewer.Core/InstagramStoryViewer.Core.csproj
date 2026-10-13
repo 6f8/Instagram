@@ -7,4 +7,8 @@
     <RootNamespace>InstagramStoryViewer</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="InstagramStoryViewer.Tests" />
+  </ItemGroup>
+
 </Project>

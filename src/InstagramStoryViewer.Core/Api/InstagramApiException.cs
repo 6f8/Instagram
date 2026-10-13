@@ -11,7 +11,8 @@ public enum InstagramErrorKind
     NotFound,           // user does not exist
     PrivateAccount,     // private account the viewer does not follow
     InvalidResponse,    // HTML or malformed JSON instead of the expected payload
-    Network             // could not reach Instagram at all
+    Network,            // could not reach Instagram at all
+    MediaExpired        // the CDN link of a story expired (403/404/410); refetch the story to get a new one
 }
 
 public sealed class InstagramApiException : Exception

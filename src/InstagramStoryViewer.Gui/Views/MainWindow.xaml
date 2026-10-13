@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:InstagramStoryViewer.Gui.ViewModels"
         Title="IG Story Viewer Pro"
-        Width="1360" Height="880" MinWidth="1100" MinHeight="700"
+        Width="1200" Height="760" MinWidth="1040" MinHeight="620"
         WindowStartupLocation="CenterScreen"
         FlowDirection="RightToLeft"
         FontFamily="{StaticResource AppFont}" FontSize="13"
@@ -61,13 +61,13 @@
         </Style>
 
         <Style x:Key="StatValue" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="30" />
+            <Setter Property="FontSize" Value="24" />
             <Setter Property="FontWeight" Value="ExtraBold" />
             <Setter Property="Margin" Value="0,2,0,0" />
         </Style>
         <Style x:Key="StatCard" TargetType="Border" BasedOn="{StaticResource Card}">
-            <Setter Property="Margin" Value="0,0,14,0" />
-            <Setter Property="Padding" Value="18,14" />
+            <Setter Property="Margin" Value="0,0,12,0" />
+            <Setter Property="Padding" Value="16,10" />
         </Style>
         <Style x:Key="ColHeader" TargetType="TextBlock" BasedOn="{StaticResource Muted}">
             <Setter Property="FontWeight" Value="SemiBold" />
@@ -128,7 +128,7 @@
                 </Border>
 
                 <!-- ==================================================== page: dashboard -->
-                <Grid Grid.Column="1" Margin="24,20,24,22"
+                <Grid Grid.Column="1" Margin="18,14,18,16"
                       Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=Dashboard}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -149,11 +149,20 @@
                                 <TextBlock Style="{StaticResource Icon}" Text="&#xE5D5;" />
                             </Button>
                         </StackPanel>
-                        <TextBlock Text="لوحة التحكم" Style="{StaticResource H1}" VerticalAlignment="Center" />
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="لوحة التحكم" Style="{StaticResource H1}" VerticalAlignment="Center" />
+                            <Border Margin="14,0,0,0" CornerRadius="10" Padding="10,3" VerticalAlignment="Center" Background="#337B2FF7"
+                                    Visibility="{Binding IsAutoWatching, Converter={StaticResource Vis}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE8F4;" FontSize="13" Foreground="{StaticResource VideoPillText}" Margin="0,0,6,0" />
+                                    <TextBlock Text="مشاهدة تلقائية..." FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource VideoPillText}" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
                     </DockPanel>
 
                     <!-- stats -->
-                    <Grid Grid.Row="1" Margin="0,18,0,0">
+                    <Grid Grid.Row="1" Margin="0,14,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition /><ColumnDefinition /><ColumnDefinition /><ColumnDefinition />
                         </Grid.ColumnDefinitions>
@@ -215,11 +224,11 @@
                     </Grid>
 
                     <!-- main area -->
-                    <Grid Grid.Row="2" Margin="0,16,0,0">
+                    <Grid Grid.Row="2" Margin="0,12,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="16" />
-                            <ColumnDefinition Width="360" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="320" />
                         </Grid.ColumnDefinitions>
 
                         <!-- stories table -->
@@ -248,7 +257,7 @@
                                         </Button>
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding StoriesTitle}" Style="{StaticResource H3}" />
+                                        <TextBlock Text="{Binding StoriesTitle}" Style="{StaticResource H3}" TextTrimming="CharacterEllipsis" MaxWidth="220" />
                                         <Border Background="{StaticResource InputBrush}" CornerRadius="9" Padding="8,0" Margin="10,0,0,0"
                                                 VerticalAlignment="Center" Visibility="{Binding Stories.Count, Converter={StaticResource Vis}}">
                                             <TextBlock Text="{Binding Stories.Count}" Foreground="{StaticResource MutedBrush}" FontSize="12" />
@@ -262,13 +271,13 @@
                                 <!-- column headers -->
                                 <Grid Grid.Row="2" Margin="8,12,8,6">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="62" />
-                                        <ColumnDefinition Width="150" />
-                                        <ColumnDefinition Width="100" />
-                                        <ColumnDefinition Width="90" />
-                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="52" />
+                                        <ColumnDefinition Width="128" />
+                                        <ColumnDefinition Width="86" />
+                                        <ColumnDefinition Width="76" />
+                                        <ColumnDefinition Width="96" />
                                         <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="84" />
+                                        <ColumnDefinition Width="80" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="1" Text="النوع" Style="{StaticResource ColHeader}" />
                                     <TextBlock Grid.Column="2" Text="نُشر" Style="{StaticResource ColHeader}" />
@@ -282,21 +291,21 @@
                                          BorderBrush="{StaticResource BorderBrush}">
                                     <ListBox.ItemTemplate>
                                         <DataTemplate DataType="{x:Type vm:StoryRowViewModel}">
-                                            <Grid Height="64">
+                                            <Grid Height="58">
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="62" />
-                                                    <ColumnDefinition Width="150" />
-                                                    <ColumnDefinition Width="100" />
-                                                    <ColumnDefinition Width="90" />
-                                                    <ColumnDefinition Width="110" />
+                                                    <ColumnDefinition Width="52" />
+                                                    <ColumnDefinition Width="128" />
+                                                    <ColumnDefinition Width="86" />
+                                                    <ColumnDefinition Width="76" />
+                                                    <ColumnDefinition Width="96" />
                                                     <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="84" />
+                                                    <ColumnDefinition Width="80" />
                                                 </Grid.ColumnDefinitions>
 
-                                                <Border Grid.Column="0" Width="38" Height="60" CornerRadius="7" Background="{StaticResource InputBrush}"
+                                                <Border Grid.Column="0" Width="34" Height="54" CornerRadius="7" Background="{StaticResource InputBrush}"
                                                         HorizontalAlignment="Left" FlowDirection="LeftToRight">
                                                     <Border.Clip>
-                                                        <RectangleGeometry Rect="0,0,38,60" RadiusX="7" RadiusY="7" />
+                                                        <RectangleGeometry Rect="0,0,34,54" RadiusX="7" RadiusY="7" />
                                                     </Border.Clip>
                                                     <Image Source="{Binding ThumbnailUrl, Converter={StaticResource Img}, ConverterParameter=96}" Stretch="UniformToFill" />
                                                 </Border>
@@ -348,7 +357,7 @@
                                                            FlowDirection="LeftToRight" HorizontalAlignment="Left" Foreground="{StaticResource MutedBrush}" />
 
                                                 <Grid Grid.Column="5" VerticalAlignment="Center">
-                                                    <ProgressBar Width="140" HorizontalAlignment="Left" Maximum="100" Value="{Binding Progress}"
+                                                    <ProgressBar Width="110" HorizontalAlignment="Left" Maximum="100" Value="{Binding Progress}"
                                                                  Visibility="{Binding IsDownloading, Converter={StaticResource Vis}}" />
                                                     <StackPanel Orientation="Horizontal" ToolTip="{Binding Error}">
                                                         <StackPanel.Resources>
@@ -441,9 +450,9 @@
                         <!-- side: preview + following -->
                         <Grid Grid.Column="2">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="1.5*" MinHeight="300" />
-                                <RowDefinition Height="16" />
-                                <RowDefinition Height="*" MinHeight="170" />
+                                <RowDefinition Height="1.5*" MinHeight="260" />
+                                <RowDefinition Height="12" />
+                                <RowDefinition Height="*" MinHeight="150" />
                             </Grid.RowDefinitions>
 
                             <Border Grid.Row="0" Style="{StaticResource Card}">
@@ -559,7 +568,7 @@
                 </Grid>
 
                 <!-- ==================================================== page: following -->
-                <Grid Grid.Column="1" Margin="24,20,24,22"
+                <Grid Grid.Column="1" Margin="18,14,18,16"
                       Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=Following}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -610,7 +619,7 @@
                 </Grid>
 
                 <!-- ==================================================== page: downloads -->
-                <Grid Grid.Column="1" Margin="24,20,24,22"
+                <Grid Grid.Column="1" Margin="18,14,18,16"
                       Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=Downloads}">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -723,7 +732,7 @@
                 <!-- ==================================================== page: settings -->
                 <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
                               Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=Settings}">
-                    <StackPanel Margin="24,20,24,22" MaxWidth="780" HorizontalAlignment="Left">
+                    <StackPanel Margin="18,14,18,16" MaxWidth="780" HorizontalAlignment="Left">
                         <TextBlock Text="الإعدادات" Style="{StaticResource H1}" Margin="0,0,0,18" />
 
                         <Border Style="{StaticResource Card}" Margin="0,0,0,14" Padding="20,18">
@@ -765,6 +774,46 @@
                                 <TextBlock Text="السلوك" Style="{StaticResource H3}" Margin="0,0,0,12" />
                                 <CheckBox IsChecked="{Binding ConfirmBeforeMarkSeen}" Content="اسأل قبل تعليم الستوري كمشاهَد (لأن اسمك سيظهر لصاحبه)" />
                                 <CheckBox IsChecked="{Binding AutoPlayVideos}" Content="تشغيل الفيديو تلقائياً في المعاينة" Margin="0,12,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}" Margin="0,0,0,14" Padding="20,18">
+                            <StackPanel>
+                                <TextBlock Text="المشاهدة التلقائية" Style="{StaticResource H3}" Margin="0,0,0,4" />
+                                <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,12"
+                                           Text="تُعرض الستوريات في نافذة صغيرة بزاوية الشاشة لثوانٍ فيسجّلها إنستجرام كمشاهَدة. سيظهر اسمك لأصحابها." />
+                                <CheckBox IsChecked="{Binding AutoWatchOnPreview}" Content="شاهِد الستوري تلقائياً عند معاينته (بعد ثانيتين)" />
+                                <CheckBox IsChecked="{Binding AutoWatchNew}" Content="شاهِد الستوريات الجديدة لمن أتابعهم في الخلفية" Margin="0,12,0,0" />
+                                <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                    <TextBlock Text="الحد اليومي:" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <RadioButton Style="{StaticResource Chip}" Content="100" GroupName="dailyLimit"
+                                                 IsChecked="{Binding AutoWatchDailyLimit, Converter={StaticResource ValueBool}, ConverterParameter=100}" />
+                                    <RadioButton Style="{StaticResource Chip}" Content="200" GroupName="dailyLimit"
+                                                 IsChecked="{Binding AutoWatchDailyLimit, Converter={StaticResource ValueBool}, ConverterParameter=200}" />
+                                    <RadioButton Style="{StaticResource Chip}" Content="400" GroupName="dailyLimit"
+                                                 IsChecked="{Binding AutoWatchDailyLimit, Converter={StaticResource ValueBool}, ConverterParameter=400}" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding AutoWatchStatus}" Style="{StaticResource Muted}" Margin="0,10,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}" Margin="0,0,0,14" Padding="20,18">
+                            <StackPanel>
+                                <TextBlock Text="حماية الحساب" Style="{StaticResource H3}" Margin="0,0,0,4" />
+                                <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,12"
+                                           Text="حد أقصى لطلبات إنستجرام في الساعة. الحد الأقل أكثر أماناً لحسابك. التحديث التلقائي يتوقف عند تصغير البرنامج." />
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="طلبات في الساعة:" VerticalAlignment="Center" Margin="0,0,10,0" />
+                                    <RadioButton Style="{StaticResource Chip}" Content="120" GroupName="rate"
+                                                 IsChecked="{Binding MaxRequestsPerHour, Converter={StaticResource ValueBool}, ConverterParameter=120}" />
+                                    <RadioButton Style="{StaticResource Chip}" Content="180" GroupName="rate"
+                                                 IsChecked="{Binding MaxRequestsPerHour, Converter={StaticResource ValueBool}, ConverterParameter=180}" />
+                                    <RadioButton Style="{StaticResource Chip}" Content="300" GroupName="rate"
+                                                 IsChecked="{Binding MaxRequestsPerHour, Converter={StaticResource ValueBool}, ConverterParameter=300}" />
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource Muted}" Margin="0,10,0,0">
+                                    <Run Text="الطلبات في آخر ساعة: " /><Run Text="{Binding RequestsLastHour, Mode=OneWay}" />
+                                </TextBlock>
                             </StackPanel>
                         </Border>
 

@@ -13,6 +13,7 @@
             <local:BoolToVisibilityConverter x:Key="NotVis" Invert="True" />
             <local:EqualsToVisibilityConverter x:Key="PageVis" />
             <local:EnumToBoolConverter x:Key="EnumBool" />
+            <local:ValueToBoolConverter x:Key="ValueBool" />
             <local:NameToBrushConverter x:Key="NameBrush" />
             <local:RingBrushConverter x:Key="Ring" />
         </ResourceDictionary>

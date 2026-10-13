@@ -333,23 +333,12 @@ internal sealed class App
         Ui.Info($"تم تنزيل {ok} من {items.Count}.");
     }
 
-    private async Task MarkSeenAsync(string userId, List<StoryItem> items, CancellationToken ct)
+    private static Task MarkSeenAsync(string userId, List<StoryItem> items, CancellationToken ct)
     {
-        var ok = 0;
-        foreach (var item in items)
-        {
-            try
-            {
-                await _client.MarkAsSeenAsync(item, userId, ct: ct);
-                ok++;
-            }
-            catch (InstagramApiException ex) when (ex.Kind is not InstagramErrorKind.LoginRequired)
-            {
-                Ui.Error($"  فشل تعليم ستوري كمشاهَد: {ex.Message}");
-                if (ex.Kind == InstagramErrorKind.RateLimited) break;
-            }
-        }
-        Ui.Info($"تم تعليم {ok} من {items.Count} كمشاهَدة.");
+        // Instagram retired the REST endpoint (404); marking as seen now needs a real browser, which only the
+        // desktop app has (it plays the story in an embedded Edge view).
+        Ui.Warn("تعليم الستوري كمشاهَد متاح في النسخة الرسومية فقط (InstagramStoryViewer.exe).");
+        return Task.CompletedTask;
     }
 }
 
