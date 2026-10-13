@@ -1,0 +1,19 @@
+{
+  "data": {
+    "user": {
+      "biography": "bio",
+      "bio_links": [],
+      "edge_followed_by": { "count": 1234 },
+      "edge_follow": { "count": 321 },
+      "full_name": "First Account",
+      "id": "1111111111",
+      "is_private": true,
+      "is_verified": false,
+      "followed_by_viewer": true,
+      "profile_pic_url_hd": "https://scontent.cdninstagram.com/hd.jpg",
+      "username": "first.account",
+      "edge_owner_to_timeline_media": { "count": 50, "edges": [] }
+    }
+  },
+  "status": "ok"
+}

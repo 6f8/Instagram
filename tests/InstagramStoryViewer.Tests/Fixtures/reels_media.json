@@ -1,0 +1,53 @@
+{
+  "reels": {},
+  "reels_media": [
+    {
+      "id": "1111111111",
+      "strong_id__": "1111111111",
+      "latest_reel_media": 1760350000,
+      "expiring_at": 1760436400,
+      "seen": 0,
+      "reel_type": "user_reel",
+      "user": { "pk": "1111111111", "username": "first.account", "is_private": false },
+      "items": [
+        {
+          "id": "3333333333333333334_1111111111",
+          "pk": 3333333333333333334,
+          "taken_at": 1760350000,
+          "media_type": 2,
+          "code": "DPxyz",
+          "video_duration": 14.9,
+          "has_liked": true,
+          "image_versions2": { "candidates": [ { "width": 640, "height": 1136, "url": "https://scontent.cdninstagram.com/cover640.jpg" } ] },
+          "video_versions": [
+            { "type": 101, "width": 720, "height": 1280, "url": "https://scontent.cdninstagram.com/v720.mp4", "id": "a" },
+            { "type": 103, "width": 1080, "height": 1920, "url": "https://scontent.cdninstagram.com/v1080.mp4", "id": "b" }
+          ],
+          "story_music_stickers": null,
+          "viewer_count": null,
+          "can_reply": true,
+          "organic_tracking_token": "eyJ..."
+        },
+        {
+          "id": "3333333333333333333_1111111111",
+          "pk": "3333333333333333333",
+          "taken_at": 1760340000,
+          "expiring_at": 1760426400,
+          "media_type": 1,
+          "original_width": 1080,
+          "original_height": 1920,
+          "image_versions2": {
+            "candidates": [
+              { "width": 1080, "height": 1920, "url": "https://scontent.cdninstagram.com/p1080.jpg", "scans_profile": "e15" },
+              { "width": 150, "height": 266, "url": "https://scontent.cdninstagram.com/p150.jpg" },
+              { "width": 320, "height": 568, "url": "https://scontent.cdninstagram.com/p320.jpg" }
+            ]
+          },
+          "story_link_stickers": [ { "story_link": { "url": "https://example.com" } } ]
+        }
+      ],
+      "media_count": 2
+    }
+  ],
+  "status": "ok"
+}

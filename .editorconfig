@@ -1,0 +1,26 @@
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{cs,xaml}]
+indent_size = 4
+
+[*.{csproj,props,targets,yml,yaml,json}]
+indent_size = 2
+
+[*.cs]
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_prefer_braces = when_multiline:silent
+dotnet_style_readonly_field = true:warning
+dotnet_diagnostic.IDE0161.severity = warning # file-scoped namespaces
+dotnet_diagnostic.IDE0044.severity = warning # readonly fields
+dotnet_diagnostic.CA2016.severity = warning  # forward the CancellationToken
+dotnet_diagnostic.CA1806.severity = warning  # do not ignore method results
+
+# The core library has no UI thread: every await must say it does not need to come back to one.
+[src/InstagramStoryViewer.Core/**.cs]
+dotnet_diagnostic.CA2007.severity = error

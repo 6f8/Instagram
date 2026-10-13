@@ -8,6 +8,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
+    <PackageReference Include="Polly.Core" Version="8.4.2" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="InstagramStoryViewer.Tests" />
   </ItemGroup>
 

@@ -54,7 +54,7 @@ public sealed class StoryDownloader
 
         var path = GetPath(username, item);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        await _client.DownloadAsync(url, path, ct, progress);
+        await _client.DownloadAsync(url, path, ct, progress).ConfigureAwait(false);
         return path;
     }
 

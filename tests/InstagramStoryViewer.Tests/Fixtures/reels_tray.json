@@ -1,0 +1,52 @@
+{
+  "tray": [
+    {
+      "id": 1111111111,
+      "strong_id__": "1111111111",
+      "latest_reel_media": 1760350000,
+      "expiring_at": 1760436400,
+      "seen": 1760340000,
+      "can_reply": true,
+      "can_gif_quick_reply": true,
+      "can_reshare": true,
+      "reel_type": "user_reel",
+      "ad_expiry_timestamp_in_millis": null,
+      "is_cta_sticker_available": null,
+      "user": {
+        "pk": "1111111111",
+        "pk_id": "1111111111",
+        "username": "first.account",
+        "full_name": "First Account",
+        "is_private": false,
+        "is_verified": true,
+        "profile_pic_id": "3000000000000000000_1111111111",
+        "profile_pic_url": "https://scontent.cdninstagram.com/v/t51.2885-19/1_n.jpg?stp=dst-jpg_s150x150&_nc_ht=scontent.cdninstagram.com&oh=00_x&oe=67000000",
+        "friendship_status": { "following": true, "is_bestie": false, "muting": false }
+      },
+      "ranked_position": 1,
+      "seen_ranked_position": 1,
+      "media_count": 3,
+      "media_ids": ["3333333333333333333", "3333333333333333334", "3333333333333333335"],
+      "has_besties_media": false,
+      "has_video": true
+    },
+    {
+      "id": "2222222222",
+      "latest_reel_media": 1760300000,
+      "seen": 1760300000,
+      "user": { "pk": 2222222222, "username": "second_account", "profile_pic_url": "https://scontent.cdninstagram.com/2.jpg" },
+      "media_count": 1
+    },
+    {
+      "id": "broadcast:999",
+      "latest_reel_media": 1760300000,
+      "broadcast_owner": { "pk": "999" }
+    }
+  ],
+  "broadcasts": [],
+  "sticker_version": 128,
+  "face_filter_nux_version": 4,
+  "stories_viewer_gestures_nux_eligible": false,
+  "has_new_nux_story": false,
+  "status": "ok"
+}

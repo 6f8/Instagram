@@ -1,0 +1,20 @@
+{
+  "tray": [
+    {
+      "id": "highlight:17900000000000000",
+      "strong_id__": "highlight:17900000000000000",
+      "title": "سفر",
+      "media_count": 12,
+      "latest_reel_media": 1750000000,
+      "cover_media": {
+        "cropped_image_version": { "width": 150, "height": 150, "url": "https://scontent.cdninstagram.com/hl.jpg" },
+        "crop_rect": [0.0, 0.2, 1.0, 0.76]
+      },
+      "user": { "pk": "1111111111", "username": "first.account" },
+      "is_pinned_highlight": false
+    },
+    { "title": "no id, skipped" }
+  ],
+  "show_empty_state": false,
+  "status": "ok"
+}
