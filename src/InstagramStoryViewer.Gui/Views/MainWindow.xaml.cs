@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using InstagramStoryViewer.Gui.Services;
 using InstagramStoryViewer.Gui.ViewModels;
 
 namespace InstagramStoryViewer.Gui.Views;
@@ -9,7 +10,11 @@ namespace InstagramStoryViewer.Gui.Views;
 public partial class MainWindow : Window, IDialogService
 {
     private readonly MainViewModel _vm;
+    private readonly TrayIcon _tray;
     private bool _isPlaying;
+    private bool _started;
+    private bool _exitRequested;
+    private bool _trayHintShown;
 
     public MainWindow()
     {
@@ -25,18 +30,69 @@ public partial class MainWindow : Window, IDialogService
             _vm.SetWindowActive(WindowState != WindowState.Minimized);
         };
         Loaded += async (_, _) => await OnLoadedAsync();
+
+        _tray = new TrayIcon();
+        _tray.SetAutoWatch(_vm.AutoWatchNew);
+        _tray.OpenRequested += ShowFromTray;
+        _tray.RefreshRequested += () => _vm.RefreshTrayCommand.Execute(null);
+        _tray.AutoWatchToggled += on => _vm.AutoWatchNew = on;
+        _tray.ExitRequested += ExitApp;
+
+        Closing += OnClosing;
         Closed += (_, _) =>
         {
             if (_watcher is { IsAlive: true }) _watcher.Close();
+            _tray.Dispose();
             _vm.Dispose();
         };
     }
 
+    /// <summary>The first-run notice needs the window, so starting hidden is only possible after it.</summary>
+    public bool CanStartHidden => _vm.DisclaimerAccepted;
+
+    /// <summary>Started with Windows (--minimized): run in the notification area without showing the window.</summary>
+    public void StartHidden()
+    {
+        _vm.SetWindowActive(false);
+        _ = OnLoadedAsync();
+    }
+
+    /// <summary>Shows the window from the notification area (also used when a second copy is started).</summary>
+    public void ShowFromTray()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+        _vm.SetWindowActive(true);
+    }
+
+    private void ExitApp()
+    {
+        _exitRequested = true;
+        Close();
+    }
+
+    /// <summary>Closing the window keeps the app running in the notification area (when enabled).</summary>
+    private void OnClosing(object? sender, CancelEventArgs e)
+    {
+        if (_exitRequested || !_vm.MinimizeToTray) return;
+        e.Cancel = true;
+        Hide();
+        _vm.SetWindowActive(false);
+        if (!_trayHintShown)
+        {
+            _trayHintShown = true;
+            _tray.Notify("البرنامج يعمل في الخلفية", "للخروج نهائياً: انقر بالزر الأيمن على الأيقونة ثم \"خروج\".");
+        }
+    }
+
     private async Task OnLoadedAsync()
     {
+        if (_started) return;
+        _started = true;
         if (!ShowDisclaimerIfNeeded())
         {
-            Close();
+            ExitApp();
             return;
         }
         try
@@ -86,6 +142,8 @@ public partial class MainWindow : Window, IDialogService
     {
         if (e.PropertyName is nameof(MainViewModel.SelectedStory) or nameof(MainViewModel.IsLoggedIn))
             UpdatePlayer();
+        if (e.PropertyName == nameof(MainViewModel.AutoWatchNew))
+            _tray.SetAutoWatch(_vm.AutoWatchNew);
     }
 
     private CancellationTokenSource? _previewCts;
@@ -249,7 +307,14 @@ public partial class MainWindow : Window, IDialogService
         }
     }
 
-    public void Notify(string title, string message) => _vm.ShowToast($"{title}: {message}");
+    /// <summary>In-app toast while the window is in front, Windows notification otherwise.</summary>
+    public void Notify(string title, string message)
+    {
+        if (IsVisible && IsActive && WindowState != WindowState.Minimized)
+            _vm.ShowToast($"{title}: {message}");
+        else
+            _tray.Notify(title, message);
+    }
 
     public string? PickFolder(string initial)
     {

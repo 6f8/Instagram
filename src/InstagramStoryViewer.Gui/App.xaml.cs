@@ -42,6 +42,14 @@ public partial class App : Application
         DispatcherUnhandledException += OnUnhandledException;
         TaskScheduler.UnobservedTaskException += (_, args) => args.SetObserved(); // never crash on a forgotten task
         base.OnStartup(e);
+
+        var window = new Views.MainWindow();
+        MainWindow = window;
+        var minimized = e.Args.Contains(Services.StartupRegistration.MinimizedArg);
+        if (minimized && window.CanStartHidden)
+            window.StartHidden(); // started with Windows: stay in the notification area
+        else
+            window.Show();
     }
 
     private void ListenForActivation()
@@ -50,9 +58,8 @@ public partial class App : Application
         {
             Dispatcher.BeginInvoke(() =>
             {
-                if (MainWindow is not { } w) return;
-                if (w.WindowState == WindowState.Minimized) w.WindowState = WindowState.Normal;
-                w.Activate();
+                if (MainWindow is not Views.MainWindow w) return;
+                w.ShowFromTray(); // also covers a window hidden in the notification area
                 w.Topmost = true;  // reliably bring to front, then restore normal z-order
                 w.Topmost = false;
             });

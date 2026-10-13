@@ -18,6 +18,7 @@ public sealed partial class MainViewModel
         CleanVideoCache();
         RefreshDownloads();
         foreach (var r in WatchHistory.Load()) History.Add(new WatchRecordViewModel(r));
+        _ = SafeAsync(() => CheckForUpdatesIfDueAsync());
         var saved = SettingsStore.Unprotect(_settings.ProtectedSession);
         if (saved is not null)
             await TryLoginAsync(saved, persist: true);

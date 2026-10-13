@@ -62,6 +62,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _quietFrom = _settings.QuietFrom;
         _quietTo = _settings.QuietTo;
         InitializeAccountLists();
+        InitializeAppOptions();
 
         _trayTimer = new DispatcherTimer();
         _trayTimer.Tick += async (_, _) => await SafeAsync(async () =>

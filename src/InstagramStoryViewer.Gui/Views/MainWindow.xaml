@@ -104,6 +104,13 @@
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="لوحة التحكم" Style="{StaticResource H1}" VerticalAlignment="Center" />
+                            <Button Margin="14,0,0,0" Padding="10,3" VerticalAlignment="Center" Style="{StaticResource PrimaryButton}"
+                                    Command="{Binding OpenUpdateCommand}" Visibility="{Binding HasUpdate, Converter={StaticResource Vis}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE923;" FontSize="13" Margin="0,0,6,0" />
+                                    <TextBlock Text="{Binding UpdateText}" FontSize="12" />
+                                </StackPanel>
+                            </Button>
                             <Border Margin="14,0,0,0" CornerRadius="10" Padding="10,3" VerticalAlignment="Center" Background="#337B2FF7"
                                     Visibility="{Binding IsAutoWatching, Converter={StaticResource Vis}}">
                                 <StackPanel Orientation="Horizontal">
