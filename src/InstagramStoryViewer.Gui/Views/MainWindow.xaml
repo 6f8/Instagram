@@ -1,0 +1,855 @@
+<Window x:Class="InstagramStoryViewer.Gui.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:InstagramStoryViewer.Gui.ViewModels"
+        Title="IG Story Viewer Pro"
+        Width="1360" Height="880" MinWidth="1100" MinHeight="700"
+        WindowStartupLocation="CenterScreen"
+        FlowDirection="RightToLeft"
+        FontFamily="{StaticResource AppFont}" FontSize="13"
+        Foreground="{StaticResource TextBrush}"
+        Background="{StaticResource BgBrush}"
+        Icon="pack://application:,,,/app.ico"
+        UseLayoutRounding="True"
+        d:DataContext="{d:DesignInstance vm:MainViewModel}"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="38" ResizeBorderThickness="6" GlassFrameThickness="0"
+                      CornerRadius="0" UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <!-- avatar with story ring; drawn at 76px, wrap in a Viewbox for other sizes -->
+        <DataTemplate x:Key="Avatar" DataType="{x:Type vm:TrayUserViewModel}">
+            <Grid Width="76" Height="76" FlowDirection="LeftToRight">
+                <Ellipse StrokeThickness="3.5" Stroke="{Binding HasUnseen, Converter={StaticResource Ring}}" />
+                <Ellipse Margin="7" Fill="{Binding Username, Converter={StaticResource NameBrush}}" />
+                <TextBlock Text="{Binding Initial}" FontSize="28" FontWeight="Bold" Foreground="White"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <Ellipse Margin="7">
+                    <Ellipse.Fill>
+                        <ImageBrush ImageSource="{Binding ProfilePicUrl, Converter={StaticResource Img}, ConverterParameter=160}"
+                                    Stretch="UniformToFill" />
+                    </Ellipse.Fill>
+                </Ellipse>
+            </Grid>
+        </DataTemplate>
+
+        <!-- flat clickable row -->
+        <Style x:Key="RowButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="Transparent" CornerRadius="10" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource RowHoverBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="StatValue" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="30" />
+            <Setter Property="FontWeight" Value="ExtraBold" />
+            <Setter Property="Margin" Value="0,2,0,0" />
+        </Style>
+        <Style x:Key="StatCard" TargetType="Border" BasedOn="{StaticResource Card}">
+            <Setter Property="Margin" Value="0,0,14,0" />
+            <Setter Property="Padding" Value="18,14" />
+        </Style>
+        <Style x:Key="ColHeader" TargetType="TextBlock" BasedOn="{StaticResource Muted}">
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+    </Window.Resources>
+
+    <Border x:Name="RootBorder">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="38" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- ======================================================== title bar -->
+            <Border Grid.Row="0" Background="{StaticResource BgBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1">
+                <DockPanel>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" WindowChrome.IsHitTestVisibleInChrome="True">
+                        <Button Style="{StaticResource CaptionButton}" Content="&#xE15B;" Click="Minimize_Click" ToolTip="تصغير" />
+                        <Button x:Name="MaxButton" Style="{StaticResource CaptionButton}" Content="&#xE3C6;" Click="Maximize_Click" ToolTip="تكبير" />
+                        <Button Style="{StaticResource CloseCaptionButton}" Content="&#xE5CD;" Click="Close_Click" ToolTip="إغلاق" />
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="16,0" VerticalAlignment="Center">
+                        <TextBlock Text="&#xEA0B;" Style="{StaticResource Icon}" FontSize="14" Foreground="{StaticResource PinkBrush}" Margin="0,0,8,0" />
+                        <TextBlock Text="IG Story Viewer Pro" Foreground="{StaticResource MutedBrush}" FontSize="12.5" VerticalAlignment="Center" />
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+
+            <!-- ======================================================== body -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="72" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- navigation rail -->
+                <Border Grid.Column="0" Background="{StaticResource RailBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
+                    <DockPanel Margin="0,14">
+                        <RadioButton DockPanel.Dock="Bottom" Style="{StaticResource RailButton}" ToolTip="الإعدادات"
+                                     IsChecked="{Binding Page, Converter={StaticResource EnumBool}, ConverterParameter=Settings}">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8B8;" FontSize="18" />
+                        </RadioButton>
+                        <StackPanel HorizontalAlignment="Center">
+                            <RadioButton Style="{StaticResource RailButton}" ToolTip="لوحة التحكم"
+                                         IsChecked="{Binding Page, Converter={StaticResource EnumBool}, ConverterParameter=Dashboard}">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE88A;" FontSize="18" />
+                            </RadioButton>
+                            <RadioButton Style="{StaticResource RailButton}" ToolTip="من تتابعهم"
+                                         IsChecked="{Binding Page, Converter={StaticResource EnumBool}, ConverterParameter=Following}">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE7FB;" FontSize="18" />
+                            </RadioButton>
+                            <RadioButton Style="{StaticResource RailButton}" ToolTip="التنزيلات"
+                                         IsChecked="{Binding Page, Converter={StaticResource EnumBool}, ConverterParameter=Downloads}">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xF090;" FontSize="18" />
+                            </RadioButton>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- ==================================================== page: dashboard -->
+                <Grid Grid.Column="1" Margin="24,20,24,22"
+                      Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=Dashboard}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <DockPanel Grid.Row="0">
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <TextBox Style="{StaticResource SearchBox}" Width="340" Tag="ابحث عن مستخدم واضغط Enter"
+                                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}">
+                                <TextBox.InputBindings>
+                                    <KeyBinding Key="Enter" Command="{Binding SearchCommand}" />
+                                </TextBox.InputBindings>
+                            </TextBox>
+                            <Button Style="{StaticResource IconButton}" Margin="8,0,0,0" Height="40" Width="40"
+                                    Command="{Binding RefreshTrayCommand}" ToolTip="تحديث">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE5D5;" />
+                            </Button>
+                        </StackPanel>
+                        <TextBlock Text="لوحة التحكم" Style="{StaticResource H1}" VerticalAlignment="Center" />
+                    </DockPanel>
+
+                    <!-- stats -->
+                    <Grid Grid.Row="1" Margin="0,18,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition /><ColumnDefinition /><ColumnDefinition /><ColumnDefinition />
+                        </Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Style="{StaticResource StatCard}">
+                            <StackPanel>
+                                <TextBlock Text="حسابات لديها ستوريات" Style="{StaticResource Muted}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding AccountsWithStories}" Style="{StaticResource StatValue}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Column="1" Style="{StaticResource StatCard}">
+                            <StackPanel>
+                                <TextBlock Text="حسابات بستوريات جديدة" Style="{StaticResource Muted}" />
+                                <TextBlock Text="{Binding UnseenAccounts}" Style="{StaticResource StatValue}" Foreground="{StaticResource PinkBrush}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Column="2" Style="{StaticResource StatCard}">
+                            <StackPanel>
+                                <TextBlock Text="تم تنزيله" Style="{StaticResource Muted}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding DownloadedCount}" Style="{StaticResource StatValue}" />
+                                    <TextBlock Text="{Binding DownloadedSize}" Foreground="{StaticResource GreenBrush}" FontSize="12.5"
+                                               FontWeight="SemiBold" VerticalAlignment="Bottom" Margin="10,0,0,10" FlowDirection="LeftToRight" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Column="3" Style="{StaticResource StatCard}" Margin="0">
+                            <StackPanel>
+                                <TextBlock Text="حالة الجلسة" Style="{StaticResource Muted}" />
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Ellipse Width="10" Height="10" Margin="0,0,10,0" VerticalAlignment="Center">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="{StaticResource RedBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsLoggedIn}" Value="True">
+                                                        <Setter Property="Fill" Value="{StaticResource GreenBrush}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+                                    <TextBlock Text="{Binding SessionText}" FontSize="22" FontWeight="ExtraBold">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{StaticResource RedBrush}" />
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsLoggedIn}" Value="True">
+                                                        <Setter Property="Foreground" Value="{StaticResource GreenBrush}" />
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <!-- main area -->
+                    <Grid Grid.Row="2" Margin="0,16,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="16" />
+                            <ColumnDefinition Width="360" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- stories table -->
+                        <Border Grid.Column="0" Style="{StaticResource Card}" Padding="16,14,16,8">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+
+                                <DockPanel Grid.Row="0">
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <Button Style="{StaticResource LinkButton}" Command="{Binding MarkAllSeenCommand}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource Icon}" Text="&#xE8F4;" FontSize="13" Margin="0,0,6,0" />
+                                                <TextBlock Text="تعليم الكل كمشاهَد" />
+                                            </StackPanel>
+                                        </Button>
+                                        <Button Style="{StaticResource LinkButton}" Command="{Binding DownloadAllCommand}" Margin="6,0,0,0">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource Icon}" Text="&#xF090;" FontSize="13" Margin="0,0,6,0" />
+                                                <TextBlock Text="تنزيل الكل" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding StoriesTitle}" Style="{StaticResource H3}" />
+                                        <Border Background="{StaticResource InputBrush}" CornerRadius="9" Padding="8,0" Margin="10,0,0,0"
+                                                VerticalAlignment="Center" Visibility="{Binding Stories.Count, Converter={StaticResource Vis}}">
+                                            <TextBlock Text="{Binding Stories.Count}" Foreground="{StaticResource MutedBrush}" FontSize="12" />
+                                        </Border>
+                                    </StackPanel>
+                                </DockPanel>
+
+                                <ProgressBar Grid.Row="1" IsIndeterminate="True" Height="3" Margin="0,10,0,0"
+                                             Visibility="{Binding IsLoadingStories, Converter={StaticResource Vis}}" />
+
+                                <!-- column headers -->
+                                <Grid Grid.Row="2" Margin="8,12,8,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="62" />
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="100" />
+                                        <ColumnDefinition Width="90" />
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="84" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="1" Text="النوع" Style="{StaticResource ColHeader}" />
+                                    <TextBlock Grid.Column="2" Text="نُشر" Style="{StaticResource ColHeader}" />
+                                    <TextBlock Grid.Column="3" Text="ينتهي بعد" Style="{StaticResource ColHeader}" />
+                                    <TextBlock Grid.Column="4" Text="الدقة" Style="{StaticResource ColHeader}" />
+                                    <TextBlock Grid.Column="5" Text="التنزيل" Style="{StaticResource ColHeader}" />
+                                </Grid>
+
+                                <ListBox Grid.Row="3" Style="{StaticResource PlainList}" ItemContainerStyle="{StaticResource RowItem}"
+                                         ItemsSource="{Binding Stories}" SelectedItem="{Binding SelectedStory}"
+                                         BorderBrush="{StaticResource BorderBrush}">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type vm:StoryRowViewModel}">
+                                            <Grid Height="64">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="62" />
+                                                    <ColumnDefinition Width="150" />
+                                                    <ColumnDefinition Width="100" />
+                                                    <ColumnDefinition Width="90" />
+                                                    <ColumnDefinition Width="110" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="84" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <Border Grid.Column="0" Width="38" Height="60" CornerRadius="7" Background="{StaticResource InputBrush}"
+                                                        HorizontalAlignment="Left" FlowDirection="LeftToRight">
+                                                    <Border.Clip>
+                                                        <RectangleGeometry Rect="0,0,38,60" RadiusX="7" RadiusY="7" />
+                                                    </Border.Clip>
+                                                    <Image Source="{Binding ThumbnailUrl, Converter={StaticResource Img}, ConverterParameter=96}" Stretch="UniformToFill" />
+                                                </Border>
+
+                                                <Border Grid.Column="1" CornerRadius="10" Padding="10,2" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="{StaticResource ImagePillBrush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsVideo}" Value="True">
+                                                                    <Setter Property="Background" Value="{StaticResource VideoPillBrush}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock FontSize="12" Margin="0,0,6,0">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock" BasedOn="{StaticResource Icon}">
+                                                                    <Setter Property="Text" Value="&#xE3F4;" />
+                                                                    <Setter Property="Foreground" Value="{StaticResource GreenBrush}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsVideo}" Value="True">
+                                                                            <Setter Property="Text" Value="&#xE037;" />
+                                                                            <Setter Property="Foreground" Value="{StaticResource VideoPillText}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                        <TextBlock Text="{Binding TypeText}" FontSize="12" FontWeight="Bold">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="{StaticResource GreenBrush}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsVideo}" Value="True">
+                                                                            <Setter Property="Foreground" Value="{StaticResource VideoPillText}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                </Border>
+
+                                                <TextBlock Grid.Column="2" Text="{Binding PostedText}" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="3" Text="{Binding ExpiresText}" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="4" Text="{Binding Resolution}" VerticalAlignment="Center"
+                                                           FlowDirection="LeftToRight" HorizontalAlignment="Left" Foreground="{StaticResource MutedBrush}" />
+
+                                                <Grid Grid.Column="5" VerticalAlignment="Center">
+                                                    <ProgressBar Width="140" HorizontalAlignment="Left" Maximum="100" Value="{Binding Progress}"
+                                                                 Visibility="{Binding IsDownloading, Converter={StaticResource Vis}}" />
+                                                    <StackPanel Orientation="Horizontal" ToolTip="{Binding Error}">
+                                                        <StackPanel.Resources>
+                                                            <Style x:Key="StatusColor" TargetType="TextBlock">
+                                                                <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+                                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                                                <Setter Property="VerticalAlignment" Value="Center" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding State}" Value="Done">
+                                                                        <Setter Property="Foreground" Value="{StaticResource GreenBrush}" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding State}" Value="Queued">
+                                                                        <Setter Property="Foreground" Value="{StaticResource OrangeBrush}" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding State}" Value="Failed">
+                                                                        <Setter Property="Foreground" Value="{StaticResource RedBrush}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </StackPanel.Resources>
+                                                        <TextBlock Margin="0,0,6,0" FontSize="15">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock" BasedOn="{StaticResource StatusColor}">
+                                                                    <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding State}" Value="Done">
+                                                                            <Setter Property="Text" Value="&#xE86C;" />
+                                                                            <Setter Property="Visibility" Value="Visible" />
+                                                                            <Setter Property="Foreground" Value="{StaticResource GreenBrush}" />
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding State}" Value="Queued">
+                                                                            <Setter Property="Text" Value="&#xE8B5;" />
+                                                                            <Setter Property="Visibility" Value="Visible" />
+                                                                            <Setter Property="Foreground" Value="{StaticResource OrangeBrush}" />
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding State}" Value="Failed">
+                                                                            <Setter Property="Text" Value="&#xE000;" />
+                                                                            <Setter Property="Visibility" Value="Visible" />
+                                                                            <Setter Property="Foreground" Value="{StaticResource RedBrush}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                        <TextBlock Text="{Binding StatusText}" Style="{StaticResource StatusColor}" />
+                                                        <TextBlock Text="{Binding SizeText}" Style="{StaticResource StatusColor}" FlowDirection="LeftToRight"
+                                                                   Margin="10,0,0,0" Opacity="0.85" />
+                                                    </StackPanel>
+                                                </Grid>
+
+                                                <StackPanel Grid.Column="6" Orientation="Horizontal" HorizontalAlignment="Right">
+                                                    <Button Style="{StaticResource IconButton}" Width="34" Height="34" ToolTip="تعليم كمشاهَد"
+                                                            Command="{Binding DataContext.MarkSeenCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}">
+                                                        <TextBlock FontSize="14">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock" BasedOn="{StaticResource Icon}">
+                                                                    <Setter Property="Text" Value="&#xE8F4;" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding MarkedSeen}" Value="True">
+                                                                            <Setter Property="Text" Value="&#xE5CA;" />
+                                                                            <Setter Property="Foreground" Value="{StaticResource GreenBrush}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
+                                                    </Button>
+                                                    <Button Style="{StaticResource IconButton}" Width="34" Height="34" Margin="6,0,0,0" ToolTip="تنزيل"
+                                                            Command="{Binding DataContext.DownloadStoryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}">
+                                                        <TextBlock Style="{StaticResource Icon}" Text="&#xF090;" FontSize="14" />
+                                                    </Button>
+                                                </StackPanel>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+
+                                <StackPanel Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Center" MaxWidth="420"
+                                            Visibility="{Binding ShowEmpty, Converter={StaticResource Vis}}">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE413;" FontSize="44" Foreground="#2A2F45" />
+                                    <TextBlock Text="{Binding EmptyMessage}" Style="{StaticResource Muted}" FontSize="14" Margin="0,14,0,0"
+                                               TextWrapping="Wrap" TextAlignment="Center" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- side: preview + following -->
+                        <Grid Grid.Column="2">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="1.5*" MinHeight="300" />
+                                <RowDefinition Height="16" />
+                                <RowDefinition Height="*" MinHeight="170" />
+                            </Grid.RowDefinitions>
+
+                            <Border Grid.Row="0" Style="{StaticResource Card}">
+                                <DockPanel>
+                                    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                                        <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Padding="4,0" ToolTip="فتح في المتصفح"
+                                                Command="{Binding OpenInBrowserCommand}" Visibility="{Binding HasSelection, Converter={StaticResource Vis}}">
+                                            <TextBlock Style="{StaticResource Icon}" Text="&#xE89E;" FontSize="14" />
+                                        </Button>
+                                        <TextBlock Text="معاينة" Style="{StaticResource H3}" />
+                                    </DockPanel>
+
+                                    <Border CornerRadius="12" Background="{StaticResource RailBrush}">
+                                        <Grid FlowDirection="LeftToRight" ClipToBounds="True">
+                                            <Image x:Name="PreviewImage" Stretch="Uniform"
+                                                   Source="{Binding SelectedStory.PreviewSource, Converter={StaticResource Img}}" />
+                                            <MediaElement x:Name="Player" LoadedBehavior="Manual" UnloadedBehavior="Stop" Stretch="Uniform"
+                                                          Visibility="Collapsed" MediaEnded="Player_MediaEnded" MediaFailed="Player_MediaFailed"
+                                                          MediaOpened="Player_MediaOpened" />
+
+                                            <!-- play / pause overlay for videos -->
+                                            <Button x:Name="PlayOverlay" Visibility="Collapsed" Click="PlayPause_Click" Background="Transparent"
+                                                    Cursor="Hand" FocusVisualStyle="{x:Null}">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border Background="Transparent">
+                                                            <Border x:Name="PlayBadge" Width="64" Height="64" CornerRadius="32" Background="#66000000"
+                                                                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                                <TextBlock x:Name="PlayGlyph" Style="{StaticResource Icon}" Text="&#xE037;" FontSize="24" Foreground="White" />
+                                                            </Border>
+                                                        </Border>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                            </Button>
+
+                                            <Button x:Name="MuteButton" Style="{StaticResource IconButton}" Width="32" Height="32" Visibility="Collapsed"
+                                                    Background="#99000000" BorderThickness="0" Click="Mute_Click"
+                                                    HorizontalAlignment="Left" VerticalAlignment="Top" Margin="10">
+                                                <TextBlock x:Name="MuteGlyph" Style="{StaticResource Icon}" Text="&#xE050;" FontSize="13" />
+                                            </Button>
+
+                                            <TextBlock Text="اختر ستوري للمعاينة" FlowDirection="RightToLeft" Style="{StaticResource Muted}"
+                                                       HorizontalAlignment="Center" Visibility="{Binding HasSelection, Converter={StaticResource NotVis}}" />
+
+                                            <Grid VerticalAlignment="Bottom" Margin="12" FlowDirection="RightToLeft"
+                                                  Visibility="{Binding HasSelection, Converter={StaticResource Vis}}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition /><ColumnDefinition Width="10" /><ColumnDefinition />
+                                                </Grid.ColumnDefinitions>
+                                                <Button Grid.Column="0" Style="{StaticResource DarkOverlayButton}" Command="{Binding MarkSeenCommand}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE8F4;" FontSize="13" Margin="0,0,6,0" />
+                                                        <TextBlock Text="مشاهَد" />
+                                                    </StackPanel>
+                                                </Button>
+                                                <Button Grid.Column="2" Style="{StaticResource PrimaryButton}" Command="{Binding DownloadStoryCommand}">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Style="{StaticResource Icon}" Text="&#xF090;" FontSize="13" Margin="0,0,6,0" />
+                                                        <TextBlock Text="تنزيل" />
+                                                    </StackPanel>
+                                                </Button>
+                                            </Grid>
+                                        </Grid>
+                                    </Border>
+                                </DockPanel>
+                            </Border>
+
+                            <Border Grid.Row="2" Style="{StaticResource Card}" Padding="12,14,12,8">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="*" />
+                                    </Grid.RowDefinitions>
+                                    <DockPanel Margin="4,0,4,6">
+                                        <TextBlock DockPanel.Dock="Right" Text="{Binding TrayUsers.Count}" Style="{StaticResource Muted}" />
+                                        <TextBlock Text="من تتابعهم" Style="{StaticResource H3}" />
+                                    </DockPanel>
+                                    <ProgressBar Grid.Row="1" IsIndeterminate="True" Height="3" Margin="4,0,4,6"
+                                                 Visibility="{Binding IsLoadingTray, Converter={StaticResource Vis}}" />
+                                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
+                                        <ItemsControl ItemsSource="{Binding TrayUsers}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="{x:Type vm:TrayUserViewModel}">
+                                                    <Button Style="{StaticResource RowButton}" Padding="6,5"
+                                                            Command="{Binding DataContext.OpenUserCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}">
+                                                        <DockPanel>
+                                                            <Viewbox Width="40" Height="40" DockPanel.Dock="Left">
+                                                                <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource Avatar}" />
+                                                            </Viewbox>
+                                                            <TextBlock DockPanel.Dock="Right" Text="{Binding StoryCount}" Style="{StaticResource Muted}" Margin="8,0" />
+                                                            <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding Username}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                                <TextBlock Text="{Binding LatestText}" Style="{StaticResource Muted}" FontSize="11.5" />
+                                                            </StackPanel>
+                                                        </DockPanel>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </Grid>
+
+                <!-- ==================================================== page: following -->
+                <Grid Grid.Column="1" Margin="24,20,24,22"
+                      Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=Following}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Command="{Binding RefreshTrayCommand}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE5D5;" FontSize="13" Margin="0,0,8,0" />
+                                <TextBlock Text="تحديث" />
+                            </StackPanel>
+                        </Button>
+                        <StackPanel>
+                            <TextBlock Text="من تتابعهم" Style="{StaticResource H1}" />
+                            <TextBlock Style="{StaticResource Muted}" Margin="0,2,0,0">
+                                <Run Text="{Binding AccountsWithStories, Mode=OneWay}" /><Run Text=" حساب لديه ستوريات · " /><Run Text="{Binding UnseenAccounts, Mode=OneWay}" /><Run Text=" بستوريات جديدة" />
+                            </TextBlock>
+                        </StackPanel>
+                    </DockPanel>
+                    <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,18,0,0">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto">
+                            <ItemsControl ItemsSource="{Binding TrayUsers}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:TrayUserViewModel}">
+                                        <Button Style="{StaticResource RowButton}" Width="140" Padding="8,12" Margin="4"
+                                                Command="{Binding DataContext.OpenUserCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}">
+                                            <StackPanel Width="120">
+                                                <Viewbox Width="84" Height="84" HorizontalAlignment="Center">
+                                                    <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource Avatar}" />
+                                                </Viewbox>
+                                                <TextBlock Text="{Binding Username}" FontWeight="SemiBold" Margin="0,8,0,0"
+                                                           TextAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding LatestText}" Foreground="{StaticResource MutedBrush}" FontSize="11.5"
+                                                           TextAlignment="Center" Margin="0,2,0,0" />
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+                </Grid>
+
+                <!-- ==================================================== page: downloads -->
+                <Grid Grid.Column="1" Margin="24,20,24,22"
+                      Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=Downloads}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel>
+                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                            <Button Command="{Binding OpenDownloadFolderCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE2C8;" FontSize="13" Margin="0,0,8,0" />
+                                    <TextBlock Text="فتح المجلد" />
+                                </StackPanel>
+                            </Button>
+                            <Button Margin="8,0,0,0" Click="RefreshDownloads_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE5D5;" FontSize="13" Margin="0,0,8,0" />
+                                    <TextBlock Text="تحديث" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                        <StackPanel>
+                            <TextBlock Text="التنزيلات" Style="{StaticResource H1}" />
+                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                <TextBlock Style="{StaticResource Muted}">
+                                    <Run Text="{Binding DownloadedCount, Mode=OneWay}" /><Run Text=" ملف  ·  " />
+                                </TextBlock>
+                                <TextBlock Style="{StaticResource Muted}" Text="{Binding DownloadedSize}" FlowDirection="LeftToRight" />
+                            </StackPanel>
+                        </StackPanel>
+                    </DockPanel>
+
+                    <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,18,0,0" Padding="16,10,16,8">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <Grid Margin="8,4,8,6">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="56" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="170" />
+                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="160" />
+                                    <ColumnDefinition Width="84" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="1" Text="الملف" Style="{StaticResource ColHeader}" />
+                                <TextBlock Grid.Column="2" Text="الحساب" Style="{StaticResource ColHeader}" />
+                                <TextBlock Grid.Column="3" Text="الحجم" Style="{StaticResource ColHeader}" />
+                                <TextBlock Grid.Column="4" Text="التاريخ" Style="{StaticResource ColHeader}" />
+                            </Grid>
+                            <ListBox Grid.Row="1" Style="{StaticResource PlainList}" ItemContainerStyle="{StaticResource RowItem}"
+                                     ItemsSource="{Binding Downloads}" MouseDoubleClick="Downloads_DoubleClick"
+                                     VirtualizingPanel.IsVirtualizing="True">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:DownloadedFileViewModel}">
+                                        <Grid Height="52">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="56" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="170" />
+                                                <ColumnDefinition Width="100" />
+                                                <ColumnDefinition Width="160" />
+                                                <ColumnDefinition Width="84" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="32" Height="50" CornerRadius="6" Background="{StaticResource InputBrush}"
+                                                    HorizontalAlignment="Left" FlowDirection="LeftToRight">
+                                                <Border.Clip>
+                                                    <RectangleGeometry Rect="0,0,32,50" RadiusX="6" RadiusY="6" />
+                                                </Border.Clip>
+                                                <Grid>
+                                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE04B;" Foreground="{StaticResource VideoPillText}"
+                                                               Visibility="{Binding IsVideo, Converter={StaticResource Vis}}" />
+                                                    <Image Source="{Binding ImagePath, Converter={StaticResource Img}, ConverterParameter=64}" Stretch="UniformToFill" />
+                                                </Grid>
+                                            </Border>
+                                            <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                                       FlowDirection="LeftToRight" HorizontalAlignment="Left" ToolTip="{Binding FullPath}" />
+                                            <TextBlock Grid.Column="2" Text="{Binding Folder}" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Grid.Column="3" Text="{Binding SizeText}" VerticalAlignment="Center"
+                                                       FlowDirection="LeftToRight" HorizontalAlignment="Left" />
+                                            <TextBlock Grid.Column="4" Text="{Binding DateText}" VerticalAlignment="Center"
+                                                       FlowDirection="LeftToRight" HorizontalAlignment="Left" Foreground="{StaticResource MutedBrush}" />
+                                            <StackPanel Grid.Column="5" Orientation="Horizontal" HorizontalAlignment="Right">
+                                                <Button Style="{StaticResource IconButton}" Width="34" Height="34" ToolTip="فتح"
+                                                        Command="{Binding DataContext.OpenFileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding FullPath}">
+                                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE873;" FontSize="14" />
+                                                </Button>
+                                                <Button Style="{StaticResource IconButton}" Width="34" Height="34" Margin="6,0,0,0" ToolTip="إظهار في المجلد"
+                                                        Command="{Binding DataContext.ShowInFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                        CommandParameter="{Binding FullPath}">
+                                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE2C8;" FontSize="14" />
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <StackPanel Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        Visibility="{Binding HasDownloads, Converter={StaticResource NotVis}}">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xF090;" FontSize="44" Foreground="#2A2F45" />
+                                <TextBlock Text="لا توجد تنزيلات بعد" Style="{StaticResource Muted}" FontSize="14" Margin="0,14,0,0" HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <!-- ==================================================== page: settings -->
+                <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
+                              Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=Settings}">
+                    <StackPanel Margin="24,20,24,22" MaxWidth="780" HorizontalAlignment="Left">
+                        <TextBlock Text="الإعدادات" Style="{StaticResource H1}" Margin="0,0,0,18" />
+
+                        <Border Style="{StaticResource Card}" Margin="0,0,0,14" Padding="20,18">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Command="{Binding LogoutCommand}" VerticalAlignment="Center"
+                                        Foreground="{StaticResource RedBrush}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE9BA;" FontSize="13" Margin="0,0,8,0" />
+                                        <TextBlock Text="تسجيل الخروج" />
+                                    </StackPanel>
+                                </Button>
+                                <StackPanel>
+                                    <TextBlock Text="الحساب" Style="{StaticResource H3}" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                        <TextBlock Text="{Binding SessionText}" Foreground="{StaticResource GreenBrush}" FontWeight="Bold" />
+                                        <TextBlock Text="  ·  معرّف المستخدم: " Style="{StaticResource Muted}" />
+                                        <TextBlock Text="{Binding ViewerId}" Style="{StaticResource Muted}" FlowDirection="LeftToRight" />
+                                    </StackPanel>
+                                    <TextBlock Text="الجلسة محفوظة مشفّرة على هذا الجهاز ولا يمكن قراءتها من حساب ويندوز آخر."
+                                               Style="{StaticResource Muted}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </DockPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}" Margin="0,0,0,14" Padding="20,18">
+                            <StackPanel>
+                                <TextBlock Text="مجلد التنزيل" Style="{StaticResource H3}" />
+                                <DockPanel Margin="0,10,0,0">
+                                    <Button DockPanel.Dock="Right" Margin="8,0,0,0" Command="{Binding OpenDownloadFolderCommand}" Content="فتح" />
+                                    <Button DockPanel.Dock="Right" Margin="8,0,0,0" Command="{Binding BrowseFolderCommand}" Content="تغيير..." />
+                                    <TextBox Style="{StaticResource FieldBox}" Text="{Binding DownloadFolder, Mode=OneWay}" IsReadOnly="True"
+                                             FlowDirection="LeftToRight" />
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}" Margin="0,0,0,14" Padding="20,18">
+                            <StackPanel>
+                                <TextBlock Text="السلوك" Style="{StaticResource H3}" Margin="0,0,0,12" />
+                                <CheckBox IsChecked="{Binding ConfirmBeforeMarkSeen}" Content="اسأل قبل تعليم الستوري كمشاهَد (لأن اسمك سيظهر لصاحبه)" />
+                                <CheckBox IsChecked="{Binding AutoPlayVideos}" Content="تشغيل الفيديو تلقائياً في المعاينة" Margin="0,12,0,0" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource Card}" Padding="20,18">
+                            <StackPanel>
+                                <TextBlock Text="حول البرنامج" Style="{StaticResource H3}" />
+                                <TextBlock Style="{StaticResource Muted}" Margin="0,6,0,0">
+                                    <Run Text="IG Story Viewer Pro · الإصدار " /><Run Text="{Binding AppVersion, Mode=OneWay}" />
+                                </TextBlock>
+                                <TextBlock Style="{StaticResource Muted}" Margin="0,4,0,0" TextWrapping="Wrap"
+                                           Text="يعتمد البرنامج على واجهات إنستجرام غير الرسمية وقد تتغير دون إشعار. استخدمه للاستخدام الشخصي واحترم خصوصية الآخرين." />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- ==================================================== login overlay -->
+                <Grid Grid.ColumnSpan="2" Visibility="{Binding IsLoggedIn, Converter={StaticResource NotVis}}">
+                    <Grid.Background>
+                        <RadialGradientBrush Center="0.5,0.35" GradientOrigin="0.5,0.35" RadiusX="0.8" RadiusY="0.9">
+                            <GradientStop Color="#1C1530" Offset="0" />
+                            <GradientStop Color="#0D0F17" Offset="1" />
+                        </RadialGradientBrush>
+                    </Grid.Background>
+                    <Border Width="480" Style="{StaticResource Card}" Padding="34,30" VerticalAlignment="Center" CornerRadius="20">
+                        <StackPanel>
+                            <Border Width="64" Height="64" CornerRadius="18" Background="{StaticResource AccentBrush}" HorizontalAlignment="Center">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#FF2D95" BlurRadius="30" ShadowDepth="0" Opacity="0.5" />
+                                </Border.Effect>
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE412;" FontSize="30" Foreground="White" />
+                            </Border>
+                            <TextBlock Text="تسجيل الدخول" Style="{StaticResource H1}" HorizontalAlignment="Center" Margin="0,18,0,4" />
+                            <TextBlock Text="سجّل الدخول بحساب إنستجرام لعرض الستوريات وتنزيلها" Style="{StaticResource Muted}"
+                                       HorizontalAlignment="Center" FontSize="13.5" />
+
+                            <Button Style="{StaticResource PrimaryButton}" Height="46" Margin="0,24,0,0" FontSize="14"
+                                    Command="{Binding LoginWithBrowserCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE894;" FontSize="15" Margin="0,0,10,0" />
+                                    <TextBlock Text="تسجيل الدخول عبر إنستجرام" />
+                                </StackPanel>
+                            </Button>
+
+                            <Grid Margin="0,22,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition /><ColumnDefinition Width="Auto" /><ColumnDefinition />
+                                </Grid.ColumnDefinitions>
+                                <Border Height="1" Background="{StaticResource BorderBrush}" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="أو الصق الكوكيز يدوياً" Style="{StaticResource Muted}" Margin="12,0" />
+                                <Border Grid.Column="2" Height="1" Background="{StaticResource BorderBrush}" VerticalAlignment="Center" />
+                            </Grid>
+
+                            <PasswordBox x:Name="CookieBox" KeyDown="CookieBox_KeyDown" />
+                            <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="2,8,2,0" FontSize="12"
+                                       Text="من المتصفح: F12 ثم Application ثم Cookies ثم instagram.com، وانسخ sessionid (ويُفضَّل معه csrftoken)." />
+
+                            <DockPanel Margin="0,16,0,0">
+                                <Button DockPanel.Dock="Right" Content="دخول" Width="110" Click="CookieLogin_Click" />
+                                <CheckBox IsChecked="{Binding RememberSession}" Content="تذكّرني على هذا الجهاز" VerticalAlignment="Center" />
+                            </DockPanel>
+
+                            <ProgressBar IsIndeterminate="True" Height="3" Margin="0,18,0,0"
+                                         Visibility="{Binding IsLoggingIn, Converter={StaticResource Vis}}" />
+                            <TextBlock Text="{Binding LoginError}" Foreground="{StaticResource RedBrush}" TextWrapping="Wrap"
+                                       Margin="0,12,0,0" HorizontalAlignment="Center" TextAlignment="Center"
+                                       Visibility="{Binding LoginError, Converter={StaticResource Vis}}" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- toast -->
+                <Border Grid.ColumnSpan="2" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,26"
+                        CornerRadius="12" Padding="18,10" MaxWidth="640" IsHitTestVisible="False"
+                        Visibility="{Binding Toast, Converter={StaticResource Vis}}">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="#1D2132" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding ToastIsError}" Value="True">
+                                    <Setter Property="Background" Value="#5A1E2B" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="24" ShadowDepth="4" Opacity="0.5" />
+                    </Border.Effect>
+                    <TextBlock Text="{Binding Toast}" TextWrapping="Wrap" FontWeight="SemiBold" />
+                </Border>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

@@ -83,6 +83,7 @@ public sealed class StoryUser
     [JsonPropertyName("username")] public string? Username { get; set; }
     [JsonPropertyName("full_name")] public string? FullName { get; set; }
     [JsonPropertyName("is_private")] public bool? IsPrivate { get; set; }
+    [JsonPropertyName("profile_pic_url")] public string? ProfilePicUrl { get; set; }
 }
 
 public sealed class StoryItem
@@ -114,6 +115,24 @@ public sealed class StoryItem
     public string? BestUrl => IsVideo
         ? Best(VideoVersions)?.Url
         : Best(ImageVersions2?.Candidates)?.Url;
+
+    /// <summary>Smallest image rendition that is still sharp enough for a list thumbnail.</summary>
+    [JsonIgnore]
+    public string? ThumbnailUrl =>
+        ImageVersions2?.Candidates?.Where(c => !string.IsNullOrEmpty(c.Url))
+            .OrderBy(c => c.Width < 150 ? int.MaxValue : c.Width)
+            .FirstOrDefault()?.Url;
+
+    /// <summary>"width×height" of the rendition <see cref="BestUrl"/> points at.</summary>
+    [JsonIgnore]
+    public string? Resolution
+    {
+        get
+        {
+            var c = IsVideo ? Best(VideoVersions) : Best(ImageVersions2?.Candidates);
+            return c is { Width: > 0, Height: > 0 } ? $"{c.Width}×{c.Height}" : null;
+        }
+    }
 
     [JsonIgnore]
     public DateTimeOffset TakenAtTime => DateTimeOffset.FromUnixTimeSeconds(TakenAt);

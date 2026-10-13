@@ -28,7 +28,7 @@ public static class Program
         try
         {
             var cookies = LoadSession();
-            using var client = new InstagramClient(cookies);
+            using var client = new InstagramClient(cookies, msg => Ui.Warn("  ⚠ " + msg));
             var app = new App(client, new StoryDownloader(client, options.OutputFolder));
 
             if (options.Tray)

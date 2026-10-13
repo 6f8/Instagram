@@ -30,9 +30,13 @@ public sealed class InstagramClient : IDisposable
     private readonly SemaphoreSlim _throttle = new(1, 1);
     private DateTime _lastRequest = DateTime.MinValue;
 
-    public InstagramClient(SessionCookies cookies)
+    private readonly Action<string>? _log;
+
+    /// <param name="log">Receives status messages such as retry notices (optional).</param>
+    public InstagramClient(SessionCookies cookies, Action<string>? log = null)
     {
         _cookies = cookies;
+        _log = log;
         var handler = new HttpClientHandler
         {
             UseCookies = false, // cookies are sent manually so we control exactly what goes out
@@ -112,7 +116,8 @@ public sealed class InstagramClient : IDisposable
     }
 
     /// <summary>Downloads raw media bytes from Instagram's CDN.</summary>
-    public async Task DownloadAsync(string url, string filePath, CancellationToken ct = default)
+    /// <param name="progress">Reports 0..1 when the server sends Content-Length.</param>
+    public async Task DownloadAsync(string url, string filePath, CancellationToken ct = default, IProgress<double>? progress = null)
     {
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
         using var res = await _http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
@@ -120,10 +125,31 @@ public sealed class InstagramClient : IDisposable
             throw new InstagramApiException(InstagramErrorKind.Unknown,
                 $"فشل تنزيل الملف (HTTP {(int)res.StatusCode}).", res.StatusCode);
 
+        var total = res.Content.Headers.ContentLength;
         var tmp = filePath + ".part";
-        await using (var fs = File.Create(tmp))
-            await res.Content.CopyToAsync(fs, ct);
-        File.Move(tmp, filePath, overwrite: true);
+        try
+        {
+            await using (var src = await res.Content.ReadAsStreamAsync(ct))
+            await using (var fs = File.Create(tmp))
+            {
+                var buffer = new byte[81920];
+                long read = 0;
+                int n;
+                while ((n = await src.ReadAsync(buffer, ct)) > 0)
+                {
+                    await fs.WriteAsync(buffer.AsMemory(0, n), ct);
+                    read += n;
+                    if (total is > 0) progress?.Report((double)read / total.Value);
+                }
+            }
+            File.Move(tmp, filePath, overwrite: true);
+            progress?.Report(1);
+        }
+        catch
+        {
+            try { File.Delete(tmp); } catch (IOException) { }
+            throw;
+        }
     }
 
     // ------------------------------------------------------------------ plumbing
@@ -257,13 +283,11 @@ public sealed class InstagramClient : IDisposable
         finally { _throttle.Release(); }
     }
 
-    private static async Task BackoffAsync(int attempt, RetryConditionHeaderValue? retryAfter, string reason, CancellationToken ct)
+    private async Task BackoffAsync(int attempt, RetryConditionHeaderValue? retryAfter, string reason, CancellationToken ct)
     {
         var delay = retryAfter?.Delta ?? TimeSpan.FromSeconds(Math.Pow(2, attempt) * 2);
         if (delay > TimeSpan.FromMinutes(2)) delay = TimeSpan.FromMinutes(2);
-        Console.ForegroundColor = ConsoleColor.DarkYellow;
-        Console.WriteLine($"  ⚠ {reason} — إعادة المحاولة بعد {delay.TotalSeconds:0} ثانية ({attempt}/{MaxRetries - 1})...");
-        Console.ResetColor();
+        _log?.Invoke($"{reason} — إعادة المحاولة بعد {delay.TotalSeconds:0} ثانية ({attempt}/{MaxRetries - 1})...");
         await Task.Delay(delay, ct);
     }
 

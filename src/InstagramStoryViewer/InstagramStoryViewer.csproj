@@ -6,8 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>InstagramStoryViewer</RootNamespace>
-    <AssemblyName>InstagramStoryViewer</AssemblyName>
+    <AssemblyName>InstagramStoryViewer.Cli</AssemblyName>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../InstagramStoryViewer.Core/InstagramStoryViewer.Core.csproj" />
+  </ItemGroup>
 
   <!-- dotnet publish -c Release -r win-x64 → single self-contained .exe (no .NET install needed) -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">

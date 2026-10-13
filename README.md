@@ -1,73 +1,64 @@
-# Instagram Story Viewer (C#)
+# IG Story Viewer Pro
 
-A .NET 8 console program for viewing Instagram stories with **your own account's session**. It talks to the same endpoints the instagram.com web app uses.
+A Windows desktop app (WPF, .NET 8) for viewing and downloading Instagram stories with **your own account**. It has a right-to-left Arabic interface with a dark "neon dashboard" design.
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+## Download
+Get [`release/win-x64/InstagramStoryViewer.exe`](release/win-x64/InstagramStoryViewer.exe) and double-click it.
+It's a single self-contained file, so .NET doesn't need to be installed (Windows 10/11, 64-bit).
 
 ## Features
-- List the stories of the accounts you follow (●: not seen yet)
-- Show the stories of any public account, or a private account you follow
-- Open a story in your browser, or download stories in their highest quality (`.jpg` / `.mp4`)
-- Mark stories as seen (optional; your name then appears in the story owner's viewers list)
-- Handles Instagram's responses: expired session, account verification (checkpoint), rate limits (429), private accounts, and non-JSON responses
-- Automatic retries with exponential backoff, plus a delay between requests to avoid getting blocked
+- **Dashboard:** stats (accounts with stories, new stories, downloads, session status), a table of the selected account's stories, and a preview panel that plays images and videos.
+- **Following:** every account you follow that currently has stories. The gradient ring means there are stories you haven't seen yet.
+- **Search** for any public account, or a private account you follow.
+- **Downloads** at the highest available quality with a progress bar. Each file is saved to `<download folder>/<username>/`.
+- **Mark as seen** for one story or for all of them. The app asks first, because your name will appear in the story owner's viewers list.
+- **Downloads page** lists every downloaded file. You can open a file or show it in its folder.
+- **Settings:** download folder, confirm before marking as seen, video autoplay, and log out.
 
-## Download (Windows)
-A ready-to-run executable is at [`release/win-x64/InstagramStoryViewer.exe`](release/win-x64/InstagramStoryViewer.exe). It is a single self-contained file, so .NET does **not** need to be installed. Double-click it, or run it from a terminal:
-```powershell
-.\InstagramStoryViewer.exe --user natgeo --download
-```
+| Following | Downloads |
+|---|---|
+| ![](docs/screenshots/following.png) | ![](docs/screenshots/downloads.png) |
+| **Settings** | **Login** |
+| ![](docs/screenshots/settings.png) | ![](docs/screenshots/login.png) |
 
-To rebuild the exe yourself:
-```bash
-cd src/InstagramStoryViewer
-dotnet publish -c Release -r win-x64 -o ../../release/win-x64
-```
+## Logging in
+There are two ways to log in:
+1. **"Log in via Instagram"** opens instagram.com inside the app in an embedded Edge WebView2 browser. Log in as usual, and the window closes on its own once the app reads the session cookie. Your password never passes through the app.
+   WebView2 comes preinstalled on Windows 10/11. If it's missing, install the *Evergreen Runtime* from Microsoft.
+2. **Paste the cookie manually:** in your browser, open `F12`, then **Application**, then **Cookies**, then `instagram.com`. Copy `sessionid`, and preferably `csrftoken` too, in this form: `sessionid=...; csrftoken=...`.
 
-## Requirements (to build from source)
-- [.NET 8 SDK](https://dotnet.microsoft.com/download)
-
-## Getting your session (sessionid)
-1. Open https://www.instagram.com in your browser and log in.
-2. Press `F12` and go to **Application** (or **Storage** in Firefox), then **Cookies**, then `https://www.instagram.com`.
-3. Copy the value of `sessionid`, and preferably `csrftoken` too (marking stories as seen needs it).
-
-Give the program the session in one of these ways:
-- Paste it when the program asks for it (input is hidden, and you can choose to save it to `session.txt`)
-- Use the environment variable `IG_COOKIE`:
-  ```bash
-  # Windows PowerShell
-  $env:IG_COOKIE = "sessionid=XXXX; csrftoken=YYYY"
-  # Linux / macOS
-  export IG_COOKIE="sessionid=XXXX; csrftoken=YYYY"
-  ```
-
-> ⚠️ `sessionid` gives full access to your account. Never share it, and don't upload `session.txt` anywhere (it's in `.gitignore`).
-
-## Running
-```bash
-cd src/InstagramStoryViewer
-
-dotnet run                                   # interactive mode (menu)
-dotnet run -- --tray                         # stories of the accounts you follow
-dotnet run -- --user natgeo                  # show a user's stories
-dotnet run -- --user natgeo --download       # download them to the stories/natgeo folder
-dotnet run -- --user natgeo --seen           # mark them as seen
-dotnet run -- --user natgeo -d --out D:\IG   # choose the download folder
-```
+The session is saved encrypted with Windows DPAPI in `%AppData%\InstagramStoryViewer\settings.json`, so other Windows accounts can't read it.
 
 ## Project structure
 ```
-src/InstagramStoryViewer/
-├── Program.cs                    # interface, menu, and command-line options
-├── Api/
-│   ├── InstagramClient.cs        # HTTP requests, response analysis, error handling, retries
-│   ├── InstagramApiException.cs  # error types (session / verification / rate limit ...)
-│   └── SessionCookies.cs         # cookie parsing (sessionid / csrftoken / ds_user_id)
-├── Models/ApiModels.cs           # JSON response models
-├── Json/FlexibleStringConverter.cs  # reads ids whether they come back as numbers or strings
-└── Services/StoryDownloader.cs   # story downloads
+InstagramStoryViewer.sln
+src/
+├── InstagramStoryViewer.Core/   # Instagram API: requests, response parsing, errors, downloads
+├── InstagramStoryViewer.Gui/    # WPF interface (MVVM) → InstagramStoryViewer.exe
+│   ├── Views/                   # main window, WebView2 login window, dialogs
+│   ├── ViewModels/              # app logic
+│   ├── Themes/Theme.xaml        # colors and styles
+│   └── Fonts/                   # Cairo + Material Icons (embedded in the app)
+└── InstagramStoryViewer/        # command-line version (InstagramStoryViewer.Cli)
+designs/                         # the five proposed interface designs
 ```
 
-## Endpoints used
+## Building from source
+```bash
+# development build
+dotnet build InstagramStoryViewer.sln
+
+# single-file exe
+dotnet publish src/InstagramStoryViewer.Gui -c Release -r win-x64 -o release/win-x64
+
+# command-line version
+dotnet run --project src/InstagramStoryViewer -- --user natgeo --download
+```
+Building needs the .NET 8 SDK. It works on Windows, and also on Linux/macOS through `EnableWindowsTargeting`.
+
+## Instagram endpoints used
 | Purpose | Endpoint |
 |---|---|
 | Username to id | `GET /api/v1/users/web_profile_info/?username=` |
@@ -76,6 +67,7 @@ src/InstagramStoryViewer/
 | Mark as seen | `POST /api/v1/stories/reel/seen` |
 
 ## Important notes
-- These are unofficial Instagram endpoints, and they may change without notice. If something stops working, the first thing to check is the response the program prints.
-- Using automated tools may violate Instagram's terms of use. Use the program reasonably and only for personal use. Too many requests can get your account temporarily restricted.
-- Respect people's privacy. Don't republish other people's stories without their permission.
+- These are unofficial Instagram endpoints and may change without notice.
+- Using automated tools may violate Instagram's terms of use. Use the app reasonably and only for personal use. The app spaces out its requests to reduce the risk of restrictions on your account.
+- Respect people's privacy, and don't republish other people's stories without their permission.
+- Fonts: Cairo (OFL 1.1) and Material Icons (Apache 2.0). See `src/InstagramStoryViewer.Gui/Fonts/LICENSES.md`.

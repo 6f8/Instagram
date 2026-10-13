@@ -1,0 +1,20 @@
+<Application x:Class="InstagramStoryViewer.Gui.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:InstagramStoryViewer.Gui"
+             StartupUri="Views/MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/Theme.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+            <local:ImageSourceConverter x:Key="Img" />
+            <local:BoolToVisibilityConverter x:Key="Vis" />
+            <local:BoolToVisibilityConverter x:Key="NotVis" Invert="True" />
+            <local:EqualsToVisibilityConverter x:Key="PageVis" />
+            <local:EnumToBoolConverter x:Key="EnumBool" />
+            <local:NameToBrushConverter x:Key="NameBrush" />
+            <local:RingBrushConverter x:Key="Ring" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

@@ -1,0 +1,41 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{82AC8A1B-6BA3-4988-B5BF-E81492343E89}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InstagramStoryViewer.Core", "src\InstagramStoryViewer.Core\InstagramStoryViewer.Core.csproj", "{7976884E-BDD4-48FA-9089-D110CC853E25}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InstagramStoryViewer", "src\InstagramStoryViewer\InstagramStoryViewer.csproj", "{7E0105FD-0200-4822-8F1E-21B4D384825F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InstagramStoryViewer.Gui", "src\InstagramStoryViewer.Gui\InstagramStoryViewer.Gui.csproj", "{A42933E6-91D2-4607-B758-0B1B53CD6727}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7976884E-BDD4-48FA-9089-D110CC853E25}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7976884E-BDD4-48FA-9089-D110CC853E25}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7976884E-BDD4-48FA-9089-D110CC853E25}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7976884E-BDD4-48FA-9089-D110CC853E25}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7E0105FD-0200-4822-8F1E-21B4D384825F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7E0105FD-0200-4822-8F1E-21B4D384825F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7E0105FD-0200-4822-8F1E-21B4D384825F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7E0105FD-0200-4822-8F1E-21B4D384825F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A42933E6-91D2-4607-B758-0B1B53CD6727}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A42933E6-91D2-4607-B758-0B1B53CD6727}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A42933E6-91D2-4607-B758-0B1B53CD6727}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A42933E6-91D2-4607-B758-0B1B53CD6727}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{7976884E-BDD4-48FA-9089-D110CC853E25} = {82AC8A1B-6BA3-4988-B5BF-E81492343E89}
+		{7E0105FD-0200-4822-8F1E-21B4D384825F} = {82AC8A1B-6BA3-4988-B5BF-E81492343E89}
+		{A42933E6-91D2-4607-B758-0B1B53CD6727} = {82AC8A1B-6BA3-4988-B5BF-E81492343E89}
+	EndGlobalSection
+EndGlobal
