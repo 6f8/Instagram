@@ -144,26 +144,12 @@ public sealed class InstagramClient : IDisposable
             ["viewSeenAt"] = seenAt.ToString()
         };
 
-        // mobile app: reels = { "<mediaPk>_<ownerPk>_<reelId>": ["<takenAt>_<seenAt>"] }
-        var mobilePayload = JsonSerializer.Serialize(new Dictionary<string, object>
-        {
-            ["reels"] = new Dictionary<string, string[]> { [$"{mediaPk}_{ownerId}_{ownerId}"] = [$"{item.TakenAt}_{seenAt}"] },
-            ["container_module"] = "feed_timeline",
-            ["reel_media_skipped"] = new Dictionary<string, object>(),
-            ["live_vods"] = new Dictionary<string, object>(),
-            ["live_vods_skipped"] = new Dictionary<string, object>(),
-            ["nuxes"] = new Dictionary<string, object>(),
-            ["nuxes_skipped"] = new Dictionary<string, object>(),
-            ["_uid"] = ViewerId ?? "",
-            ["_uuid"] = Guid.NewGuid().ToString()
-        });
-
         var variants = new (EndpointProfile Profile, string Path, Func<HttpContent> Body)[]
         {
             (Profiles[0], "/stories/reel/seen", () => new FormUrlEncodedContent(webFields)),
-            (Profiles[0], "/api/v1/stories/reel/seen", () => new FormUrlEncodedContent(webFields)),
-            (Profiles[2], "/api/v2/media/seen/?reel=1&live_vod=0",
-                () => new FormUrlEncodedContent(new Dictionary<string, string> { ["signed_body"] = "SIGNATURE." + mobilePayload }))
+            (Profiles[0], "/api/v1/stories/reel/seen", () => new FormUrlEncodedContent(webFields))
+            // The mobile /api/v2/media/seen/ call is deliberately not used: sending app-signed requests with a
+            // browser session looks suspicious to Instagram and may get the session revoked.
         };
 
         var referer = ownerUsername is null ? null : $"https://www.instagram.com/stories/{ownerUsername}/{mediaPk}/";

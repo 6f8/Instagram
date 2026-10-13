@@ -208,7 +208,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         var cookie = await _dialogs.LoginWithBrowserAsync(_settings.ClearBrowserOnNextLogin);
         if (cookie is null) return;
         _settings.ClearBrowserOnNextLogin = false;
+        SaveSettings();
         await TryLoginAsync(cookie, persist: RememberSession);
+        if (!IsLoggedIn)
+        {
+            // The embedded browser still holds a cookie Instagram no longer accepts; without clearing it the
+            // login window would close instantly and fail the same way every time.
+            _settings.ClearBrowserOnNextLogin = true;
+            SaveSettings();
+            LoginError += "\nاضغط \"تسجيل الدخول عبر إنستجرام\" مرة أخرى لتسجيل الدخول من جديد.";
+        }
     }
 
     private async Task TryLoginAsync(string cookieText, bool persist)
@@ -637,21 +646,29 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         if (!silent) ShowToast(saved ? $"{ex.Message}\n{DiagnosticsHint}" : ex.Message, isError: true);
     }
 
+    /// <summary>
+    /// The session counts as dead only when two independent endpoints both say "login required"; anything
+    /// else (HTML pages, network errors, rate limits) is not proof that the user was logged out.
+    /// </summary>
     private static async Task<bool> IsSessionAliveAsync(InstagramClient client)
     {
-        try
+        foreach (var check in new Func<Task>[] { () => client.GetStoriesTrayAsync(), () => client.GetCurrentUserAsync() })
         {
-            await client.GetCurrentUserAsync();
-            return true;
+            try
+            {
+                await check();
+                return true;
+            }
+            catch (InstagramApiException ex) when (ex.Kind is InstagramErrorKind.LoginRequired or InstagramErrorKind.Checkpoint)
+            {
+                // try the next endpoint
+            }
+            catch (InstagramApiException)
+            {
+                return true;
+            }
         }
-        catch (InstagramApiException ex) when (ex.Kind is InstagramErrorKind.LoginRequired or InstagramErrorKind.Checkpoint)
-        {
-            return false;
-        }
-        catch (InstagramApiException)
-        {
-            return true; // network/rate-limit problems are not proof that the session is gone
-        }
+        return false;
     }
 
     public void ShowToast(string message, bool isError = false)
