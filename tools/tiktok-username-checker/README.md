@@ -1,18 +1,25 @@
 # TikTok Username Checker
 
-سكربت Python يفحص يوزرات تيك توك ويطبع المتاح منها فقط. لا يحتاج أي مكتبات خارجية (Python 3.8+).
+برنامج C# (Console) يفحص يوزرات تيك توك ويطبع المتاح منها فقط. يحتاج .NET 8 SDK فقط، بدون أي مكتبات خارجية.
 
 ## الاستخدام
 
 ```bash
 # فحص يوزرات محددة
-python check_tiktok.py yousef yousef.dev yousef_01
+dotnet run -- yousef yousef.dev yousef_01
 
 # فحص قائمة من ملف (يوزر في كل سطر)
-python check_tiktok.py -f names.txt
+dotnet run -- -f names.txt
 
 # توليد 30 يوزر عشوائي: "yo" + 3 أحرف/أرقام
-python check_tiktok.py --generate 3 --count 30 --prefix yo
+dotnet run -- --generate 3 --count 30 --prefix yo
+```
+
+لبناء ملف exe مستقل:
+
+```bash
+dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
+# ثم: check-tiktok.exe yousef yousef.dev
 ```
 
 المتاح يُحفظ في `available.txt`.
