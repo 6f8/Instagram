@@ -204,16 +204,6 @@ public partial class MainWindow : Window, IDialogService
         }
     }
 
-    // ================================================================== downloads page
-
-    private void RefreshDownloads_Click(object sender, RoutedEventArgs e) => _vm.RefreshDownloads();
-
-    private void Downloads_DoubleClick(object sender, MouseButtonEventArgs e)
-    {
-        if (sender is ListBox { SelectedItem: DownloadedFileViewModel file })
-            _vm.OpenFileCommand.Execute(file.FullPath);
-    }
-
     // ================================================================== IDialogService
 
     public bool Confirm(string message) => ConfirmDialog.Show(this, message);

@@ -1,0 +1,53 @@
+<UserControl x:Class="InstagramStoryViewer.Gui.Views.Pages.FollowingPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:InstagramStoryViewer.Gui.ViewModels">
+    <Grid Margin="18,14,18,16">
+    <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+    <DockPanel>
+        <Button DockPanel.Dock="Right" Command="{Binding RefreshTrayCommand}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE5D5;" FontSize="13" Margin="0,0,8,0" />
+                <TextBlock Text="تحديث" />
+            </StackPanel>
+        </Button>
+        <StackPanel>
+            <TextBlock Text="من تتابعهم" Style="{StaticResource H1}" />
+            <TextBlock Style="{StaticResource Muted}" Margin="0,2,0,0">
+                <Run Text="{Binding AccountsWithStories, Mode=OneWay}" /><Run Text=" حساب لديه ستوريات · " /><Run Text="{Binding UnseenAccounts, Mode=OneWay}" /><Run Text=" بستوريات جديدة" />
+            </TextBlock>
+        </StackPanel>
+    </DockPanel>
+    <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,18,0,0">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding TrayUsers}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type vm:TrayUserViewModel}">
+                        <Button Style="{StaticResource RowButton}" Width="140" Padding="8,12" Margin="4"
+                                Command="{Binding DataContext.OpenUserCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                CommandParameter="{Binding}">
+                            <StackPanel Width="120">
+                                <Viewbox Width="84" Height="84" HorizontalAlignment="Center">
+                                    <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource Avatar}" />
+                                </Viewbox>
+                                <TextBlock Text="{Binding Username}" FontWeight="SemiBold" Margin="0,8,0,0"
+                                           TextAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding LatestText}" Foreground="{StaticResource MutedBrush}" FontSize="11.5"
+                                           TextAlignment="Center" Margin="0,2,0,0" />
+                            </StackPanel>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Border>
+</Grid>
+</UserControl>
