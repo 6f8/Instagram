@@ -103,6 +103,7 @@ public sealed partial class MainViewModel
             _lastTrayRefresh = DateTime.UtcNow;
             ScheduleTrayRefresh();
             if (AutoWatchNew) _ = SafeAsync(() => RunAutoWatchAsync());
+            if (AutoLikeEnabled) _ = SafeAsync(() => RunAutoLikeAsync());
             _ = SafeAsync(() => ProcessFavoritesAsync());
             AppLog.Info($"Logged in (tray: {tray.Count} accounts, host profile: {client.ActiveProfile})");
             if (trayError is null) ShowToast("تم تسجيل الدخول بنجاح");
@@ -179,6 +180,7 @@ public sealed partial class MainViewModel
             AppLog.Info($"Tray refreshed: {TrayUsers.Count} accounts, {UnseenAccounts} with new stories, {_client?.RequestsLastHour} requests in the last hour");
             if (!silent) ShowToast("تم تحديث القائمة");
             if (AutoWatchNew) _ = SafeAsync(() => RunAutoWatchAsync());
+            if (AutoLikeEnabled) _ = SafeAsync(() => RunAutoLikeAsync());
             _ = SafeAsync(() => ProcessFavoritesAsync());
         }
         catch (InstagramApiException ex)
@@ -232,7 +234,7 @@ public sealed partial class MainViewModel
         if (!IsLoggedIn) return;
         double minutes;
         if (_isWindowActive) minutes = 6 + Random.Shared.NextDouble() * 4;        // 6–10 min
-        else if (AutoWatchNew) minutes = 20 + Random.Shared.NextDouble() * 10;    // 20–30 min
+        else if (AutoWatchNew || AutoLikeEnabled) minutes = 20 + Random.Shared.NextDouble() * 10; // 20–30 min
         else return;                                                               // idle: no traffic
         _trayTimer.Interval = TimeSpan.FromMinutes(minutes);
         _trayTimer.Start();

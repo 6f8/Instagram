@@ -29,6 +29,29 @@ public partial class StoryWatchWindow : Window
         })()
         """;
 
+    // Likes the post/story on the page. Comment hearts carry the same label, so the largest heart icon is
+    // taken (the post's own like button is 24 px, comment hearts are 12 px). Labels cover common UI languages.
+    // mode 'check' only reports the state; 'click' clicks when not yet liked.
+    private const string LikeScriptTemplate = """
+        ((mode) => {
+          if (location.pathname.startsWith('/accounts/login')) return 'login';
+          const liked = /^(unlike|إلغاء الإعجاب|ya no me gusta|je n.aime plus|gefällt mir nicht mehr|beğenmekten vazgeç)$/i;
+          const like = /^(like|أعجبني|me gusta|j.aime|gefällt mir|beğen)$/i;
+          const hearts = [...document.querySelectorAll('svg[aria-label]')]
+            .filter(s => { const l = s.getAttribute('aria-label').trim(); return liked.test(l) || like.test(l); })
+            .map(s => ({ s, w: s.getBoundingClientRect().width }))
+            .filter(h => h.w > 0)
+            .sort((a, b) => b.w - a.w);
+          if (!hearts.length) return 'missing';
+          const top = hearts[0].s;
+          if (liked.test(top.getAttribute('aria-label').trim())) return 'liked';
+          if (mode !== 'click') return 'unliked';
+          const btn = top.closest('button, [role="button"]') || top.parentElement;
+          btn.click();
+          return 'clicked';
+        })('{MODE}')
+        """;
+
     private CancellationTokenSource _batchCts = new();
     private Task? _init;
     private bool _closed;
@@ -112,6 +135,117 @@ public partial class StoryWatchWindow : Window
             catch (InvalidOperationException) { }
         }
         return shown;
+    }
+
+    /// <summary>
+    /// Opens each story/post and presses its like button, then checks the button flipped to "Unlike".
+    /// Stories are played first (the "View story" step), so liking a story also counts as viewing it.
+    /// </summary>
+    public async Task<IReadOnlyList<LikeOutcome>> LikeAsync(string cookieHeader, IReadOnlyList<LikeRequest> requests)
+    {
+        _batchCts = new CancellationTokenSource();
+        var ct = _batchCts.Token;
+        var results = Enumerable.Repeat(LikeOutcome.NotShown, requests.Count).ToArray();
+
+        try
+        {
+            _init ??= InitializeBrowserAsync();
+            await _init;
+            if (_closed) return results;
+
+            var core = Web.CoreWebView2;
+            ApplySessionCookies(core, cookieHeader);
+
+            for (var i = 0; i < requests.Count; i++)
+            {
+                var r = requests[i];
+                StatusText.Text = $"إعجاب {i + 1} من {requests.Count}...";
+                Progress.Value = (double)i / requests.Count;
+
+                var opened = r.IsStory ? await PlayOneAsync(core, r.Url, ct) : await OpenPageAsync(core, r.Url, ct);
+                if (opened == "login")
+                {
+                    StatusText.Text = "المتصفح غير مسجّل الدخول";
+                    break;
+                }
+                if (opened is not ("clicked" or "playing" or "loaded")) continue;
+
+                // A short, varying pause before reacting, then wait for the like button to render.
+                await Task.Delay(TimeSpan.FromMilliseconds(1200 + Random.Shared.Next(0, 1500)), ct);
+                results[i] = await ClickLikeAsync(core, ct);
+                await Task.Delay(TimeSpan.FromMilliseconds(800 + Random.Shared.Next(0, 1200)), ct);
+            }
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or InvalidOperationException
+                                       or System.Runtime.InteropServices.COMException)
+        {
+            // stopped by the user, or the window was closed mid-call
+        }
+        catch (Exception ex) when (ex is WebView2RuntimeNotFoundException or UnauthorizedAccessException or IOException)
+        {
+            ConfirmDialog.Info(this, ex is WebView2RuntimeNotFoundException
+                ? "مكوّن Microsoft Edge WebView2 غير مثبت. ثبّته من موقع مايكروسوفت (Evergreen Runtime)."
+                : $"تعذّر تشغيل المتصفح المدمج: {ex.Message}");
+            Close();
+        }
+
+        if (!_closed)
+        {
+            Progress.Value = 1;
+            StatusText.Text = $"إعجابات: {results.Count(x => x == LikeOutcome.Liked)}";
+            try { Web.CoreWebView2?.Navigate("about:blank"); }
+            catch (InvalidOperationException) { }
+        }
+        return results;
+    }
+
+    /// <summary>Waits for the like button, clicks it if needed, and verifies the result.</summary>
+    private static async Task<LikeOutcome> ClickLikeAsync(CoreWebView2 core, CancellationToken ct)
+    {
+        string Script(string mode) => LikeScriptTemplate.Replace("{MODE}", mode);
+
+        // The button can take a moment to render.
+        var state = "missing";
+        for (var attempt = 0; attempt < 8 && state == "missing"; attempt++)
+        {
+            state = JsonSerializer.Deserialize<string>(await core.ExecuteScriptAsync(Script("check"))) ?? "missing";
+            if (state == "missing") await Task.Delay(600, ct);
+        }
+        if (state == "missing") return LikeOutcome.NoButton;
+        if (state == "liked") return LikeOutcome.AlreadyLiked;
+        if (state == "login") return LikeOutcome.NotShown;
+
+        await core.ExecuteScriptAsync(Script("click"));
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            await Task.Delay(600, ct);
+            var after = JsonSerializer.Deserialize<string>(await core.ExecuteScriptAsync(Script("check")));
+            if (after == "liked") return LikeOutcome.Liked;
+        }
+        return LikeOutcome.Failed;
+    }
+
+    /// <summary>Opens a regular page (a post). Returns "loaded", "login" or "failed".</summary>
+    private static async Task<string> OpenPageAsync(CoreWebView2 core, string url, CancellationToken ct)
+    {
+        var navigated = new TaskCompletionSource<bool>();
+        void OnCompleted(object? s, CoreWebView2NavigationCompletedEventArgs e) => navigated.TrySetResult(e.IsSuccess);
+        core.NavigationCompleted += OnCompleted;
+        try
+        {
+            core.Navigate(url);
+            var ok = await navigated.Task.WaitAsync(StartTimeout, ct);
+            if (!ok) return "failed";
+        }
+        catch (TimeoutException)
+        {
+            // continue; the page may still have rendered
+        }
+        finally
+        {
+            core.NavigationCompleted -= OnCompleted;
+        }
+        return core.Source.Contains("/accounts/login", StringComparison.OrdinalIgnoreCase) ? "login" : "loaded";
     }
 
     private async Task InitializeBrowserAsync()

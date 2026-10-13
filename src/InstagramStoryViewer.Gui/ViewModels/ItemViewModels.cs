@@ -163,13 +163,16 @@ public sealed class WatchRecordViewModel
         {
             WatchMode.Manual => "يدوي",
             WatchMode.Preview => "عند المعاينة",
+            WatchMode.AutoLike => r.IsPost ? "إعجاب بمنشور" : "إعجاب بستوري",
             _ => "تلقائي"
         };
-        ResultText = r.Outcome switch
+        ResultText = (r.Mode, r.Outcome) switch
         {
-            WatchOutcome.Verified => "مؤكَّد",
-            WatchOutcome.Shown => "عُرض (غير مؤكَّد)",
-            WatchOutcome.Failed => "لم يُسجَّل",
+            (WatchMode.AutoLike, WatchOutcome.Verified) => "أُعجب (مؤكَّد)",
+            (WatchMode.AutoLike, WatchOutcome.Failed) => "فشل الإعجاب",
+            (_, WatchOutcome.Verified) => "مؤكَّد",
+            (_, WatchOutcome.Shown) => "عُرض (غير مؤكَّد)",
+            (_, WatchOutcome.Failed) => "لم يُسجَّل",
             _ => "لم يُعرض"
         };
     }
@@ -180,5 +183,5 @@ public sealed class WatchRecordViewModel
     public string TimeText { get; }
     public string ModeText { get; }
     public string ResultText { get; }
-    public string StoryUrl => $"https://www.instagram.com/stories/{Uri.EscapeDataString(Record.Username)}/{Record.MediaPk}/";
+    public string StoryUrl => Record.Url ?? $"https://www.instagram.com/stories/{Uri.EscapeDataString(Record.Username)}/{Record.MediaPk}/";
 }

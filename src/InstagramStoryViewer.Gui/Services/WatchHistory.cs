@@ -2,7 +2,7 @@ using System.Text.Json;
 
 namespace InstagramStoryViewer.Gui.Services;
 
-public enum WatchMode { Manual, Preview, Auto }
+public enum WatchMode { Manual, Preview, Auto, AutoLike }
 
 /// <summary>Result of one watch attempt, as recorded in the history.</summary>
 public enum WatchOutcome
@@ -13,7 +13,10 @@ public enum WatchOutcome
     Failed      // shown, but Instagram still reports it as unseen
 }
 
-public sealed record WatchRecord(DateTime Time, string Username, string MediaPk, WatchMode Mode, WatchOutcome Outcome);
+/// <param name="Url">Link to the item (posts); null means the story URL built from username + media id.</param>
+/// <param name="IsPost">A post rather than a story (likes only).</param>
+public sealed record WatchRecord(DateTime Time, string Username, string MediaPk, WatchMode Mode, WatchOutcome Outcome,
+    string? Url = null, bool IsPost = false);
 
 /// <summary>Append-only history of watched stories in %AppData%\InstagramStoryViewer\watch-history.jsonl.</summary>
 public static class WatchHistory

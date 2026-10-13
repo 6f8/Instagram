@@ -48,6 +48,18 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
 - **Exclusion list 👁‍🗨:** accounts the app never watches automatically. It asks before watching them manually.
 - **Watch history:** everything the app watched for you, when, and the result.
 
+### Auto-like (optional, off by default)
+- **What it likes:**
+  - New stories, either from your favorites or from everyone you follow.
+  - New posts (last 3 days) from your favorites only.
+- **How it works:**
+  - Runs after every refresh, even when the app is minimized to the notification area.
+  - Presses the real like button in the small corner window, then verifies the button switched to "Unlike".
+  - It never clicks a comment's like button by mistake.
+- **Limits:** a daily cap (30/60/100), at most 10 per cycle, quiet hours, the exclusion list, and the hourly request cap.
+- **History:** every like is recorded in the history.
+- Overusing automated likes can get your account restricted.
+
 ![Following](docs/screenshots/following.png)
 
 | History | Full screen |
@@ -119,6 +131,8 @@ In both cases, GitHub Actions builds the exe and adds it to Releases.
 | Logged-in account info | `GET /api/v1/users/{id}/info/` |
 | Stories of followed accounts | `GET /api/v1/feed/reels_tray/` |
 | Stories of an account or highlight, or several accounts at once | `GET /api/v1/feed/reels_media/?reel_ids=..` |
+| An account's latest posts (auto-like) | `GET /api/v1/feed/user/{id}/?count=..` |
+| Like | Presses the like button in the embedded browser |
 | An account's highlights | `GET /api/v1/highlights/{id}/highlights_tray/` |
 | Mark as seen | Plays the story in the embedded browser (the old REST endpoint returns 404) |
 

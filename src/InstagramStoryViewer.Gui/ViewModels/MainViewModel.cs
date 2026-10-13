@@ -25,6 +25,9 @@ public interface IDialogService
     /// <returns>For each URL, whether the story was actually shown.</returns>
     Task<IReadOnlyList<bool>> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls, bool background);
 
+    /// <summary>Likes stories/posts in the small corner window (background, never steals focus).</summary>
+    Task<IReadOnlyList<LikeOutcome>> LikeAsync(string cookieHeader, IReadOnlyList<LikeRequest> requests);
+
     /// <summary>Shows a Windows notification (from the notification-area icon).</summary>
     void Notify(string title, string message);
 }
@@ -62,6 +65,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _quietFrom = _settings.QuietFrom;
         _quietTo = _settings.QuietTo;
         InitializeAccountLists();
+        InitializeAutoLike();
         InitializeAppOptions();
 
         _trayTimer = new DispatcherTimer();

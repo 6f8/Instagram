@@ -156,6 +156,14 @@ public sealed class InstagramClient : IDisposable
         return reel;
     }
 
+    /// <summary>The newest posts of a profile (newest first).</summary>
+    public async Task<List<FeedPost>> GetUserPostsAsync(string userId, int count = 6, CancellationToken ct = default)
+    {
+        var res = await SendAsync<UserFeedResponse>(
+            HttpMethod.Get, $"/api/v1/feed/user/{Uri.EscapeDataString(userId)}/?count={Math.Clamp(count, 1, 12)}", null, ct);
+        return res.Items?.Where(p => p.Code is not null).OrderByDescending(p => p.TakenAt).ToList() ?? new List<FeedPost>();
+    }
+
     /// <summary>The highlights (saved story collections) shown on a profile.</summary>
     public async Task<List<Highlight>> GetHighlightsAsync(string userId, CancellationToken ct = default)
     {

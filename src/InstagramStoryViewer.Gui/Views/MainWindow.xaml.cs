@@ -308,7 +308,14 @@ public partial class MainWindow : Window, IDialogService
     /// same window. It has no Owner on purpose, so background watching keeps working while this window is
     /// minimised.
     /// </summary>
-    public async Task<IReadOnlyList<bool>> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls, bool background)
+    public Task<IReadOnlyList<bool>> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls, bool background) =>
+        RunInWatcherAsync(w => w.PlayAsync(cookieHeader, storyUrls), background);
+
+    public Task<IReadOnlyList<LikeOutcome>> LikeAsync(string cookieHeader, IReadOnlyList<LikeRequest> requests) =>
+        RunInWatcherAsync(w => w.LikeAsync(cookieHeader, requests), background: true);
+
+    /// <summary>Runs one batch (watch or like) in the shared corner window; batches queue behind each other.</summary>
+    private async Task<T> RunInWatcherAsync<T>(Func<StoryWatchWindow, Task<T>> batch, bool background)
     {
         await _watchGate.WaitAsync();
         try
@@ -321,7 +328,7 @@ public partial class MainWindow : Window, IDialogService
             if (!_watcher.IsVisible) _watcher.Show();
             if (!background) _watcher.Activate();
 
-            return await _watcher.PlayAsync(cookieHeader, storyUrls);
+            return await batch(_watcher);
         }
         finally
         {

@@ -60,6 +60,24 @@ public sealed class AppSettings
 
     public bool CheckForUpdates { get; set; } = true;
     public DateTime? LastUpdateCheck { get; set; }
+
+    /// <summary>Like new stories/posts automatically (in the background, after each refresh).</summary>
+    public bool AutoLikeEnabled { get; set; }
+    public bool AutoLikeStories { get; set; } = true;
+    public bool AutoLikePosts { get; set; } = true;
+
+    /// <summary>"Favorites" or "All" (all followed accounts; posts are always favorites only).</summary>
+    public string AutoLikeScope { get; set; } = "Favorites";
+
+    public int AutoLikeDailyLimit { get; set; } = 60;
+    public string? AutoLikeDay { get; set; }
+    public int AutoLikedToday { get; set; }
+
+    /// <summary>Recently handled media ids, so nothing is attempted twice (bounded list).</summary>
+    public List<string> AutoLikeHandled { get; set; } = new();
+
+    /// <summary>Round-robin position over favorites for the posts check.</summary>
+    public int AutoLikePostCursor { get; set; }
 }
 
 /// <summary>An Instagram account remembered by the app (username can change; the id cannot).</summary>

@@ -158,3 +158,25 @@ public class HighlightTests
         Assert.Contains("/api/v1/highlights/42/highlights_tray/", handler.Requests[0].RequestUri!.AbsolutePath);
     }
 }
+
+public class UserPostsTests
+{
+    [Fact]
+    public async Task Parses_user_posts_newest_first_with_like_state()
+    {
+        var handler = new FakeHandler(_ => FakeHandler.Json("""
+            {"items":[
+              {"pk":11,"code":"AAA","taken_at":100,"media_type":1,"has_liked":true,"user":{"pk":5,"username":"x"}},
+              {"pk":12,"code":"BBB","taken_at":300,"media_type":2,"has_liked":false,"user":{"pk":5,"username":"x"}},
+              {"pk":13,"taken_at":200,"media_type":1}
+            ],"status":"ok"}
+            """));
+        var posts = await TestClient.Create(handler).GetUserPostsAsync("5", count: 3);
+
+        Assert.Equal(["BBB", "AAA"], posts.Select(p => p.Code)); // newest first, item without code dropped
+        Assert.False(posts[0].HasLiked);
+        Assert.Equal("https://www.instagram.com/p/BBB/", posts[0].Url);
+        Assert.Contains("/api/v1/feed/user/5/", handler.Requests[0].RequestUri!.AbsolutePath);
+        Assert.Contains("count=3", handler.Requests[0].RequestUri!.Query);
+    }
+}

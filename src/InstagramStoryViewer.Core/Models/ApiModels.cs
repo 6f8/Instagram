@@ -44,6 +44,31 @@ public sealed class UserInfoResponse : ApiResponseBase
     [JsonPropertyName("user")] public StoryUser? User { get; set; }
 }
 
+// ---------- /api/v1/feed/user/{id}/ ----------
+
+public sealed class UserFeedResponse : ApiResponseBase
+{
+    [JsonPropertyName("items")] public List<FeedPost>? Items { get; set; }
+}
+
+/// <summary>A post (photo, video, reel or carousel) from a profile's feed.</summary>
+public sealed class FeedPost
+{
+    [JsonPropertyName("pk")]
+    [JsonConverter(typeof(FlexibleStringConverter))]
+    public string? Pk { get; set; }
+
+    /// <summary>Short code used in the post URL (instagram.com/p/{code}/).</summary>
+    [JsonPropertyName("code")] public string? Code { get; set; }
+
+    [JsonPropertyName("taken_at")] public long TakenAt { get; set; }
+    [JsonPropertyName("media_type")] public int MediaType { get; set; }
+    [JsonPropertyName("has_liked")] public bool? HasLiked { get; set; }
+    [JsonPropertyName("user")] public StoryUser? User { get; set; }
+
+    [JsonIgnore] public string? Url => Code is null ? null : $"https://www.instagram.com/p/{Code}/";
+}
+
 // ---------- /api/v1/highlights/{id}/highlights_tray/ ----------
 
 public sealed class HighlightsTrayResponse : ApiResponseBase
@@ -138,6 +163,9 @@ public sealed class StoryItem
     [JsonPropertyName("video_versions")] public List<MediaCandidate>? VideoVersions { get; set; }
     [JsonPropertyName("video_duration")] public double? VideoDuration { get; set; }
     [JsonPropertyName("user")] public StoryUser? User { get; set; }
+
+    /// <summary>The logged-in user already liked this story.</summary>
+    [JsonPropertyName("has_liked")] public bool? HasLiked { get; set; }
 
     [JsonIgnore] public bool IsVideo => MediaType == 2 && VideoVersions is { Count: > 0 };
 

@@ -94,6 +94,45 @@
         </Border>
 
         <Border Style="{StaticResource Card}" Margin="0,0,0,14" Padding="20,18">
+            <StackPanel>
+                <TextBlock Text="الإعجاب التلقائي" Style="{StaticResource H3}" Margin="0,0,0,4" />
+                <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,12"
+                           Text="بعد كل تحديث يضغط البرنامج زر الإعجاب في نافذة صغيرة بزاوية الشاشة، ويتحقق أنه سُجّل. يحترم الساعات الهادئة والحسابات المستثناة وحد الطلبات. الإفراط في الإعجاب الآلي قد يؤدي إلى تقييد حسابك." />
+                <CheckBox IsChecked="{Binding AutoLikeEnabled}" Content="تفعيل الإعجاب التلقائي" />
+                <StackPanel Margin="28,10,0,0" IsEnabled="{Binding AutoLikeEnabled}">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Style.Triggers>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Opacity" Value="0.45" />
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <CheckBox IsChecked="{Binding AutoLikeStories}" Content="الستوريات الجديدة" />
+                    <StackPanel Orientation="Horizontal" Margin="28,8,0,0" IsEnabled="{Binding AutoLikeStories}">
+                        <TextBlock Text="من:" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="{StaticResource MutedBrush}" />
+                        <RadioButton Style="{StaticResource Chip}" Content="المفضّلة" GroupName="likeScope"
+                                     IsChecked="{Binding AutoLikeScope, Converter={StaticResource ValueBool}, ConverterParameter=Favorites}" />
+                        <RadioButton Style="{StaticResource Chip}" Content="كل من أتابعهم" GroupName="likeScope"
+                                     IsChecked="{Binding AutoLikeScope, Converter={StaticResource ValueBool}, ConverterParameter=All}" />
+                    </StackPanel>
+                    <CheckBox IsChecked="{Binding AutoLikePosts}" Content="المنشورات الجديدة (حسابات المفضّلة، آخر 3 أيام)" Margin="0,12,0,0" />
+                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                        <TextBlock Text="الحد اليومي:" VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <RadioButton Style="{StaticResource Chip}" Content="30" GroupName="likeLimit"
+                                     IsChecked="{Binding AutoLikeDailyLimit, Converter={StaticResource ValueBool}, ConverterParameter=30}" />
+                        <RadioButton Style="{StaticResource Chip}" Content="60" GroupName="likeLimit"
+                                     IsChecked="{Binding AutoLikeDailyLimit, Converter={StaticResource ValueBool}, ConverterParameter=60}" />
+                        <RadioButton Style="{StaticResource Chip}" Content="100" GroupName="likeLimit"
+                                     IsChecked="{Binding AutoLikeDailyLimit, Converter={StaticResource ValueBool}, ConverterParameter=100}" />
+                    </StackPanel>
+                </StackPanel>
+                <TextBlock Text="{Binding AutoLikeStatus}" Style="{StaticResource Muted}" Margin="0,10,0,0" />
+            </StackPanel>
+        </Border>
+
+        <Border Style="{StaticResource Card}" Margin="0,0,0,14" Padding="20,18">
                 <StackPanel>
                     <TextBlock Text="المفضّلة" Style="{StaticResource H3}" Margin="0,0,0,4" />
                     <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,12"
