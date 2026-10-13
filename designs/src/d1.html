@@ -1,0 +1,49 @@
+<html dir="rtl"><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="common.css">
+<style>
+body{font-family:Cairo;background:#000;color:#f5f5f5;--ringgap:#000}
+.titlebar{background:#0b0b0b;color:#aaa}
+.app{flex:1;display:flex}
+.side{width:300px;background:#0b0b0b;border-left:1px solid #1f1f1f;padding:18px;display:flex;flex-direction:column;gap:14px}
+.logo{font-size:22px;font-weight:800;background:linear-gradient(90deg,#feda75,#d62976,#4f5bd5);-webkit-background-clip:text;color:transparent}
+.search{background:#1c1c1c;border-radius:10px;padding:10px 14px;color:#888;font-size:14px}
+.sec{font-size:13px;color:#888;font-weight:600;margin-top:4px}
+.u{display:flex;align-items:center;gap:12px;padding:8px;border-radius:12px}
+.u.act{background:#1a1a1a}
+.u .n{font-weight:700;font-size:14px}.u .t{font-size:12px;color:#888}
+.dot{width:8px;height:8px;border-radius:50%;background:#3797f0;margin-right:auto}
+.main{flex:1;display:flex;align-items:center;justify-content:center;gap:36px;position:relative;background:radial-gradient(circle at 50% 50%,#1a1a1a,#000 70%)}
+.prev{width:150px;height:266px;border-radius:14px;opacity:.45;position:relative;overflow:hidden}
+.prev .pu{position:absolute;inset:auto 0 12px 0;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;font-weight:700}
+.story{width:380px;height:676px;border-radius:16px;position:relative;overflow:hidden;box-shadow:0 20px 60px #0009}
+.bars{position:absolute;top:10px;left:10px;right:10px;display:flex;gap:4px}
+.bars i{flex:1;height:3px;border-radius:2px;background:#ffffff55}.bars i.f{background:#fff}.bars i.h{background:linear-gradient(270deg,#fff 60%,#ffffff55 60%)}
+.hdr{position:absolute;top:22px;right:12px;left:12px;display:flex;align-items:center;gap:10px;font-size:14px}
+.hdr b{font-weight:700}.hdr span{color:#ddd;font-size:12px}
+.hdr .x{margin-right:auto;font-size:20px}
+.foot{position:absolute;bottom:14px;left:12px;right:12px;display:flex;gap:10px}
+.btn{flex:1;background:#ffffff22;backdrop-filter:blur(10px);border:1px solid #ffffff33;border-radius:24px;padding:9px;text-align:center;font-size:14px;font-weight:600}
+.btn.p{background:linear-gradient(90deg,#d62976,#962fbf);border:none}
+.arrow{position:absolute;top:50%;width:34px;height:34px;border-radius:50%;background:#fff;color:#000;display:grid;place-items:center;font-weight:800;transform:translateY(-50%)}
+</style></head><body><div class="win">
+<div class="titlebar"><div class="ttl">📷 Instagram Story Viewer</div><div class="ctl"><span>—</span><span>☐</span><span>✕</span></div></div>
+<div class="app">
+<div class="side">
+ <div class="logo">عارض الستوريات</div>
+ <div class="search">🔍 ابحث عن مستخدم...</div>
+ <div class="sec">الحسابات التي تتابعها</div>
+ <div class="u act"><div class="ring"><div class="av" style="width:44px;height:44px;background:#c13584">س</div></div><div><div class="n">sara.photos</div><div class="t">٤ ستوريات · منذ ساعتين</div></div><div class="dot"></div></div>
+ <div class="u"><div class="ring"><div class="av" style="width:44px;height:44px;background:#405de6">أ</div></div><div><div class="n">ahmed_travel</div><div class="t">٧ ستوريات · منذ ٥ س</div></div><div class="dot"></div></div>
+ <div class="u"><div class="ring"><div class="av" style="width:44px;height:44px;background:#fd1d1d">ن</div></div><div><div class="n">noor.cooks</div><div class="t">٢ ستوري · منذ ٨ س</div></div><div class="dot"></div></div>
+ <div class="u"><div class="ring seen"><div class="av" style="width:44px;height:44px;background:#555">م</div></div><div><div class="n">mohammed.dev</div><div class="t">٣ ستوريات · تمت المشاهدة</div></div></div>
+ <div class="u"><div class="ring seen"><div class="av" style="width:44px;height:44px;background:#5b8">ل</div></div><div><div class="n">layla.art</div><div class="t">١ ستوري · تمت المشاهدة</div></div></div>
+</div>
+<div class="main">
+ <div class="prev m2"><div class="pu"><div class="ring"><div class="av" style="width:44px;height:44px;background:#405de6">أ</div></div>ahmed_travel</div></div>
+ <div class="story m1">
+  <div class="bars"><i class="f"></i><i class="h"></i><i></i><i></i></div>
+  <div class="hdr"><div class="av" style="width:34px;height:34px;background:#c13584">س</div><b>sara.photos</b><span>منذ ساعتين</span><div class="x">✕</div></div>
+  <div class="arrow" style="right:-48px">›</div>
+  <div class="foot"><div class="btn">👁 تعليم كمشاهَد</div><div class="btn p">⬇ تنزيل</div></div>
+ </div>
+ <div class="prev m6"><div class="pu"><div class="ring"><div class="av" style="width:44px;height:44px;background:#fd1d1d">ن</div></div>noor.cooks</div></div>
+</div></div></div></body></html>

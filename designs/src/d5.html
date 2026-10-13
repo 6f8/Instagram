@@ -1,0 +1,65 @@
+<html dir="rtl"><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="common.css">
+<style>
+body{font-family:Cairo;color:#e6e8f0;--ringgap:#12141f}
+.win{background:#0d0f17}
+.titlebar{background:#0d0f17;color:#7d84a0;border-bottom:1px solid #1d2132}
+.app{flex:1;display:flex}
+.rail{width:68px;background:#090b12;border-left:1px solid #1d2132;display:flex;flex-direction:column;align-items:center;gap:10px;padding:14px 0}
+.rail div{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:18px;color:#7d84a0}
+.rail .on{background:linear-gradient(135deg,#ff2d95,#7b2ff7);color:#fff;box-shadow:0 0 20px #ff2d9566}
+.main{flex:1;padding:20px 24px;display:flex;flex-direction:column;gap:16px}
+.top{display:flex;align-items:center;gap:12px}
+.top h1{font-size:22px;font-weight:800}
+.top .s{margin-right:auto;background:#151826;border:1px solid #23283d;border-radius:10px;padding:8px 14px;width:300px;color:#7d84a0;font-size:13px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.stat{background:#12141f;border:1px solid #1d2132;border-radius:14px;padding:14px 16px}
+.stat small{color:#7d84a0;font-size:12px}.stat b{display:block;font-size:26px;font-weight:800}
+.stat b em{font-style:normal;font-size:12px;color:#33e1a1;font-weight:600;margin-right:6px}
+.grid2{flex:1;display:grid;grid-template-columns:1fr 330px;gap:14px;min-height:0}
+.panel{background:#12141f;border:1px solid #1d2132;border-radius:14px;padding:14px 16px;overflow:hidden}
+.panel h3{font-size:14px;margin-bottom:10px;display:flex;justify-content:space-between}
+.panel h3 a{color:#ff2d95;font-size:12px;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{color:#7d84a0;font-weight:600;text-align:right;padding:6px 8px;border-bottom:1px solid #1d2132}
+td{padding:8px;border-bottom:1px solid #181c2b;vertical-align:middle}
+.th{width:34px;height:52px;border-radius:6px}
+.pill{font-size:11px;border-radius:10px;padding:2px 9px;font-weight:700}
+.vid{background:#7b2ff733;color:#b48cff}.img{background:#33e1a122;color:#33e1a1}
+.ok{color:#33e1a1}.wait{color:#ffb547}
+.prog{height:6px;background:#1d2132;border-radius:4px;overflow:hidden}.prog i{display:block;height:100%;background:linear-gradient(90deg,#7b2ff7,#ff2d95)}
+.u{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:13px}
+.u span{margin-right:auto;color:#7d84a0;font-size:12px}
+.prev{height:230px;border-radius:12px;margin-bottom:10px;position:relative}
+.prev .p{position:absolute;bottom:10px;left:10px;right:10px;display:flex;gap:8px}
+.prev .p div{flex:1;text-align:center;border-radius:8px;padding:6px;font-size:12px;font-weight:700;background:#0009}
+.prev .p div.g{background:linear-gradient(90deg,#7b2ff7,#ff2d95)}
+</style></head><body><div class="win">
+<div class="titlebar"><div class="ttl">⚡ IG Story Viewer Pro</div><div class="ctl"><span>—</span><span>☐</span><span>✕</span></div></div>
+<div class="app">
+<div class="rail"><div class="on">◉</div><div>👥</div><div>⬇</div><div>📊</div><div style="margin-top:auto">⚙</div></div>
+<div class="main">
+ <div class="top"><h1>لوحة التحكم</h1><div class="s">🔍 ابحث عن مستخدم واضغط Enter</div></div>
+ <div class="stats">
+  <div class="stat"><small>حسابات لديها ستوريات</small><b>24 <em>+6 اليوم</em></b></div>
+  <div class="stat"><small>ستوريات لم تُشاهَد</small><b>57</b></div>
+  <div class="stat"><small>تم تنزيله</small><b>132 <em><bdi dir="ltr">1.4 GB</bdi></em></b></div>
+  <div class="stat"><small>حالة الجلسة</small><b class="ok" style="font-size:20px;padding-top:4px">● متصل</b></div>
+ </div>
+ <div class="grid2">
+  <div class="panel"><h3>ستوريات ahmed_travel <a>تنزيل الكل ⬇</a></h3>
+   <table><tr><th></th><th>النوع</th><th>نُشر</th><th>ينتهي بعد</th><th>الحجم</th><th>التنزيل</th></tr>
+   <tr><td><div class="th m2"></div></td><td><span class="pill vid">▶ فيديو 0:15</span></td><td>منذ ٥ س</td><td>١٩ س</td><td><bdi dir="ltr">4.2 MB</bdi></td><td class="ok">✔ تم</td></tr>
+   <tr><td><div class="th m7"></div></td><td><span class="pill img">🖼 صورة</span></td><td>منذ ٤ س</td><td>٢٠ س</td><td><bdi dir="ltr">310 KB</bdi></td><td class="ok">✔ تم</td></tr>
+   <tr><td><div class="th m6"></div></td><td><span class="pill vid">▶ فيديو 0:09</span></td><td>منذ ٣ س</td><td>٢١ س</td><td><bdi dir="ltr">2.8 MB</bdi></td><td><div class="prog"><i style="width:64%"></i></div></td></tr>
+   <tr><td><div class="th m4"></div></td><td><span class="pill img">🖼 صورة</span></td><td>منذ ساعة</td><td>٢٣ س</td><td><bdi dir="ltr">290 KB</bdi></td><td class="wait">في الانتظار</td></tr>
+   <tr><td><div class="th m8"></div></td><td><span class="pill img">🖼 صورة</span></td><td>منذ ٢٠ د</td><td>٢٣ س</td><td><bdi dir="ltr">270 KB</bdi></td><td class="wait">في الانتظار</td></tr>
+   </table></div>
+  <div class="panel"><h3>معاينة</h3>
+   <div class="prev m6"><div class="p"><div>👁 مشاهَد</div><div class="g">⬇ تنزيل</div></div></div>
+   <h3>من تتابعهم</h3>
+   <div class="u"><div class="ring"><div class="av" style="width:34px;height:34px;background:#405de6">أ</div></div>ahmed_travel<span>7</span></div>
+   <div class="u"><div class="ring"><div class="av" style="width:34px;height:34px;background:#c13584">س</div></div>sara.photos<span>4</span></div>
+   <div class="u"><div class="ring"><div class="av" style="width:34px;height:34px;background:#fd1d1d">ن</div></div>noor.cooks<span>2</span></div>
+  </div>
+ </div>
+</div></div></div></body></html>

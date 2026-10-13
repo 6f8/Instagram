@@ -1,0 +1,51 @@
+<html dir="rtl"><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="common.css">
+<style>
+body{font-family:'IBM Plex Sans Arabic';background:#f3f3f3;color:#1b1b1b;--ringgap:#fff}
+.win{background:linear-gradient(135deg,#eef2f9,#f6efef)}
+.titlebar{color:#555}
+.app{flex:1;display:flex}
+.nav{width:220px;padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.nav div{padding:9px 12px;border-radius:6px;font-size:14px;display:flex;gap:12px;align-items:center}
+.nav .on{background:#00000009;position:relative;font-weight:600}
+.nav .on:before{content:"";position:absolute;right:0;top:9px;bottom:9px;width:3px;border-radius:3px;background:#0067c0}
+.nav .bot{margin-top:auto}
+.content{flex:1;background:#fbfbfbcc;border-top-right-radius:8px;border:1px solid #e5e5e5;padding:24px 28px;overflow:hidden}
+h1{font-size:26px;font-weight:600;margin-bottom:4px}
+.sub{color:#666;font-size:14px;margin-bottom:18px}
+.bar{display:flex;gap:10px;margin-bottom:20px}
+.inp{flex:1;background:#fff;border:1px solid #e0e0e0;border-bottom:2px solid #0067c0;border-radius:6px;padding:8px 12px;font-size:14px;color:#777}
+.b{background:#fff;border:1px solid #ddd;border-radius:6px;padding:8px 16px;font-size:14px}
+.b.p{background:#0067c0;color:#fff;border-color:#0067c0}
+.tray{display:flex;gap:18px;margin-bottom:24px}
+.tray .t{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:12px;width:76px}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.card{background:#fff;border:1px solid #e5e5e5;border-radius:8px;overflow:hidden;box-shadow:0 2px 6px #0000000a}
+.card .img{height:240px;position:relative}
+.card .img .tag{position:absolute;top:8px;right:8px;background:#000a;color:#fff;font-size:11px;padding:2px 8px;border-radius:10px}
+.card .meta{padding:9px 11px;font-size:12px;color:#555;display:flex;justify-content:space-between;align-items:center}
+.card .meta b{color:#1b1b1b;font-weight:600}
+.ic{width:28px;height:28px;border-radius:5px;display:grid;place-items:center;background:#f3f3f3}
+.status{position:absolute;bottom:0;left:0;right:220px;height:30px;font-size:12px;color:#666;display:flex;align-items:center;padding:0 28px;gap:20px}
+</style></head><body><div class="win">
+<div class="titlebar"><div class="ttl">📷 Story Viewer</div><div class="ctl"><span>—</span><span>☐</span><span>✕</span></div></div>
+<div class="app">
+<div class="nav"><div class="on">🏠 الرئيسية</div><div>👥 من أتابعهم</div><div>🔍 بحث</div><div>⬇ التنزيلات</div><div class="bot">⚙ الإعدادات</div><div>👤 الحساب</div></div>
+<div class="content">
+ <h1>ستوريات @sara.photos</h1><div class="sub">٥ ستوريات نشطة · آخر تحديث منذ دقيقة</div>
+ <div class="bar"><div class="inp">ابحث باسم المستخدم...</div><div class="b">🔄 تحديث</div><div class="b">👁 تعليم كمشاهَد</div><div class="b p">⬇ تنزيل الكل</div></div>
+ <div class="tray">
+  <div class="t"><div class="ring"><div class="av" style="width:60px;height:60px;background:#c13584">س</div></div>sara.photos</div>
+  <div class="t"><div class="ring"><div class="av" style="width:60px;height:60px;background:#405de6">أ</div></div>ahmed_travel</div>
+  <div class="t"><div class="ring"><div class="av" style="width:60px;height:60px;background:#fd1d1d">ن</div></div>noor.cooks</div>
+  <div class="t"><div class="ring"><div class="av" style="width:60px;height:60px;background:#e1306c">ر</div></div>reem.fit</div>
+  <div class="t"><div class="ring seen"><div class="av" style="width:60px;height:60px;background:#777">م</div></div>mohammed.dev</div>
+  <div class="t"><div class="ring seen"><div class="av" style="width:60px;height:60px;background:#5b8">ل</div></div>layla.art</div>
+ </div>
+ <div class="grid">
+  <div class="card"><div class="img m1"><span class="tag">🖼 صورة</span></div><div class="meta"><span><b>منذ ٢ س</b><br>ينتهي بعد ٢٢ س</span><div class="ic">⬇</div></div></div>
+  <div class="card"><div class="img m2"><span class="tag">▶ 0:15</span></div><div class="meta"><span><b>منذ ٣ س</b><br>ينتهي بعد ٢١ س</span><div class="ic">⬇</div></div></div>
+  <div class="card"><div class="img m4"><span class="tag">🖼 صورة</span></div><div class="meta"><span><b>منذ ٥ س</b><br>ينتهي بعد ١٩ س</span><div class="ic">⬇</div></div></div>
+  <div class="card"><div class="img m5"><span class="tag">▶ 0:08</span></div><div class="meta"><span><b>منذ ٩ س</b><br>ينتهي بعد ١٥ س</span><div class="ic">⬇</div></div></div>
+  <div class="card"><div class="img m3"><span class="tag">🖼 صورة</span></div><div class="meta"><span><b>منذ ١٢ س</b><br>ينتهي بعد ١٢ س</span><div class="ic">⬇</div></div></div>
+ </div>
+</div></div></div></body></html>
