@@ -79,7 +79,7 @@ public sealed partial class MainViewModel
         SaveSettings();
     }
 
-    public const int AutoLikeLimitMin = 1, AutoLikeLimitMax = 500;
+    public const int AutoLikeLimitMin = 1, AutoLikeLimitMax = 999_999;
 
     partial void OnAutoLikeDailyLimitChanged(int value)
     {

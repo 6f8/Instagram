@@ -59,9 +59,9 @@
                 <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
                     <TextBlock Text="الحد اليومي:" VerticalAlignment="Center" Margin="0,0,10,0" />
                     <TextBox Style="{StaticResource FieldBox}" Width="90" FlowDirection="LeftToRight" HorizontalContentAlignment="Center"
-                             v:NumericInput.IsEnabled="True" MaxLength="4" ToolTip="اكتب رقماً من 1 إلى 2000 ثم Enter"
+                             v:NumericInput.IsEnabled="True" MaxLength="6" ToolTip="اكتب الرقم الذي تريده ثم Enter"
                              Text="{Binding AutoWatchDailyLimit, UpdateSourceTrigger=Explicit}" />
-                    <TextBlock Text="ستوري يومياً (من 1 إلى 2000)" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{StaticResource MutedBrush}" />
+                    <TextBlock Text="ستوري يومياً" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{StaticResource MutedBrush}" />
                 </StackPanel>
                 <TextBlock Text="{Binding AutoWatchStatus}" Style="{StaticResource Muted}" Margin="0,10,0,0" />
             <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,14" />
@@ -120,9 +120,9 @@
                     <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
                         <TextBlock Text="الحد اليومي:" VerticalAlignment="Center" Margin="0,0,10,0" />
                         <TextBox Style="{StaticResource FieldBox}" Width="90" FlowDirection="LeftToRight" HorizontalContentAlignment="Center"
-                                 v:NumericInput.IsEnabled="True" MaxLength="4" ToolTip="اكتب رقماً من 1 إلى 500 ثم Enter"
+                                 v:NumericInput.IsEnabled="True" MaxLength="6" ToolTip="اكتب الرقم الذي تريده ثم Enter"
                                  Text="{Binding AutoLikeDailyLimit, UpdateSourceTrigger=Explicit}" />
-                        <TextBlock Text="إعجاب يومياً (من 1 إلى 500)" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{StaticResource MutedBrush}" />
+                        <TextBlock Text="إعجاب يومياً" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{StaticResource MutedBrush}" />
                     </StackPanel>
                 </StackPanel>
                 <TextBlock Text="{Binding AutoLikeStatus}" Style="{StaticResource Muted}" Margin="0,10,0,0" />
@@ -201,9 +201,9 @@
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="طلبات في الساعة:" VerticalAlignment="Center" Margin="0,0,10,0" />
                     <TextBox Style="{StaticResource FieldBox}" Width="90" FlowDirection="LeftToRight" HorizontalContentAlignment="Center"
-                             v:NumericInput.IsEnabled="True" MaxLength="4" ToolTip="اكتب رقماً من 30 إلى 600 ثم Enter"
+                             v:NumericInput.IsEnabled="True" MaxLength="6" ToolTip="اكتب الرقم الذي تريده ثم Enter"
                              Text="{Binding MaxRequestsPerHour, UpdateSourceTrigger=Explicit}" />
-                    <TextBlock Text="طلب (من 30 إلى 600)" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{StaticResource MutedBrush}" />
+                    <TextBlock Text="طلب" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{StaticResource MutedBrush}" />
                 </StackPanel>
                 <TextBlock Style="{StaticResource Muted}" Margin="0,10,0,0">
                     <Run Text="الطلبات في آخر ساعة: " /><Run Text="{Binding RequestsLastHour, Mode=OneWay}" />

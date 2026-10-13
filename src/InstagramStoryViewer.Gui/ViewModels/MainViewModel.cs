@@ -226,9 +226,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         else if (IsAutoWatching) StopAutoWatch(); // unticking stops the running pass right away
     }
 
-    // Typed by the user in Settings; out-of-range entries are pulled back into range.
-    public const int AutoWatchLimitMin = 1, AutoWatchLimitMax = 2000;
-    public const int RequestsPerHourMin = 30, RequestsPerHourMax = 600;
+    // Typed freely by the user in Settings; only zero is pulled back up to 1 (the box allows up to 6 digits).
+    public const int AutoWatchLimitMin = 1, AutoWatchLimitMax = 999_999;
+    public const int RequestsPerHourMin = 1, RequestsPerHourMax = 999_999;
 
     partial void OnAutoWatchDailyLimitChanged(int value)
     {
