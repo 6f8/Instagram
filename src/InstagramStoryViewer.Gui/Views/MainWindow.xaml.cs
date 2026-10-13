@@ -48,36 +48,39 @@ public partial class MainWindow : Window, IDialogService
             UpdatePlayer();
     }
 
-    private void UpdatePlayer()
+    private CancellationTokenSource? _previewCts;
+
+    private async void UpdatePlayer()
     {
+        _previewCts?.Cancel();
+        var cts = _previewCts = new CancellationTokenSource();
+
         var row = _vm.IsLoggedIn ? _vm.SelectedStory : null;
         Player.Stop();
+        Player.Source = null;
+        Player.Visibility = Visibility.Collapsed;
         _isPlaying = false;
 
-        if (row is { IsVideo: true, PreviewSource: not null } &&
-            Uri.TryCreate(row.PreviewSource, UriKind.Absolute, out var uri))
-        {
-            PreviewImage.Visibility = Visibility.Collapsed;
-            Player.Visibility = Visibility.Visible;
-            PlayOverlay.Visibility = Visibility.Visible;
-            MuteButton.Visibility = Visibility.Visible;
-            Player.Source = uri;
-            if (_vm.AutoPlayVideos) Play();
-            else
-            {
-                // Show the first frame without starting playback.
-                Player.Play();
-                Player.Pause();
-                SetPlayGlyph();
-            }
-        }
+        // The poster image (cover frame) stays visible until the video actually starts.
+        PreviewImage.Visibility = Visibility.Visible;
+        var isVideo = row is { IsVideo: true };
+        PlayOverlay.Visibility = Visibility.Collapsed;
+        MuteButton.Visibility = isVideo ? Visibility.Visible : Visibility.Collapsed;
+        if (!isVideo) return;
+
+        var path = await _vm.PrepareVideoAsync(row!, cts.Token);
+        if (cts.IsCancellationRequested || path is null || !ReferenceEquals(row, _vm.SelectedStory)) return;
+
+        Player.Source = new Uri(path);
+        Player.Visibility = Visibility.Visible;
+        PlayOverlay.Visibility = Visibility.Visible;
+        if (_vm.AutoPlayVideos) Play();
         else
         {
-            Player.Source = null;
-            Player.Visibility = Visibility.Collapsed;
-            PlayOverlay.Visibility = Visibility.Collapsed;
-            MuteButton.Visibility = Visibility.Collapsed;
-            PreviewImage.Visibility = Visibility.Visible;
+            // Show the first frame without starting playback.
+            Player.Play();
+            Player.Pause();
+            SetPlayGlyph();
         }
     }
 

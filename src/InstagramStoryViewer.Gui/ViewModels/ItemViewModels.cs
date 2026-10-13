@@ -62,16 +62,19 @@ public sealed partial class StoryRowViewModel : ObservableObject
     public string? ThumbnailUrl => Item.ThumbnailUrl ?? Item.BestUrl;
     public string? MediaUrl => Item.BestUrl;
 
+    /// <summary>Still image shown in the preview (the cover frame for videos, shown until playback starts).</summary>
+    public string? PosterSource => IsVideo ? Item.CoverUrl : PreviewSource;
+
     /// <summary>Downloaded copy when there is one, so the preview plays from disk.</summary>
     public string? PreviewSource => State == DownloadState.Done && LocalPath is not null ? LocalPath : MediaUrl;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PreviewSource), nameof(StatusText), nameof(IsDownloading))]
+    [NotifyPropertyChangedFor(nameof(PreviewSource), nameof(PosterSource), nameof(StatusText), nameof(IsDownloading))]
     private DownloadState _state;
 
     [ObservableProperty] private double _progress;
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(StatusText))] private string? _sizeText;
-    [ObservableProperty] [NotifyPropertyChangedFor(nameof(PreviewSource))] private string? _localPath;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(PreviewSource), nameof(PosterSource))] private string? _localPath;
     [ObservableProperty] private bool _markedSeen;
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(StatusText))] private string? _error;
 

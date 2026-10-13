@@ -46,6 +46,7 @@ public sealed class InstagramClient : IDisposable
     private readonly SemaphoreSlim _throttle = new(1, 1);
     private DateTime _lastRequest = DateTime.MinValue;
     private int _preferredProfile;
+    private int _seenVariant;
 
     private readonly Action<string>? _log;
 
@@ -119,23 +120,75 @@ public sealed class InstagramClient : IDisposable
     {
         if (string.IsNullOrEmpty(_cookies.CsrfToken))
             throw new InstagramApiException(InstagramErrorKind.Unknown,
-                "تعليم الستوري كمشاهَد يحتاج csrftoken. الصق الكوكيز كاملة (وليس sessionid فقط).");
+                "تعليم الستوري كمشاهَد يحتاج csrftoken. سجّل الدخول عبر زر إنستجرام أو الصق الكوكيز كاملة.");
 
-        var mediaId = item.Pk ?? item.Id?.Split('_')[0]
+        var mediaPk = item.Pk ?? item.Id?.Split('_')[0]
             ?? throw new InstagramApiException(InstagramErrorKind.InvalidResponse, "الستوري لا يحتوي على معرّف.");
 
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var fields = new Dictionary<string, string>
+        var seenAt = Math.Max(now, item.TakenAt);
+
+        // instagram.com's web app
+        var webFields = new Dictionary<string, string>
         {
-            ["reelMediaId"] = mediaId,
+            ["reelMediaId"] = mediaPk,
             ["reelMediaOwnerId"] = ownerId,
             ["reelId"] = ownerId,
             ["reelMediaTakenAt"] = item.TakenAt.ToString(),
-            ["viewSeenAt"] = Math.Max(now, item.TakenAt).ToString()
+            ["viewSeenAt"] = seenAt.ToString()
         };
 
-        await SendAsync<ApiResponseBase>(HttpMethod.Post, "/api/v1/stories/reel/seen",
-            () => new FormUrlEncodedContent(fields), ct);
+        // mobile app: reels = { "<mediaPk>_<ownerPk>_<reelId>": ["<takenAt>_<seenAt>"] }
+        var mobilePayload = JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["reels"] = new Dictionary<string, string[]> { [$"{mediaPk}_{ownerId}_{ownerId}"] = [$"{item.TakenAt}_{seenAt}"] },
+            ["container_module"] = "feed_timeline",
+            ["reel_media_skipped"] = new Dictionary<string, object>(),
+            ["live_vods"] = new Dictionary<string, object>(),
+            ["live_vods_skipped"] = new Dictionary<string, object>(),
+            ["nuxes"] = new Dictionary<string, object>(),
+            ["nuxes_skipped"] = new Dictionary<string, object>(),
+            ["_uid"] = ViewerId ?? "",
+            ["_uuid"] = Guid.NewGuid().ToString()
+        });
+
+        var variants = new (EndpointProfile Profile, string Path, Func<HttpContent> Body)[]
+        {
+            (Profiles[0], "/stories/reel/seen", () => new FormUrlEncodedContent(webFields)),
+            (Profiles[0], "/api/v1/stories/reel/seen", () => new FormUrlEncodedContent(webFields)),
+            (Profiles[2], "/api/v2/media/seen/?reel=1&live_vod=0",
+                () => new FormUrlEncodedContent(new Dictionary<string, string> { ["signed_body"] = "SIGNATURE." + mobilePayload }))
+        };
+
+        // Remember which variant worked so later calls go straight to it.
+        var start = _seenVariant;
+        var attempts = new List<string>();
+        InstagramApiException? first = null;
+        for (var i = 0; i < variants.Length; i++)
+        {
+            var index = (start + i) % variants.Length;
+            var v = variants[index];
+            try
+            {
+                await SendWithProfileAsync<ApiResponseBase>(v.Profile, HttpMethod.Post, v.Path, v.Body, ct);
+                _seenVariant = index;
+                return;
+            }
+            catch (InstagramApiException ex) when (ex.TryAnotherHost || ex.Kind is InstagramErrorKind.NotFound or InstagramErrorKind.Unknown)
+            {
+                first ??= ex;
+                attempts.Add($"{v.Path}: HTTP {(int?)ex.StatusCode}");
+            }
+        }
+
+        throw new InstagramApiException(first!.Kind,
+            $"تعذّر تعليم الستوري كمشاهَد. {first.Message}\nالمسارات التي جُرّبت: {string.Join("، ", attempts)}",
+            first.StatusCode, first)
+        {
+            ResponseBody = first.ResponseBody,
+            ContentType = first.ContentType,
+            RequestPath = "stories/seen"
+        };
     }
 
     /// <summary>Downloads raw media bytes from Instagram's CDN.</summary>

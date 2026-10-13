@@ -123,6 +123,10 @@ public sealed class StoryItem
         ? Best(VideoVersions)?.Url
         : Best(ImageVersions2?.Candidates)?.Url;
 
+    /// <summary>Largest still image (for videos this is the cover frame).</summary>
+    [JsonIgnore]
+    public string? CoverUrl => Best(ImageVersions2?.Candidates)?.Url;
+
     /// <summary>Smallest image rendition that is still sharp enough for a list thumbnail.</summary>
     [JsonIgnore]
     public string? ThumbnailUrl =>

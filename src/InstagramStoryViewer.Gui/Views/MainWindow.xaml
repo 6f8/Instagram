@@ -459,10 +459,16 @@
                                     <Border CornerRadius="12" Background="{StaticResource RailBrush}">
                                         <Grid FlowDirection="LeftToRight" ClipToBounds="True">
                                             <Image x:Name="PreviewImage" Stretch="Uniform"
-                                                   Source="{Binding SelectedStory.PreviewSource, Converter={StaticResource Img}}" />
+                                                   Source="{Binding SelectedStory.PosterSource, Converter={StaticResource Img}}" />
                                             <MediaElement x:Name="Player" LoadedBehavior="Manual" UnloadedBehavior="Stop" Stretch="Uniform"
                                                           Visibility="Collapsed" MediaEnded="Player_MediaEnded" MediaFailed="Player_MediaFailed"
                                                           MediaOpened="Player_MediaOpened" />
+
+                                            <Border VerticalAlignment="Top" HorizontalAlignment="Right" Margin="10" CornerRadius="10"
+                                                    Background="#CC000000" Padding="10,4" FlowDirection="RightToLeft"
+                                                    Visibility="{Binding IsPreparingPreview, Converter={StaticResource Vis}}">
+                                                <TextBlock Text="جاري تحميل الفيديو..." FontSize="12" Foreground="White" />
+                                            </Border>
 
                                             <!-- play / pause overlay for videos -->
                                             <Button x:Name="PlayOverlay" Visibility="Collapsed" Click="PlayPause_Click" Background="Transparent"

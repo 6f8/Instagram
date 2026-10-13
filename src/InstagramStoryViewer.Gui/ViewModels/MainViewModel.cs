@@ -60,6 +60,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isLoadingTray;
     [ObservableProperty] private bool _isLoadingStories;
 
+    [ObservableProperty] private bool _isPreparingPreview;
     [ObservableProperty] private string? _toast;
     [ObservableProperty] private bool _toastIsError;
 
@@ -129,8 +130,60 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     // ================================================================== startup / login
 
+    private static string VideoCacheFolder => Path.Combine(Path.GetTempPath(), "InstagramStoryViewer", "video-cache");
+
+    /// <summary>
+    /// Windows' media player often cannot stream Instagram's CDN URLs directly, so videos are fetched to a
+    /// temp file first (or the downloaded copy is used). Returns null when the video could not be fetched.
+    /// </summary>
+    public async Task<string?> PrepareVideoAsync(StoryRowViewModel row, CancellationToken ct)
+    {
+        if (row.LocalPath is not null && File.Exists(row.LocalPath)) return row.LocalPath;
+        if (_client is null || row.MediaUrl is null) return null;
+
+        var name = string.Concat((row.Item.Pk ?? row.Item.Id ?? Guid.NewGuid().ToString()).Where(char.IsLetterOrDigit));
+        var path = Path.Combine(VideoCacheFolder, name + ".mp4");
+        if (File.Exists(path)) return path;
+
+        IsPreparingPreview = true;
+        try
+        {
+            Directory.CreateDirectory(VideoCacheFolder);
+            await _client.DownloadAsync(row.MediaUrl, path, ct);
+            return path;
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
+        catch (Exception ex) when (ex is InstagramApiException or HttpRequestException or IOException or UnauthorizedAccessException)
+        {
+            ShowToast($"تعذّر تحميل الفيديو للمعاينة: {ex.Message}", isError: true);
+            return null;
+        }
+        finally
+        {
+            IsPreparingPreview = false;
+        }
+    }
+
+    private static void CleanVideoCache()
+    {
+        try
+        {
+            if (!Directory.Exists(VideoCacheFolder)) return;
+            foreach (var f in new DirectoryInfo(VideoCacheFolder).EnumerateFiles())
+                if (f.LastWriteTimeUtc < DateTime.UtcNow.AddDays(-1)) f.Delete();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // best effort; stories expire anyway
+        }
+    }
+
     public async Task InitializeAsync()
     {
+        CleanVideoCache();
         RefreshDownloads();
         var saved = SettingsStore.Unprotect(_settings.ProtectedSession);
         if (saved is not null)
