@@ -36,6 +36,37 @@ public sealed class AppSettings
     public string? AutoWatchDay { get; set; }
 
     public int AutoWatchedToday { get; set; }
+
+    /// <summary>Accounts that are never watched automatically (manual watching asks first).</summary>
+    public List<AccountRef> ExcludedFromWatch { get; set; } = new();
+
+    /// <summary>Starred accounts: shown first, optionally auto-downloaded and announced.</summary>
+    public List<AccountRef> Favorites { get; set; } = new();
+
+    public bool AutoDownloadFavorites { get; set; }
+    public bool NotifyFavorites { get; set; } = true;
+
+    /// <summary>latest_reel_media last announced per favorite, so each new story is announced once.</summary>
+    public Dictionary<string, long> FavoriteLastNotified { get; set; } = new();
+
+    /// <summary>No automatic watching between these local hours (wraps past midnight).</summary>
+    public bool QuietHoursEnabled { get; set; } = true;
+    public int QuietFrom { get; set; } = 1;
+    public int QuietTo { get; set; } = 8;
+
+    /// <summary>Closing the window keeps the app running in the notification area.</summary>
+    public bool MinimizeToTray { get; set; } = true;
+    public bool StartWithWindows { get; set; }
+
+    public bool CheckForUpdates { get; set; } = true;
+    public DateTime? LastUpdateCheck { get; set; }
+}
+
+/// <summary>An Instagram account remembered by the app (username can change; the id cannot).</summary>
+public sealed class AccountRef
+{
+    public string UserId { get; set; } = "";
+    public string Username { get; set; } = "";
 }
 
 /// <summary>Persists settings to %AppData%\InstagramStoryViewer\settings.json.</summary>

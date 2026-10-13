@@ -72,6 +72,10 @@
                                          IsChecked="{Binding Page, Converter={StaticResource EnumBool}, ConverterParameter=Downloads}">
                                 <TextBlock Style="{StaticResource Icon}" Text="&#xF090;" FontSize="18" />
                             </RadioButton>
+                            <RadioButton Style="{StaticResource RailButton}" ToolTip="سجل المشاهدات"
+                                         IsChecked="{Binding Page, Converter={StaticResource EnumBool}, ConverterParameter=History}">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE889;" FontSize="18" />
+                            </RadioButton>
                         </StackPanel>
                     </DockPanel>
                 </Border>
@@ -359,7 +363,7 @@
                                                 </Grid>
 
                                                 <StackPanel Grid.Column="6" Orientation="Horizontal" HorizontalAlignment="Right">
-                                                    <Button Style="{StaticResource IconButton}" Width="34" Height="34" ToolTip="تعليم كمشاهَد"
+                                                    <Button Style="{StaticResource IconButton}" Width="34" Height="34" ToolTip="{Binding SeenTooltip}"
                                                             Command="{Binding DataContext.MarkSeenCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                             CommandParameter="{Binding}">
                                                         <TextBlock FontSize="14">
@@ -367,9 +371,17 @@
                                                                 <Style TargetType="TextBlock" BasedOn="{StaticResource Icon}">
                                                                     <Setter Property="Text" Value="&#xE8F4;" />
                                                                     <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding MarkedSeen}" Value="True">
+                                                                        <DataTrigger Binding="{Binding SeenState}" Value="Verified">
                                                                             <Setter Property="Text" Value="&#xE5CA;" />
                                                                             <Setter Property="Foreground" Value="{StaticResource GreenBrush}" />
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding SeenState}" Value="Shown">
+                                                                            <Setter Property="Text" Value="&#xE5CA;" />
+                                                                            <Setter Property="Foreground" Value="{StaticResource OrangeBrush}" />
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding SeenState}" Value="Failed">
+                                                                            <Setter Property="Text" Value="&#xE000;" />
+                                                                            <Setter Property="Foreground" Value="{StaticResource RedBrush}" />
                                                                         </DataTrigger>
                                                                     </Style.Triggers>
                                                                 </Style>
@@ -525,6 +537,8 @@
                                  Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=Downloads}" />
 
                 <!-- ==================================================== page: settings -->
+                <pages:HistoryPage Grid.Column="1"
+                                 Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=History}" />
                 <pages:SettingsPage Grid.Column="1"
                                  Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=Settings}" />
 

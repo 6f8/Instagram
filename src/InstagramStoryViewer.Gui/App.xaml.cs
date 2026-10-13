@@ -34,6 +34,11 @@ public partial class App : Application
         var listener = new Thread(ListenForActivation) { IsBackground = true, Name = "single-instance" };
         listener.Start();
 
+        InstagramStoryViewer.Diagnostics.AppLog.Initialize(
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "InstagramStoryViewer", "logs"));
+        InstagramStoryViewer.Diagnostics.AppLog.Info(
+            $"Start v{typeof(App).Assembly.GetName().Version?.ToString(3)} on {Environment.OSVersion}");
+
         DispatcherUnhandledException += OnUnhandledException;
         TaskScheduler.UnobservedTaskException += (_, args) => args.SetObserved(); // never crash on a forgotten task
         base.OnStartup(e);
@@ -62,6 +67,7 @@ public partial class App : Application
 
     private static void OnUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
+        InstagramStoryViewer.Diagnostics.AppLog.Error("Unhandled UI exception", e.Exception);
         // Keep the app alive on unexpected errors and tell the user what happened.
         MessageBox.Show(e.Exception.Message, "خطأ غير متوقع", MessageBoxButton.OK, MessageBoxImage.Error,
             MessageBoxResult.OK, MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign);

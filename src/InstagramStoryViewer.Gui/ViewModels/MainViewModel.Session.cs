@@ -17,6 +17,7 @@ public sealed partial class MainViewModel
     {
         CleanVideoCache();
         RefreshDownloads();
+        foreach (var r in WatchHistory.Load()) History.Add(new WatchRecordViewModel(r));
         var saved = SettingsStore.Unprotect(_settings.ProtectedSession);
         if (saved is not null)
             await TryLoginAsync(saved, persist: true);
@@ -59,7 +60,11 @@ public sealed partial class MainViewModel
         try
         {
             var cookies = SessionCookies.Parse(cookieText);
-            var client = new InstagramClient(cookies, msg => ShowToast(msg)) { MaxRequestsPerHour = MaxRequestsPerHour };
+            var client = new InstagramClient(cookies, msg =>
+            {
+                AppLog.Info(msg);
+                ShowToast(msg);
+            }) { MaxRequestsPerHour = MaxRequestsPerHour };
 
             // The tray doubles as a session check. If only the tray endpoint misbehaves, fall back to
             // the account-info endpoint so the user can still log in and search for accounts.
@@ -97,16 +102,19 @@ public sealed partial class MainViewModel
             _lastTrayRefresh = DateTime.UtcNow;
             ScheduleTrayRefresh();
             if (AutoWatchNew) _ = SafeAsync(() => RunAutoWatchAsync());
+            AppLog.Info($"Logged in (tray: {tray.Count} accounts, host profile: {client.ActiveProfile})");
             if (trayError is null) ShowToast("تم تسجيل الدخول بنجاح");
             else ShowToast($"تم تسجيل الدخول، لكن تعذّر جلب ستوريات من تتابعهم. يمكنك البحث عن أي حساب.\n{DiagnosticsHint}", isError: true);
         }
         catch (ArgumentException ex)
         {
             LoginError = ex.Message;
+            AppLog.Warn($"Login rejected locally: {ex.Message}");
         }
         catch (InstagramApiException ex)
         {
             LoginError = SaveDiagnostics(ex) ? $"{ex.Message}\n{DiagnosticsHint}" : ex.Message;
+            AppLog.Warn($"Login failed: {ex.Kind} HTTP {(int?)ex.StatusCode} {ex.Message}");
             if (ex.Kind == InstagramErrorKind.LoginRequired && _settings.ProtectedSession is not null)
             {
                 _settings.ProtectedSession = null;
@@ -128,6 +136,7 @@ public sealed partial class MainViewModel
 
     private void SignOut(string? reason)
     {
+        AppLog.Info(reason is null ? "Signed out by user" : $"Signed out: {reason}");
         _trayTimer.Stop();
         _autoWatchPreviewTimer.Stop();
         _saveCookiesTimer.Stop();
@@ -165,6 +174,7 @@ public sealed partial class MainViewModel
         {
             ApplyTray(await _client.GetStoriesTrayAsync());
             _lastTrayRefresh = DateTime.UtcNow;
+            AppLog.Info($"Tray refreshed: {TrayUsers.Count} accounts, {UnseenAccounts} with new stories, {_client?.RequestsLastHour} requests in the last hour");
             if (!silent) ShowToast("تم تحديث القائمة");
             if (AutoWatchNew) _ = SafeAsync(() => RunAutoWatchAsync());
         }

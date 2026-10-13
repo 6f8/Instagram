@@ -222,7 +222,7 @@ public partial class MainWindow : Window, IDialogService
     /// same window. It has no Owner on purpose, so background watching keeps working while this window is
     /// minimised.
     /// </summary>
-    public async Task<int> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls, bool background)
+    public async Task<IReadOnlyList<bool>> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls, bool background)
     {
         await _watchGate.WaitAsync();
         try

@@ -4,7 +4,7 @@ using InstagramStoryViewer.Models;
 
 namespace InstagramStoryViewer.Gui.ViewModels;
 
-public enum AppPage { Dashboard, Following, Downloads, Settings }
+public enum AppPage { Dashboard, Following, Downloads, History, Settings }
 
 public enum DownloadState { None, Queued, Downloading, Done, Failed }
 
@@ -82,7 +82,20 @@ public sealed partial class StoryRowViewModel : ObservableObject
     [ObservableProperty] private double _progress;
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(StatusText))] private string? _sizeText;
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(PreviewSource), nameof(PosterSource))] private string? _localPath;
-    [ObservableProperty] private bool _markedSeen;
+    /// <summary>Result of the last watch of this story (None = not watched by this app).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MarkedSeen), nameof(SeenTooltip))]
+    private WatchOutcome _seenState = WatchOutcome.NotShown;
+
+    public bool MarkedSeen => SeenState is WatchOutcome.Verified or WatchOutcome.Shown;
+
+    public string SeenTooltip => SeenState switch
+    {
+        WatchOutcome.Verified => "شوهد (أكّد إنستجرام ذلك)",
+        WatchOutcome.Shown => "عُرض، لكن لم يتأكد إنستجرام بعد",
+        WatchOutcome.Failed => "عُرض لكن إنستجرام لم يسجّله كمشاهَد",
+        _ => "تعليم كمشاهَد"
+    };
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(StatusText))] private string? _error;
 
     public bool IsDownloading => State == DownloadState.Downloading;
@@ -121,4 +134,35 @@ public sealed class DownloadedFileViewModel
     public string DateText { get; }
     public bool IsVideo { get; }
     public string? ImagePath => IsVideo ? null : FullPath;
+}
+
+/// <summary>A row in the watch history page.</summary>
+public sealed class WatchRecordViewModel
+{
+    public WatchRecordViewModel(WatchRecord r)
+    {
+        Record = r;
+        TimeText = r.Time.ToString("yyyy/MM/dd  HH:mm");
+        ModeText = r.Mode switch
+        {
+            WatchMode.Manual => "يدوي",
+            WatchMode.Preview => "عند المعاينة",
+            _ => "تلقائي"
+        };
+        ResultText = r.Outcome switch
+        {
+            WatchOutcome.Verified => "مؤكَّد",
+            WatchOutcome.Shown => "عُرض (غير مؤكَّد)",
+            WatchOutcome.Failed => "لم يُسجَّل",
+            _ => "لم يُعرض"
+        };
+    }
+
+    public WatchRecord Record { get; }
+    public string Username => Record.Username;
+    public WatchOutcome Outcome => Record.Outcome;
+    public string TimeText { get; }
+    public string ModeText { get; }
+    public string ResultText { get; }
+    public string StoryUrl => $"https://www.instagram.com/stories/{Uri.EscapeDataString(Record.Username)}/{Record.MediaPk}/";
 }

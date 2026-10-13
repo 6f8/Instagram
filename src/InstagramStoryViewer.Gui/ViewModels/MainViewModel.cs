@@ -22,7 +22,8 @@ public interface IDialogService
     /// Returns how many stories were shown (in order).
     /// </summary>
     /// <param name="background">Run in the small corner window without stealing focus (auto-watch).</param>
-    Task<int> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls, bool background);
+    /// <returns>For each URL, whether the story was actually shown.</returns>
+    Task<IReadOnlyList<bool>> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls, bool background);
 }
 
 public sealed partial class MainViewModel : ObservableObject, IDisposable
@@ -54,6 +55,9 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _autoWatchNew = _settings.AutoWatchNew;
         _autoWatchDailyLimit = _settings.AutoWatchDailyLimit;
         _maxRequestsPerHour = _settings.MaxRequestsPerHour;
+        _quietHoursEnabled = _settings.QuietHoursEnabled;
+        _quietFrom = _settings.QuietFrom;
+        _quietTo = _settings.QuietTo;
 
         _trayTimer = new DispatcherTimer();
         _trayTimer.Tick += async (_, _) => await SafeAsync(async () =>
@@ -108,6 +112,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     public ObservableCollection<TrayUserViewModel> TrayUsers { get; } = new();
     public ObservableCollection<StoryRowViewModel> Stories { get; } = new();
     public ObservableCollection<DownloadedFileViewModel> Downloads { get; } = new();
+    public ObservableCollection<WatchRecordViewModel> History { get; } = new();
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasCurrentUser), nameof(StoriesTitle))]
@@ -137,6 +142,11 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(AutoWatchStatus))] private int _autoWatchDailyLimit;
     [ObservableProperty] private int _maxRequestsPerHour;
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(AutoWatchStatus))] private bool _isAutoWatching;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(QuietHoursText))] private bool _quietHoursEnabled;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(QuietHoursText))] private int _quietFrom;
+    [ObservableProperty] [NotifyPropertyChangedFor(nameof(QuietHoursText))] private int _quietTo;
+
+    public string QuietHoursText => $"من {QuietFrom:00}:00 إلى {QuietTo:00}:00";
 
     public int RequestsLastHour => _client?.RequestsLastHour ?? 0;
     public bool DisclaimerAccepted => _settings.AcceptedDisclaimer;
@@ -207,6 +217,60 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SaveSettings();
     }
 
+    partial void OnQuietHoursEnabledChanged(bool value)
+    {
+        _settings.QuietHoursEnabled = value;
+        SaveSettings();
+    }
+
+    partial void OnQuietFromChanged(int value)
+    {
+        _settings.QuietFrom = value;
+        SaveSettings();
+    }
+
+    partial void OnQuietToChanged(int value)
+    {
+        _settings.QuietTo = value;
+        SaveSettings();
+    }
+
+    /// <summary>Steps a quiet-hours bound by ±1 hour (parameter "from+", "from-", "to+", "to-").</summary>
+    [RelayCommand]
+    private void StepQuietHour(string? which)
+    {
+        int Step(int h, int d) => (h + d + 24) % 24;
+        switch (which)
+        {
+            case "from+": QuietFrom = Step(QuietFrom, 1); break;
+            case "from-": QuietFrom = Step(QuietFrom, -1); break;
+            case "to+": QuietTo = Step(QuietTo, 1); break;
+            case "to-": QuietTo = Step(QuietTo, -1); break;
+        }
+    }
+
+    [RelayCommand]
+    private void ClearHistory()
+    {
+        if (!_dialogs.Confirm("حذف سجل المشاهدات بالكامل؟")) return;
+        WatchHistory.Clear();
+        History.Clear();
+    }
+
+    [RelayCommand]
+    private void OpenLogsFolder()
+    {
+        if (AppLog.Folder is null) return;
+        Directory.CreateDirectory(AppLog.Folder);
+        Shell(AppLog.Folder);
+    }
+
+    [RelayCommand]
+    private void OpenUrl(string? url)
+    {
+        if (!string.IsNullOrEmpty(url)) Shell(url);
+    }
+
     partial void OnMaxRequestsPerHourChanged(int value)
     {
         _settings.MaxRequestsPerHour = value;
@@ -236,6 +300,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
+            AppLog.Error("Unexpected error in background task", ex);
             ShowToast($"خطأ غير متوقع: {ex.Message}", isError: true);
         }
     }
@@ -267,6 +332,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     private async Task HandleErrorAsync(InstagramApiException ex, bool silent)
     {
+        AppLog.Warn($"API error: {ex.Kind} HTTP {(int?)ex.StatusCode} {ex.RequestPath} {ex.Message}");
         var saved = SaveDiagnostics(ex);
         if (ex.Kind is InstagramErrorKind.LoginRequired or InstagramErrorKind.Checkpoint)
         {

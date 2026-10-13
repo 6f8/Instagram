@@ -64,6 +64,7 @@ public sealed partial class MainViewModel
             row.LocalPath = path;
             row.SizeText = Format.Size(new FileInfo(path).Length);
             row.State = DownloadState.Done;
+            AppLog.Info($"Downloaded {row.Username}/{row.Item.Pk} ({row.SizeText})");
             return true;
         }
         catch (OperationCanceledException)
@@ -76,6 +77,7 @@ public sealed partial class MainViewModel
         {
             row.State = DownloadState.Failed;
             row.Error = ex.Message;
+            AppLog.Warn($"Download failed {row.Username}/{row.Item.Pk}: {ex.Message}");
             ShowToast($"فشل التنزيل: {ex.Message}", isError: true);
             return false;
         }

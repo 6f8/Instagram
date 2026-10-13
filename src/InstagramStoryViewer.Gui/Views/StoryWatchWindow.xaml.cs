@@ -56,18 +56,18 @@ public partial class StoryWatchWindow : Window
 
     private void Stop_Click(object sender, RoutedEventArgs e) => _batchCts.Cancel();
 
-    /// <summary>Plays the given stories in order. Returns how many were shown.</summary>
-    public async Task<int> PlayAsync(string cookieHeader, IReadOnlyList<string> urls)
+    /// <summary>Plays the given stories in order. Returns, per URL, whether it was shown.</summary>
+    public async Task<IReadOnlyList<bool>> PlayAsync(string cookieHeader, IReadOnlyList<string> urls)
     {
         _batchCts = new CancellationTokenSource();
         var ct = _batchCts.Token;
-        var watched = 0;
+        var shown = new bool[urls.Count];
 
         try
         {
             _init ??= InitializeBrowserAsync();
             await _init;
-            if (_closed) return 0;
+            if (_closed) return shown;
 
             var core = Web.CoreWebView2;
             ApplySessionCookies(core, cookieHeader);
@@ -87,7 +87,7 @@ public partial class StoryWatchWindow : Window
 
                 // Vary the dwell time slightly, like a person would.
                 await Task.Delay(ViewDuration + TimeSpan.FromMilliseconds(Random.Shared.Next(0, 1500)), ct);
-                watched = i + 1;
+                shown[i] = true;
             }
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or InvalidOperationException
@@ -106,12 +106,12 @@ public partial class StoryWatchWindow : Window
         if (!_closed)
         {
             Progress.Value = 1;
-            StatusText.Text = $"تمت مشاهدة {watched}";
+            StatusText.Text = $"تمت مشاهدة {shown.Count(x => x)}";
             // Park on a blank page so nothing keeps playing between batches.
             try { Web.CoreWebView2?.Navigate("about:blank"); }
             catch (InvalidOperationException) { }
         }
-        return watched;
+        return shown;
     }
 
     private async Task InitializeBrowserAsync()
