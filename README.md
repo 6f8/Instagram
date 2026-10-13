@@ -1,89 +1,127 @@
 # IG Story Viewer Pro
 
-A Windows desktop app (WPF, .NET 8) for viewing and downloading Instagram stories with **your own account**. It has a right-to-left Arabic interface with a dark "neon dashboard" design.
+A Windows desktop app (WPF, .NET 8) for viewing, downloading and watching Instagram stories with **your own account**.
+The interface is in Arabic (right to left) with a dark "neon dashboard" design.
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
 ## Download
-Get [`release/win-x64/InstagramStoryViewer.exe`](release/win-x64/InstagramStoryViewer.exe) and double-click it.
-It's a single self-contained file, so .NET doesn't need to be installed (Windows 10/11, 64-bit).
-To make sure the file wasn't changed, compare its SHA256 fingerprint (`Get-FileHash InstagramStoryViewer.exe` in PowerShell) with [`InstagramStoryViewer.exe.sha256`](release/win-x64/InstagramStoryViewer.exe.sha256).
-The file isn't digitally signed, so Windows SmartScreen may warn you the first time: click **More info**, then **Run anyway**.
+**[⬇ InstagramStoryViewer.exe (latest version)](https://github.com/6f8/Instagram/releases/latest/download/InstagramStoryViewer.exe)**. Every version is on the [Releases](https://github.com/6f8/Instagram/releases) page.
+
+- It's a single self-contained file, so .NET doesn't need to be installed (Windows 10/11, 64-bit). Double-click to run it.
+- Next to it is `InstagramStoryViewer.exe.sha256`, which you can use to verify the file (`Get-FileHash InstagramStoryViewer.exe` in PowerShell).
+- The file isn't digitally signed, so Windows SmartScreen may warn you the first time: click **More info**, then **Run anyway**.
+- The app checks for new versions daily and shows an update banner when one is available.
 
 ## Features
-- **Dashboard:** stats (accounts with stories, new stories, downloads, session status), a table of the selected account's stories, and a preview panel that plays images and videos.
-- **Following:** every account you follow that currently has stories. The gradient ring means there are stories you haven't seen yet.
-- **Search** for any public account, or a private account you follow.
-- **Downloads** at the highest available quality with a progress bar. Each file is saved to `<download folder>/<username>/`.
-- **Mark as seen** for one story or for all of them. The app opens the story in the embedded browser and plays it for a few seconds, so Instagram records a real view. It asks first, because your name will appear in the story owner's viewers list.
-- **Downloads page** lists every downloaded file. You can open a file or show it in its folder.
-- **Auto-watch:**
-  - Optionally mark a story as seen automatically when you preview it.
-  - Optionally watch your followed accounts' new stories in the background.
-  - Watching happens in a small corner window that doesn't steal focus, with a daily limit you choose (100/200/400).
-- **Account protection:**
-  - A cap on Instagram requests per hour (120/180/300).
-  - Refreshes happen at irregular intervals and stop when the app is minimized.
-  - Cookies that Instagram rotates are saved automatically, and a session that Instagram ends is detected immediately.
-- **Settings:** download folder, confirm before marking as seen, video autoplay, auto-watch, the request cap, and log out.
 
-| Following | Downloads |
+### Viewing and downloading
+- **Dashboard:**
+  - Stats at the top.
+  - A table of the selected account's stories.
+  - A preview panel that plays images and videos.
+  - The list of accounts you follow.
+- **Full-screen viewer:** double-click a story, or use the button in the preview panel.
+  - Moves to the next story automatically.
+  - Keys: `←` next, `→` previous, `Space` pause, `D` download, `Esc` close.
+- **Highlights:** browse a profile's pinned stories and download them.
+- **Downloads:** highest available quality.
+  - Each file is saved to `<download folder>/<username>/`, and highlights to `<username>_highlights`.
+  - Never downloaded twice, never saved incomplete.
+  - Expired links are refreshed automatically.
+- **Search** for any public account, or a private account you follow.
+
+### Following and favorites
+- Search by name, and filter: All, New, or Favorites.
+- **Favorites ⭐:**
+  - Starred accounts appear first.
+  - Their new stories can be downloaded automatically.
+  - You get a Windows notification when they post something new.
+
+### Watching (marking as seen)
+- **How it works:** the story actually plays in a small embedded-browser window in the corner of the screen, so Instagram records a real view.
+- **Verification:** after watching, the app asks Instagram whether the view was recorded (**confirmed / unconfirmed / failed**).
+- **Auto-watch (optional):**
+  - When you preview a story.
+  - Or your followed accounts' new stories, in the background.
+  - Within a daily limit and outside **quiet hours** (default 01:00–08:00).
+- **Exclusion list 👁‍🗨:** accounts the app never watches automatically. It asks before watching them manually.
+- **Watch history:** everything the app watched for you, when, and the result.
+
+![Following](docs/screenshots/following.png)
+
+| History | Full screen |
 |---|---|
-| ![](docs/screenshots/following.png) | ![](docs/screenshots/downloads.png) |
+| ![](docs/screenshots/history.png) | ![](docs/screenshots/fullscreen.png) |
 | **Settings** | **Login** |
 | ![](docs/screenshots/settings.png) | ![](docs/screenshots/login.png) |
 
-## Logging in
-There are two ways to log in:
-1. **"Log in via Instagram"** opens instagram.com inside the app in an embedded Edge WebView2 browser. Log in as usual, and the window closes on its own once the app reads the session cookie. Your password never passes through the app.
-   WebView2 comes preinstalled on Windows 10/11. If it's missing, install the *Evergreen Runtime* from Microsoft.
-2. **Paste the cookie manually:** in your browser, open `F12`, then **Application**, then **Cookies**, then `instagram.com`. Copy `sessionid`, and preferably `csrftoken` too, in this form: `sessionid=...; csrftoken=...`.
+### Protecting your account
+- A cap on Instagram requests per hour (120/180/300), with random spacing between requests.
+- Refreshes happen at irregular intervals and stop when the window is closed or minimized.
+- Cookies that Instagram rotates are saved automatically, so the session doesn't expire on its own.
+- A session that Instagram ends is detected immediately, and requests stop.
+- The session is stored encrypted with Windows DPAPI.
+- The diagnostics file and the log mask tokens and account identifiers.
 
-The session is saved encrypted with Windows DPAPI in `%AppData%\InstagramStoryViewer\settings.json`, so other Windows accounts can't read it.
+### Running in the background
+- Closing the window keeps the app running in the **notification area** next to the clock (Open / Refresh / Auto-watch / Quit).
+- An option to **start with Windows**, minimized.
+- Only one copy of the app runs at a time.
+
+## Logging in
+1. **"Log in via Instagram"** opens instagram.com inside the app (Edge WebView2). Log in as usual, and the window closes on its own. Your password never passes through the app.
+   WebView2 comes preinstalled on Windows 10/11. If it's missing, install the *Evergreen Runtime* from Microsoft.
+2. **Paste the cookie manually:** in your browser, open `F12`, then **Application**, then **Cookies**, then `instagram.com`, and copy `sessionid` (preferably with `csrftoken`).
+
+## File locations
+| What | Where |
+|---|---|
+| Settings and encrypted session | `%AppData%\InstagramStoryViewer\settings.json` (+ `.bak`) |
+| Watch history | `%AppData%\InstagramStoryViewer\watch-history.jsonl` |
+| Last unexpected server response (tokens masked) | `%AppData%\InstagramStoryViewer\last-response.txt` |
+| Daily run log (7 days) | `%LocalAppData%\InstagramStoryViewer\logs\` |
+| Embedded browser data | `%LocalAppData%\InstagramStoryViewer\WebView2\` |
 
 ## Project structure
 ```
 InstagramStoryViewer.sln
 src/
-├── InstagramStoryViewer.Core/   # Instagram API: requests, response parsing, errors, downloads
-├── InstagramStoryViewer.Gui/    # WPF interface (MVVM) → InstagramStoryViewer.exe
-│   ├── Views/                   # main window, WebView2 login window, dialogs
-│   ├── ViewModels/              # app logic
-│   ├── Themes/Theme.xaml        # colors and styles
-│   └── Fonts/                   # Cairo + Material Icons (embedded in the app)
-└── InstagramStoryViewer/        # command-line version (InstagramStoryViewer.Cli)
-tests/InstagramStoryViewer.Tests/ # xUnit tests for the core library
-.github/workflows/build.yml      # CI: tests + exe build; tags v* publish a GitHub Release
-designs/                         # the five proposed interface designs
+├── InstagramStoryViewer.Core/     # Instagram API: requests, response parsing, errors, downloads, log
+├── InstagramStoryViewer.Gui/      # WPF interface (MVVM) → InstagramStoryViewer.exe
+│   ├── Views/                     # main window, Pages/ (pages), full-screen viewer, watch window, login window
+│   ├── ViewModels/                # MainViewModel split by function (Session, Stories, Downloads, Watch, Accounts, ...)
+│   ├── Services/                  # settings, watch history, tray icon, startup with Windows, update check
+│   ├── Themes/Theme.xaml          # colors, styles and shared templates
+│   └── Fonts/                     # Cairo + Material Icons (embedded)
+└── InstagramStoryViewer/          # command-line version
+tests/InstagramStoryViewer.Tests/  # xUnit tests for the core library
+.github/workflows/build.yml        # CI: tests + exe build; tags v* publish a Release
+designs/                           # the five proposed interface designs
 ```
 
 ## Building from source
 ```bash
-# development build
 dotnet build InstagramStoryViewer.sln
-
-# tests
 dotnet test tests/InstagramStoryViewer.Tests
-
-# single-file exe
-dotnet publish src/InstagramStoryViewer.Gui -c Release -r win-x64 -o release/win-x64
-
-# command-line version
-dotnet run --project src/InstagramStoryViewer -- --user natgeo --download
+dotnet publish src/InstagramStoryViewer.Gui -c Release -r win-x64 -o out
 ```
-Building needs the .NET 8 SDK. It works on Windows, and also on Linux/macOS through `EnableWindowsTargeting`.
+To publish a new version: bump `<Version>` in `InstagramStoryViewer.Gui.csproj`, then push a tag such as `v2.3.0`. GitHub Actions builds the exe and adds it to Releases.
 
 ## Instagram endpoints used
 | Purpose | Endpoint |
 |---|---|
 | Username to id | `GET /api/v1/users/web_profile_info/?username=` |
+| Logged-in account info | `GET /api/v1/users/{id}/info/` |
 | Stories of followed accounts | `GET /api/v1/feed/reels_tray/` |
-| A user's stories | `GET /api/v1/feed/reels_media/?reel_ids=` |
-| Stories of several accounts at once (auto-watch) | `GET /api/v1/feed/reels_media/?reel_ids=..&reel_ids=..` |
-| Mark as seen | Opens the story in the embedded browser (`/stories/<user>/<id>/`) and presses "View story". Instagram retired the old REST endpoint, which now returns 404 |
+| Stories of an account or highlight, or several accounts at once | `GET /api/v1/feed/reels_media/?reel_ids=..` |
+| An account's highlights | `GET /api/v1/highlights/{id}/highlights_tray/` |
+| Mark as seen | Plays the story in the embedded browser (the old REST endpoint returns 404) |
+
+If `www.instagram.com` returns an HTML page instead of data, the app automatically tries `i.instagram.com`.
 
 ## Important notes
-- These are unofficial Instagram endpoints and may change without notice.
-- Using automated tools may violate Instagram's terms of use. Use the app reasonably and only for personal use. The app spaces out its requests to reduce the risk of restrictions on your account.
+- These are unofficial Instagram endpoints, and they may change without notice.
+- Using automated tools may violate Instagram's terms of use. Use the app reasonably and only for personal use.
 - Respect people's privacy, and don't republish other people's stories without their permission.
 - Fonts: Cairo (OFL 1.1) and Material Icons (Apache 2.0). See `src/InstagramStoryViewer.Gui/Fonts/LICENSES.md`.

@@ -4,3 +4,4 @@ obj/
 *.user
 session.txt
 stories/
+release/
