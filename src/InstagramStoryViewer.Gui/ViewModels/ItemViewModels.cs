@@ -22,7 +22,11 @@ public sealed partial class TrayUserViewModel : ObservableObject
             ? Format.Ago(DateTimeOffset.FromUnixTimeSeconds(reel.LatestReelMedia.Value))
             : "";
         _hasUnseen = reel.HasUnseen;
+        LatestReelMedia = reel.LatestReelMedia ?? 0;
     }
+
+    /// <summary>taken_at of the account's newest story (used to spot new stories of favorites).</summary>
+    public long LatestReelMedia { get; }
 
     public string Username { get; }
     public string UserId { get; }
@@ -33,6 +37,8 @@ public sealed partial class TrayUserViewModel : ObservableObject
     public string Initial => Username.Length > 0 ? Username[..1].ToUpperInvariant() : "?";
 
     [ObservableProperty] private bool _hasUnseen;
+    [ObservableProperty] private bool _isFavorite;
+    [ObservableProperty] private bool _isExcluded;
 }
 
 /// <summary>A single story row in the table.</summary>

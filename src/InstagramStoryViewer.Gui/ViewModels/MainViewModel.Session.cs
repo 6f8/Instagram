@@ -102,6 +102,7 @@ public sealed partial class MainViewModel
             _lastTrayRefresh = DateTime.UtcNow;
             ScheduleTrayRefresh();
             if (AutoWatchNew) _ = SafeAsync(() => RunAutoWatchAsync());
+            _ = SafeAsync(() => ProcessFavoritesAsync());
             AppLog.Info($"Logged in (tray: {tray.Count} accounts, host profile: {client.ActiveProfile})");
             if (trayError is null) ShowToast("تم تسجيل الدخول بنجاح");
             else ShowToast($"تم تسجيل الدخول، لكن تعذّر جلب ستوريات من تتابعهم. يمكنك البحث عن أي حساب.\n{DiagnosticsHint}", isError: true);
@@ -177,6 +178,7 @@ public sealed partial class MainViewModel
             AppLog.Info($"Tray refreshed: {TrayUsers.Count} accounts, {UnseenAccounts} with new stories, {_client?.RequestsLastHour} requests in the last hour");
             if (!silent) ShowToast("تم تحديث القائمة");
             if (AutoWatchNew) _ = SafeAsync(() => RunAutoWatchAsync());
+            _ = SafeAsync(() => ProcessFavoritesAsync());
         }
         catch (InstagramApiException ex)
         {
@@ -191,8 +193,18 @@ public sealed partial class MainViewModel
     private void ApplyTray(List<Models.Reel> tray)
     {
         TrayUsers.Clear();
-        foreach (var reel in tray.OrderByDescending(r => r.HasUnseen).ThenByDescending(r => r.LatestReelMedia))
-            TrayUsers.Add(new TrayUserViewModel(reel));
+        var users = tray.Select(r => new TrayUserViewModel(r)).ToList();
+        foreach (var u in users)
+        {
+            u.IsFavorite = IsFavorite(u.UserId);
+            u.IsExcluded = IsExcluded(u.UserId);
+            RememberUsername(u.UserId, u.Username);
+        }
+        // Favorites first, then accounts with something new, newest first.
+        foreach (var u in users.OrderByDescending(u => u.IsFavorite).ThenByDescending(u => u.HasUnseen)
+                     .ThenByDescending(u => u.LatestReelMedia))
+            TrayUsers.Add(u);
+        FollowingView.Refresh();
         AccountsWithStories = TrayUsers.Count;
         UnseenAccounts = TrayUsers.Count(u => u.HasUnseen);
     }

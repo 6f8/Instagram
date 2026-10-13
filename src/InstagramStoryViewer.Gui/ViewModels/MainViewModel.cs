@@ -24,6 +24,9 @@ public interface IDialogService
     /// <param name="background">Run in the small corner window without stealing focus (auto-watch).</param>
     /// <returns>For each URL, whether the story was actually shown.</returns>
     Task<IReadOnlyList<bool>> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls, bool background);
+
+    /// <summary>Shows a Windows notification (from the notification-area icon).</summary>
+    void Notify(string title, string message);
 }
 
 public sealed partial class MainViewModel : ObservableObject, IDisposable
@@ -58,6 +61,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _quietHoursEnabled = _settings.QuietHoursEnabled;
         _quietFrom = _settings.QuietFrom;
         _quietTo = _settings.QuietTo;
+        InitializeAccountLists();
 
         _trayTimer = new DispatcherTimer();
         _trayTimer.Tick += async (_, _) => await SafeAsync(async () =>

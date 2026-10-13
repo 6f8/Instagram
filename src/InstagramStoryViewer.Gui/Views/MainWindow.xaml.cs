@@ -249,6 +249,8 @@ public partial class MainWindow : Window, IDialogService
         }
     }
 
+    public void Notify(string title, string message) => _vm.ShowToast($"{title}: {message}");
+
     public string? PickFolder(string initial)
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog

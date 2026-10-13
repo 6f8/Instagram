@@ -211,6 +211,45 @@
                                     </StackPanel>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding StoriesTitle}" Style="{StaticResource H3}" TextTrimming="CharacterEllipsis" MaxWidth="220" />
+                                        <Button Style="{StaticResource LinkButton}" Padding="6,0" Margin="6,0,0,0"
+                                                Command="{Binding ToggleCurrentFavoriteCommand}"
+                                                Visibility="{Binding HasCurrentAccount, Converter={StaticResource Vis}}">
+                                            <TextBlock FontSize="16">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Icon}">
+                                                        <Setter Property="Text" Value="&#xE83A;" />
+                                                        <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+                                                        <Setter Property="ToolTip" Value="إضافة إلى المفضّلة" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsCurrentFavorite}" Value="True">
+                                                                <Setter Property="Text" Value="&#xE838;" />
+                                                                <Setter Property="Foreground" Value="{StaticResource OrangeBrush}" />
+                                                                <Setter Property="ToolTip" Value="إزالة من المفضّلة" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Button>
+                                        <Button Style="{StaticResource LinkButton}" Padding="6,0"
+                                                Command="{Binding ToggleCurrentExcludedCommand}"
+                                                Visibility="{Binding HasCurrentAccount, Converter={StaticResource Vis}}">
+                                            <TextBlock FontSize="15">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource Icon}">
+                                                        <Setter Property="Text" Value="&#xE8F5;" />
+                                                        <Setter Property="Foreground" Value="#3A3F55" />
+                                                        <Setter Property="ToolTip" Value="استثناء من المشاهدة التلقائية" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsCurrentExcluded}" Value="True">
+                                                                <Setter Property="Foreground" Value="{StaticResource RedBrush}" />
+                                                                <Setter Property="ToolTip" Value="مستثنى من المشاهدة — اضغط لإلغاء الاستثناء" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Button>
                                         <Border Background="{StaticResource InputBrush}" CornerRadius="9" Padding="8,0" Margin="10,0,0,0"
                                                 VerticalAlignment="Center" Visibility="{Binding Stories.Count, Converter={StaticResource Vis}}">
                                             <TextBlock Text="{Binding Stories.Count}" Foreground="{StaticResource MutedBrush}" FontSize="12" />
@@ -513,7 +552,12 @@
                                                             </Viewbox>
                                                             <TextBlock DockPanel.Dock="Right" Text="{Binding StoryCount}" Style="{StaticResource Muted}" Margin="8,0" />
                                                             <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
-                                                                <TextBlock Text="{Binding Username}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock Text="{Binding Username}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" MaxWidth="150" />
+                                                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE838;" FontSize="12" Margin="6,0,0,0"
+                                                                               Foreground="{StaticResource OrangeBrush}"
+                                                                               Visibility="{Binding IsFavorite, Converter={StaticResource Vis}}" />
+                                                                </StackPanel>
                                                                 <TextBlock Text="{Binding LatestText}" Style="{StaticResource Muted}" FontSize="11.5" />
                                                             </StackPanel>
                                                         </DockPanel>

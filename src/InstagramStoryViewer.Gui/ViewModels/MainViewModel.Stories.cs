@@ -125,6 +125,7 @@ public sealed partial class MainViewModel
             var (username, userId) = target.Value;
             CurrentUsername = username;
             _currentUserId = userId;
+            NotifyCurrentAccountFlags();
 
             var reel = await _client!.GetUserStoriesAsync(userId, ct);
             ct.ThrowIfCancellationRequested();
