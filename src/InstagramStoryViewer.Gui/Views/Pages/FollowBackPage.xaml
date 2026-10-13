@@ -1,0 +1,116 @@
+<UserControl x:Class="InstagramStoryViewer.Gui.Views.Pages.FollowBackPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:InstagramStoryViewer.Gui.ViewModels">
+    <!-- DataContext: MainViewModel; the page works on its FollowBack view model. -->
+    <Grid Margin="18,14,18,16" DataContext="{Binding FollowBack}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <DockPanel>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                <Button Command="{Binding StopCommand}" Margin="0,0,8,0" Foreground="{StaticResource RedBrush}"
+                        Visibility="{Binding IsChecking, Converter={StaticResource Vis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE047;" FontSize="13" Margin="0,0,8,0" />
+                        <TextBlock Text="إيقاف" />
+                    </StackPanel>
+                </Button>
+                <Button Style="{StaticResource PrimaryButton}" Command="{Binding CheckCommand}" Padding="18,0" Height="40">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xF106;" FontSize="15" Margin="0,0,8,0" />
+                        <TextBlock Text="فحص الآن" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+            <StackPanel>
+                <TextBlock Text="لا يتابعونك" Style="{StaticResource H1}" />
+                <TextBlock Style="{StaticResource Muted}" Margin="0,4,0,0" TextWrapping="Wrap"
+                           Text="الحسابات التي تتابعها ولا تتابعك. يقرأ البرنامج قائمتي من تتابعهم ومن يتابعونك ويقارن بينهما؛ كل 200 حساب = طلب واحد إلى إنستجرام." />
+            </StackPanel>
+        </DockPanel>
+
+        <!-- summary + progress -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,14,0,0" Padding="18,14">
+            <StackPanel>
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding CheckedText}" Style="{StaticResource Muted}" FontSize="12"
+                               VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="14" />
+                </DockPanel>
+                <ProgressBar Height="5" Margin="0,10,0,0" Maximum="1" Value="{Binding Progress, Mode=OneWay}"
+                             Visibility="{Binding IsChecking, Converter={StaticResource Vis}}" />
+                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,8,0,0"
+                           Visibility="{Binding Status, Converter={StaticResource Vis}}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding StatusIsError}" Value="True">
+                                    <Setter Property="Foreground" Value="{StaticResource OrangeBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </StackPanel>
+        </Border>
+
+        <!-- search + options -->
+        <DockPanel Grid.Row="2" Margin="0,14,0,0">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <CheckBox IsChecked="{Binding HideVerified}" Content="إخفاء الحسابات الموثّقة" VerticalAlignment="Center" Margin="0,0,14,0"
+                          ToolTip="المشاهير والصفحات الرسمية نادراً ما يتابعون أحداً" />
+                <Button Command="{Binding CopyUsernamesCommand}" ToolTip="نسخ أسماء المستخدمين الظاهرة، اسم في كل سطر">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE14D;" FontSize="13" Margin="0,0,8,0" />
+                        <TextBlock Text="نسخ الأسماء" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+            <TextBox Style="{StaticResource SearchBox}" Tag="ابحث بالاسم..." Width="300" HorizontalAlignment="Left"
+                     AutomationProperties.Name="ابحث في القائمة" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
+        </DockPanel>
+
+        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,12,0,0" Padding="12,10,12,8">
+            <Grid>
+                <ListBox Style="{StaticResource PlainList}" ItemContainerStyle="{StaticResource RowItem}" ItemsSource="{Binding View}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:FollowBackRowViewModel}">
+                            <DockPanel Height="46">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" ToolTip="فتح الحساب في المتصفح"
+                                        Command="{Binding DataContext.OpenProfileCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                        CommandParameter="{Binding}">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE89E;" FontSize="14" />
+                                </Button>
+                                <Viewbox Width="38" Height="38" DockPanel.Dock="Left">
+                                    <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource Avatar}" />
+                                </Viewbox>
+                                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Username}" FontWeight="SemiBold" />
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xEF76;" FontSize="13" Margin="6,0,0,0"
+                                                   Foreground="#4CA3FF" ToolTip="حساب موثّق"
+                                                   Visibility="{Binding IsVerified, Converter={StaticResource Vis}}" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding FullName}" Style="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis"
+                                               Visibility="{Binding FullName, Converter={StaticResource Vis}}" />
+                                </StackPanel>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Visibility="{Binding View.IsEmpty, Converter={StaticResource Vis}}">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xEF66;" FontSize="44" Foreground="#2A2F45" HorizontalAlignment="Center" />
+                    <TextBlock Style="{StaticResource Muted}" FontSize="14" Margin="0,14,0,0" HorizontalAlignment="Center"
+                               Text="{Binding Summary}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

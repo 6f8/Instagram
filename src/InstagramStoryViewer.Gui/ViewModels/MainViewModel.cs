@@ -45,6 +45,8 @@ public interface IDialogService
     /// <summary>Opens a link or folder in Windows.</summary>
     void OpenUrl(string target);
 
+    void CopyToClipboard(string text);
+
     /// <summary>Quits the app for real (also from the notification area), e.g. to let an update replace it.</summary>
     void ExitApplication();
 }
@@ -95,6 +97,7 @@ public sealed partial class MainViewModel : ObservableObject, IMainContext, IDis
         AutoLike = new AutoLikeViewModel(this, dialogs, settings, history, jobs);
         Updates = new UpdatesViewModel(this, dialogs, settings);
         Comments = new CommentViewModel(this, dialogs, History);
+        FollowBack = new FollowBackViewModel(this, dialogs);
 
         _trayTimer = new DispatcherTimer();
         _trayTimer.Tick += async (_, _) => await SafeAsync(async () =>
@@ -131,6 +134,7 @@ public sealed partial class MainViewModel : ObservableObject, IMainContext, IDis
     public AutoLikeViewModel AutoLike { get; }
     public UpdatesViewModel Updates { get; }
     public CommentViewModel Comments { get; }
+    public FollowBackViewModel FollowBack { get; }
 
     // ================================================================== IMainContext
 
@@ -159,7 +163,11 @@ public sealed partial class MainViewModel : ObservableObject, IMainContext, IDis
     [NotifyPropertyChangedFor(nameof(SessionText))]
     private bool _isLoggedIn;
 
-    partial void OnIsLoggedInChanged(bool value) => Comments.Refresh();
+    partial void OnIsLoggedInChanged(bool value)
+    {
+        Comments.Refresh();
+        FollowBack.Refresh();
+    }
 
     [ObservableProperty] private bool _isLoggingIn;
     [ObservableProperty] private string? _loginError;

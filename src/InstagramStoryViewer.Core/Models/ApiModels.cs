@@ -148,6 +148,26 @@ public sealed class StoryUser
     [JsonPropertyName("full_name")] public string? FullName { get; set; }
     [JsonPropertyName("is_private")] public bool? IsPrivate { get; set; }
     [JsonPropertyName("profile_pic_url")] public string? ProfilePicUrl { get; set; }
+    [JsonPropertyName("is_verified")] public bool? IsVerified { get; set; }
+
+    /// <summary>Only in users/{id}/info.</summary>
+    [JsonPropertyName("follower_count")] public int? FollowerCount { get; set; }
+
+    /// <summary>Only in users/{id}/info.</summary>
+    [JsonPropertyName("following_count")] public int? FollowingCount { get; set; }
+}
+
+// ---------- /api/v1/friendships/{id}/following/ and /followers/ ----------
+
+/// <summary>One page of a follow list.</summary>
+public sealed class FriendshipListResponse : ApiResponseBase
+{
+    [JsonPropertyName("users")] public List<StoryUser>? Users { get; set; }
+
+    /// <summary>Cursor of the next page; empty or missing on the last page.</summary>
+    [JsonPropertyName("next_max_id")]
+    [JsonConverter(typeof(FlexibleStringConverter))]
+    public string? NextMaxId { get; set; }
 }
 
 public sealed class StoryItem

@@ -82,8 +82,23 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
   - The app then waits until the comment actually appears on the page: **posted**, **sent but unconfirmed**, or **not posted** (comments off, or an error from Instagram).
 - Every comment is recorded in the history together with its text.
 
+### Not following back
+- The **Not following back** page (`Ctrl+6`) lists the accounts you follow that don't follow you.
+- **How it works:** press **Check now**. The app reads your *following* and *followers* lists and compares them.
+- **Request cost:**
+  - Every 200 accounts cost one request.
+  - The app tells you the cost first, and asks to confirm if it is more than 10 requests.
+  - It refuses to start if the hourly request cap would cut the check short, because a partial followers list would give wrong results.
+- It warns you if Instagram returned fewer followers than your profile shows.
+- **On the list:**
+  - Search by name.
+  - Hide verified accounts.
+  - Copy the shown usernames.
+  - Open any profile.
+- The last result is kept (`%AppData%\InstagramStoryViewer\not-following-back.json`) and shown again without new requests. It is deleted when you log out.
+
 ### Keyboard
-- `Ctrl+1` … `Ctrl+6`: switch pages.
+- `Ctrl+1` … `Ctrl+7`: switch pages.
 - `F5`: refresh.
 - `Ctrl+F`: search.
 - `Tab`: moves between controls with a visible focus ring. Icon buttons have names for screen readers.
@@ -193,6 +208,7 @@ In both cases, GitHub Actions builds the exe and adds it to Releases.
 | Stories of followed accounts | `GET /api/v1/feed/reels_tray/` |
 | Stories of an account or highlight, or several accounts at once | `GET /api/v1/feed/reels_media/?reel_ids=..` |
 | An account's latest posts (auto-like) | `GET /api/v1/feed/user/{id}/?count=..` |
+| Following / followers (not following back) | `GET /api/v1/friendships/{id}/following/` and `/followers/?count=200&max_id=..` |
 | Like | Presses the like button in the embedded browser |
 | Post info for a comment (owner, comments off) | `GET /api/v1/media/{id}/info/` |
 | Comment | Typed into the post's comment box in the embedded browser |

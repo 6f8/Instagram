@@ -401,6 +401,15 @@ public partial class MainWindow : Window, IDialogService
 
     public void ExitApplication() => ExitApp();
 
+    public void CopyToClipboard(string text)
+    {
+        try { Clipboard.SetText(text); }
+        catch (System.Runtime.InteropServices.COMException ex)
+        {
+            _vm.ShowToast($"تعذّر النسخ: {ex.Message}", isError: true); // clipboard held by another program
+        }
+    }
+
     /// <summary>Runs one batch (watch or like) in the shared corner window; batches queue behind each other.</summary>
     private async Task<T> RunInWatcherAsync<T>(Func<StoryWatchWindow, Task<T>> batch, bool background)
     {

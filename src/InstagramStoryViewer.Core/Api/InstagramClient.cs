@@ -244,6 +244,36 @@ public sealed class InstagramClient : IDisposable
         return res.Items?.Where(p => p.Code is not null).OrderByDescending(p => p.TakenAt).ToList() ?? new List<FeedPost>();
     }
 
+    /// <summary>Which follow list to read.</summary>
+    public enum FollowList { Following, Followers }
+
+    /// <summary>
+    /// Every account in one of a user's follow lists, page by page (200 per request). Each page counts
+    /// against the hourly request cap; <paramref name="progress"/> reports how many were read so far.
+    /// </summary>
+    public async Task<List<StoryUser>> GetFollowListAsync(string userId, FollowList list, IProgress<int>? progress = null,
+        CancellationToken ct = default)
+    {
+        const int MaxPages = 250; // 50,000 accounts: far beyond any real list, just a guard against a cursor loop
+        var kind = list == FollowList.Following ? "following" : "followers";
+        var users = new List<StoryUser>();
+        var seen = new HashSet<string>();
+        string? cursor = null;
+        for (var page = 0; page < MaxPages; page++)
+        {
+            var path = $"/api/v1/friendships/{Uri.EscapeDataString(userId)}/{kind}/?count=200"
+                       + (list == FollowList.Followers ? "&search_surface=follow_list_page" : "")
+                       + (cursor is null ? "" : "&max_id=" + Uri.EscapeDataString(cursor));
+            var res = await SendAsync<FriendshipListResponse>(HttpMethod.Get, path, null, ct).ConfigureAwait(false);
+            foreach (var u in res.Users ?? [])
+                if (u.Pk is not null && seen.Add(u.Pk)) users.Add(u);
+            progress?.Report(users.Count);
+            if (string.IsNullOrEmpty(res.NextMaxId) || res.NextMaxId == cursor || res.Users is not { Count: > 0 }) break;
+            cursor = res.NextMaxId;
+        }
+        return users;
+    }
+
     /// <summary>One post by its numeric media id (owner, like state, whether comments are off).</summary>
     public async Task<FeedPost?> GetMediaInfoAsync(string mediaId, CancellationToken ct = default)
     {

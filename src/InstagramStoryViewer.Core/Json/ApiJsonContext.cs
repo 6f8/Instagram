@@ -16,6 +16,7 @@ namespace InstagramStoryViewer.Json;
 [JsonSerializable(typeof(UserInfoResponse))]
 [JsonSerializable(typeof(UserFeedResponse))]
 [JsonSerializable(typeof(MediaInfoResponse))]
+[JsonSerializable(typeof(FriendshipListResponse))]
 [JsonSerializable(typeof(HighlightsTrayResponse))]
 [JsonSerializable(typeof(ReelsTrayResponse))]
 [JsonSerializable(typeof(ReelsMediaResponse))]

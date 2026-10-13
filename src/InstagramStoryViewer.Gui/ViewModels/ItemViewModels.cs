@@ -6,7 +6,7 @@ using InstagramStoryViewer.Models;
 
 namespace InstagramStoryViewer.Gui.ViewModels;
 
-public enum AppPage { Dashboard, Following, Downloads, History, Comment, Settings }
+public enum AppPage { Dashboard, Following, Downloads, History, Comment, NotFollowingBack, Settings }
 
 public enum DownloadState { None, Queued, Downloading, Done, Failed }
 
