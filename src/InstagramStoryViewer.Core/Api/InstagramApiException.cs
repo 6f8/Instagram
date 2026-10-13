@@ -27,6 +27,16 @@ public sealed class InstagramApiException : Exception
     /// <summary>The failure is specific to the host that was called; another host may answer properly.</summary>
     internal bool TryAnotherHost { get; init; }
 
+    /// <summary>Copy of this error with the raw response attached.</summary>
+    internal InstagramApiException WithResponse(string body, string? contentType, string path) =>
+        new(Kind, Message, StatusCode, InnerException)
+        {
+            ResponseBody = body,
+            ContentType = ContentType ?? contentType,
+            RequestPath = RequestPath ?? path,
+            TryAnotherHost = TryAnotherHost
+        };
+
     public InstagramApiException(InstagramErrorKind kind, string message, HttpStatusCode? statusCode = null, Exception? inner = null)
         : base(message, inner)
     {

@@ -47,6 +47,7 @@ public sealed class InstagramClient : IDisposable
     private DateTime _lastRequest = DateTime.MinValue;
     private int _preferredProfile;
     private int _seenVariant;
+    private string _wwwClaim = "0";
 
     private readonly Action<string>? _log;
 
@@ -116,7 +117,12 @@ public sealed class InstagramClient : IDisposable
     }
 
     /// <summary>Marks a single story item as seen (the owner will see you in the viewers list).</summary>
-    public async Task MarkAsSeenAsync(StoryItem item, string ownerId, CancellationToken ct = default)
+    /// <remarks>
+    /// Instagram has moved this call around several times, so a few known variants are tried in turn.
+    /// A rejection from one variant (even "login_required") says nothing about the session as a whole,
+    /// so failures here are always reported as <see cref="InstagramErrorKind.Unknown"/>.
+    /// </remarks>
+    public async Task MarkAsSeenAsync(StoryItem item, string ownerId, string? ownerUsername = null, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(_cookies.CsrfToken))
             throw new InstagramApiException(InstagramErrorKind.Unknown,
@@ -160,34 +166,37 @@ public sealed class InstagramClient : IDisposable
                 () => new FormUrlEncodedContent(new Dictionary<string, string> { ["signed_body"] = "SIGNATURE." + mobilePayload }))
         };
 
+        var referer = ownerUsername is null ? null : $"https://www.instagram.com/stories/{ownerUsername}/{mediaPk}/";
+
         // Remember which variant worked so later calls go straight to it.
         var start = _seenVariant;
         var attempts = new List<string>();
-        InstagramApiException? first = null;
+        var diagnostics = new System.Text.StringBuilder();
         for (var i = 0; i < variants.Length; i++)
         {
             var index = (start + i) % variants.Length;
             var v = variants[index];
             try
             {
-                await SendWithProfileAsync<ApiResponseBase>(v.Profile, HttpMethod.Post, v.Path, v.Body, ct);
+                await SendWithProfileAsync<ApiResponseBase>(v.Profile, HttpMethod.Post, v.Path, v.Body, ct, referer);
                 _seenVariant = index;
                 return;
             }
-            catch (InstagramApiException ex) when (ex.TryAnotherHost || ex.Kind is InstagramErrorKind.NotFound or InstagramErrorKind.Unknown)
+            catch (InstagramApiException ex) when (ex.Kind is not (InstagramErrorKind.Network or InstagramErrorKind.RateLimited))
             {
-                first ??= ex;
-                attempts.Add($"{v.Path}: HTTP {(int?)ex.StatusCode}");
+                attempts.Add($"{v.Path} → HTTP {(int?)ex.StatusCode}");
+                diagnostics.AppendLine($"===== {v.Profile.Name} POST {v.Path} → HTTP {(int?)ex.StatusCode} {ex.ContentType} ({ex.Kind})")
+                    .AppendLine(ex.Message)
+                    .AppendLine(ex.ResponseBody)
+                    .AppendLine();
             }
         }
 
-        throw new InstagramApiException(first!.Kind,
-            $"تعذّر تعليم الستوري كمشاهَد. {first.Message}\nالمسارات التي جُرّبت: {string.Join("، ", attempts)}",
-            first.StatusCode, first)
+        throw new InstagramApiException(InstagramErrorKind.Unknown,
+            $"تعذّر تعليم الستوري كمشاهَد (جلستك ما زالت صالحة).\nالمسارات التي جُرّبت: {string.Join("، ", attempts)}")
         {
-            ResponseBody = first.ResponseBody,
-            ContentType = first.ContentType,
-            RequestPath = "stories/seen"
+            ResponseBody = diagnostics.ToString(),
+            RequestPath = "mark-as-seen"
         };
     }
 
@@ -270,13 +279,13 @@ public sealed class InstagramClient : IDisposable
     }
 
     private async Task<T> SendWithProfileAsync<T>(EndpointProfile profile, HttpMethod method, string path,
-        Func<HttpContent>? contentFactory, CancellationToken ct) where T : ApiResponseBase
+        Func<HttpContent>? contentFactory, CancellationToken ct, string? referer = null) where T : ApiResponseBase
     {
         for (var attempt = 1; ; attempt++)
         {
             await ThrottleAsync(ct);
 
-            using var req = BuildRequest(profile, method, path);
+            using var req = BuildRequest(profile, method, path, referer);
             if (contentFactory is not null)
                 req.Content = contentFactory();
 
@@ -303,6 +312,9 @@ public sealed class InstagramClient : IDisposable
             using (res)
             {
                 _cookies.UpdateFrom(res);
+                // instagram.com's JS echoes this value back on later requests; so do we.
+                if (res.Headers.TryGetValues("x-ig-set-www-claim", out var claims) && claims.FirstOrDefault() is { Length: > 0 } claim)
+                    _wwwClaim = claim;
                 var body = await res.Content.ReadAsStringAsync(ct);
 
                 // Retry-able: rate limits and transient server errors.
@@ -312,12 +324,20 @@ public sealed class InstagramClient : IDisposable
                     continue;
                 }
 
-                return Interpret<T>(res, body, path);
+                try
+                {
+                    return Interpret<T>(res, body, path);
+                }
+                catch (InstagramApiException ex) when (ex.ResponseBody is null)
+                {
+                    // Attach the raw response to every API error so failures can be diagnosed.
+                    throw ex.WithResponse(Truncate(body), res.Content.Headers.ContentType?.MediaType, path);
+                }
             }
         }
     }
 
-    private HttpRequestMessage BuildRequest(EndpointProfile profile, HttpMethod method, string path)
+    private HttpRequestMessage BuildRequest(EndpointProfile profile, HttpMethod method, string path, string? referer = null)
     {
         var req = new HttpRequestMessage(method, profile.BaseUrl + path);
         var h = req.Headers;
@@ -334,9 +354,9 @@ public sealed class InstagramClient : IDisposable
             // What instagram.com's own JavaScript sends; without these some endpoints return the HTML app shell.
             h.TryAddWithoutValidation("X-Requested-With", "XMLHttpRequest");
             h.TryAddWithoutValidation("X-ASBD-ID", "129477");
-            h.TryAddWithoutValidation("X-IG-WWW-Claim", "0");
+            h.TryAddWithoutValidation("X-IG-WWW-Claim", _wwwClaim);
             h.TryAddWithoutValidation("Origin", "https://www.instagram.com");
-            h.TryAddWithoutValidation("Referer", "https://www.instagram.com/");
+            h.TryAddWithoutValidation("Referer", referer ?? "https://www.instagram.com/");
             h.TryAddWithoutValidation("Sec-Fetch-Site", profile.BaseUrl.Contains("www.") ? "same-origin" : "same-site");
             h.TryAddWithoutValidation("Sec-Fetch-Mode", "cors");
             h.TryAddWithoutValidation("Sec-Fetch-Dest", "empty");

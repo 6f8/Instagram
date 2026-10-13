@@ -340,7 +340,7 @@ internal sealed class App
         {
             try
             {
-                await _client.MarkAsSeenAsync(item, userId, ct);
+                await _client.MarkAsSeenAsync(item, userId, ct: ct);
                 ok++;
             }
             catch (InstagramApiException ex) when (ex.Kind is not InstagramErrorKind.LoginRequired)

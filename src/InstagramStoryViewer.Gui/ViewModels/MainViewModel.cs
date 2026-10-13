@@ -316,7 +316,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (InstagramApiException ex)
         {
-            HandleError(ex, silent);
+            await HandleErrorAsync(ex, silent);
         }
         finally
         {
@@ -417,7 +417,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         catch (InstagramApiException ex)
         {
             EmptyMessage = ex.Message;
-            HandleError(ex, silent: false);
+            await HandleErrorAsync(ex, silent: false);
         }
         finally
         {
@@ -574,13 +574,13 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     {
         try
         {
-            await _client!.MarkAsSeenAsync(row.Item, row.OwnerId);
+            await _client!.MarkAsSeenAsync(row.Item, row.OwnerId, row.Username);
             row.MarkedSeen = true;
             return true;
         }
         catch (InstagramApiException ex)
         {
-            HandleError(ex, silent: false);
+            await HandleErrorAsync(ex, silent: false);
             return false;
         }
     }
@@ -619,15 +619,39 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void HandleError(InstagramApiException ex, bool silent)
+    private async Task HandleErrorAsync(InstagramApiException ex, bool silent)
     {
-        SaveDiagnostics(ex);
+        var saved = SaveDiagnostics(ex);
         if (ex.Kind is InstagramErrorKind.LoginRequired or InstagramErrorKind.Checkpoint)
         {
-            SignOut(ex.Message);
+            // One endpoint rejecting the session does not mean it has expired: confirm before
+            // signing out, otherwise a single misbehaving endpoint would wipe a working login.
+            if (_client is not null && !await IsSessionAliveAsync(_client))
+            {
+                SignOut(ex.Message);
+                return;
+            }
+            if (!silent) ShowToast("رفض إنستجرام هذا الطلب، لكن جلستك ما زالت صالحة." + (saved ? $"\n{DiagnosticsHint}" : ""), isError: true);
             return;
         }
-        if (!silent) ShowToast(ex.Message, isError: true);
+        if (!silent) ShowToast(saved ? $"{ex.Message}\n{DiagnosticsHint}" : ex.Message, isError: true);
+    }
+
+    private static async Task<bool> IsSessionAliveAsync(InstagramClient client)
+    {
+        try
+        {
+            await client.GetCurrentUserAsync();
+            return true;
+        }
+        catch (InstagramApiException ex) when (ex.Kind is InstagramErrorKind.LoginRequired or InstagramErrorKind.Checkpoint)
+        {
+            return false;
+        }
+        catch (InstagramApiException)
+        {
+            return true; // network/rate-limit problems are not proof that the session is gone
+        }
     }
 
     public void ShowToast(string message, bool isError = false)
