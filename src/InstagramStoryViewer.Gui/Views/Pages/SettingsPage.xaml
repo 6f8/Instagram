@@ -1,7 +1,8 @@
 <UserControl x:Class="InstagramStoryViewer.Gui.Views.Pages.SettingsPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:InstagramStoryViewer.Gui.ViewModels">
+             xmlns:vm="clr-namespace:InstagramStoryViewer.Gui.ViewModels"
+             xmlns:v="clr-namespace:InstagramStoryViewer.Gui.Views">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
     <StackPanel Margin="18,14,18,16" MaxWidth="780" HorizontalAlignment="Left">
         <TextBlock Text="الإعدادات" Style="{StaticResource H1}" Margin="0,0,0,18" />
@@ -57,12 +58,10 @@
                 <CheckBox IsChecked="{Binding AutoWatchNew}" Content="شاهِد الستوريات الجديدة لمن أتابعهم في الخلفية" Margin="0,12,0,0" />
                 <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
                     <TextBlock Text="الحد اليومي:" VerticalAlignment="Center" Margin="0,0,10,0" />
-                    <RadioButton Style="{StaticResource Chip}" Content="100" GroupName="dailyLimit"
-                                 IsChecked="{Binding AutoWatchDailyLimit, Converter={StaticResource ValueBool}, ConverterParameter=100}" />
-                    <RadioButton Style="{StaticResource Chip}" Content="200" GroupName="dailyLimit"
-                                 IsChecked="{Binding AutoWatchDailyLimit, Converter={StaticResource ValueBool}, ConverterParameter=200}" />
-                    <RadioButton Style="{StaticResource Chip}" Content="400" GroupName="dailyLimit"
-                                 IsChecked="{Binding AutoWatchDailyLimit, Converter={StaticResource ValueBool}, ConverterParameter=400}" />
+                    <TextBox Style="{StaticResource FieldBox}" Width="90" FlowDirection="LeftToRight" HorizontalContentAlignment="Center"
+                             v:NumericInput.IsEnabled="True" MaxLength="4" ToolTip="اكتب رقماً من 1 إلى 2000 ثم Enter"
+                             Text="{Binding AutoWatchDailyLimit, UpdateSourceTrigger=Explicit}" />
+                    <TextBlock Text="ستوري يومياً (من 1 إلى 2000)" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{StaticResource MutedBrush}" />
                 </StackPanel>
                 <TextBlock Text="{Binding AutoWatchStatus}" Style="{StaticResource Muted}" Margin="0,10,0,0" />
             <Border Height="1" Background="{StaticResource BorderBrush}" Margin="0,14" />
@@ -120,12 +119,10 @@
                     <CheckBox IsChecked="{Binding AutoLikePosts}" Content="المنشورات الجديدة (حسابات المفضّلة، آخر 3 أيام)" Margin="0,12,0,0" />
                     <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
                         <TextBlock Text="الحد اليومي:" VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <RadioButton Style="{StaticResource Chip}" Content="30" GroupName="likeLimit"
-                                     IsChecked="{Binding AutoLikeDailyLimit, Converter={StaticResource ValueBool}, ConverterParameter=30}" />
-                        <RadioButton Style="{StaticResource Chip}" Content="60" GroupName="likeLimit"
-                                     IsChecked="{Binding AutoLikeDailyLimit, Converter={StaticResource ValueBool}, ConverterParameter=60}" />
-                        <RadioButton Style="{StaticResource Chip}" Content="100" GroupName="likeLimit"
-                                     IsChecked="{Binding AutoLikeDailyLimit, Converter={StaticResource ValueBool}, ConverterParameter=100}" />
+                        <TextBox Style="{StaticResource FieldBox}" Width="90" FlowDirection="LeftToRight" HorizontalContentAlignment="Center"
+                                 v:NumericInput.IsEnabled="True" MaxLength="4" ToolTip="اكتب رقماً من 1 إلى 500 ثم Enter"
+                                 Text="{Binding AutoLikeDailyLimit, UpdateSourceTrigger=Explicit}" />
+                        <TextBlock Text="إعجاب يومياً (من 1 إلى 500)" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{StaticResource MutedBrush}" />
                     </StackPanel>
                 </StackPanel>
                 <TextBlock Text="{Binding AutoLikeStatus}" Style="{StaticResource Muted}" Margin="0,10,0,0" />
@@ -203,12 +200,10 @@
                            Text="حد أقصى لطلبات إنستجرام في الساعة. الحد الأقل أكثر أماناً لحسابك. التحديث التلقائي يتوقف عند تصغير البرنامج." />
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="طلبات في الساعة:" VerticalAlignment="Center" Margin="0,0,10,0" />
-                    <RadioButton Style="{StaticResource Chip}" Content="120" GroupName="rate"
-                                 IsChecked="{Binding MaxRequestsPerHour, Converter={StaticResource ValueBool}, ConverterParameter=120}" />
-                    <RadioButton Style="{StaticResource Chip}" Content="180" GroupName="rate"
-                                 IsChecked="{Binding MaxRequestsPerHour, Converter={StaticResource ValueBool}, ConverterParameter=180}" />
-                    <RadioButton Style="{StaticResource Chip}" Content="300" GroupName="rate"
-                                 IsChecked="{Binding MaxRequestsPerHour, Converter={StaticResource ValueBool}, ConverterParameter=300}" />
+                    <TextBox Style="{StaticResource FieldBox}" Width="90" FlowDirection="LeftToRight" HorizontalContentAlignment="Center"
+                             v:NumericInput.IsEnabled="True" MaxLength="4" ToolTip="اكتب رقماً من 30 إلى 600 ثم Enter"
+                             Text="{Binding MaxRequestsPerHour, UpdateSourceTrigger=Explicit}" />
+                    <TextBlock Text="طلب (من 30 إلى 600)" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{StaticResource MutedBrush}" />
                 </StackPanel>
                 <TextBlock Style="{StaticResource Muted}" Margin="0,10,0,0">
                     <Run Text="الطلبات في آخر ساعة: " /><Run Text="{Binding RequestsLastHour, Mode=OneWay}" />

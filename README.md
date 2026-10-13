@@ -47,7 +47,7 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
 - **Auto-watch (optional):**
   - When you preview a story.
   - Or your followed accounts' new stories, in the background.
-  - Within a daily limit and outside **quiet hours** (default 01:00–08:00).
+  - Within a daily limit you type yourself (1–2000 stories) and outside **quiet hours** (default 01:00–08:00).
 - **Exclusion list 👁‍🗨:** accounts the app never watches automatically. It asks before watching them manually.
 - **Watch history:** everything the app watched for you, when, and the result.
 
@@ -59,7 +59,7 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
   - Runs after every refresh, even when the app is minimized to the notification area.
   - Presses the real like button in the small corner window, then verifies the button switched to "Unlike".
   - It never clicks a comment's like button by mistake.
-- **Limits:** a daily cap (30/60/100), at most 10 per cycle, quiet hours, the exclusion list, and the hourly request cap.
+- **Limits:** a daily cap you type yourself in Settings (1–500), at most 10 per cycle, quiet hours, the exclusion list, and the hourly request cap.
 - **History:** every like is recorded in the history.
 - Overusing automated likes can get your account restricted.
 
@@ -72,7 +72,7 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
 | ![](docs/screenshots/settings.png) | ![](docs/screenshots/login.png) |
 
 ### Protecting your account
-- A cap on Instagram requests per hour (120/180/300), with random spacing between requests.
+- A cap on Instagram requests per hour that you set yourself (30–600), with random spacing between requests.
 - Refreshes happen at irregular intervals and stop when the window is closed or minimized.
 - Cookies that Instagram rotates are saved automatically, so the session doesn't expire on its own.
 - A session that Instagram ends is detected immediately, and requests stop.

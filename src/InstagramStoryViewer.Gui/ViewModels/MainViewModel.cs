@@ -64,8 +64,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _autoPlayVideos = _settings.AutoPlayVideos;
         _autoWatchOnPreview = _settings.AutoWatchOnPreview;
         _autoWatchNew = _settings.AutoWatchNew;
-        _autoWatchDailyLimit = _settings.AutoWatchDailyLimit;
-        _maxRequestsPerHour = _settings.MaxRequestsPerHour;
+        _autoWatchDailyLimit = Math.Clamp(_settings.AutoWatchDailyLimit, AutoWatchLimitMin, AutoWatchLimitMax);
+        _maxRequestsPerHour = Math.Clamp(_settings.MaxRequestsPerHour, RequestsPerHourMin, RequestsPerHourMax);
         _quietHoursEnabled = _settings.QuietHoursEnabled;
         _quietFrom = _settings.QuietFrom;
         _quietTo = _settings.QuietTo;
@@ -226,8 +226,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         else if (IsAutoWatching) StopAutoWatch(); // unticking stops the running pass right away
     }
 
+    // Typed by the user in Settings; out-of-range entries are pulled back into range.
+    public const int AutoWatchLimitMin = 1, AutoWatchLimitMax = 2000;
+    public const int RequestsPerHourMin = 30, RequestsPerHourMax = 600;
+
     partial void OnAutoWatchDailyLimitChanged(int value)
     {
+        var clamped = Math.Clamp(value, AutoWatchLimitMin, AutoWatchLimitMax);
+        if (clamped != value) { AutoWatchDailyLimit = clamped; return; }
         _settings.AutoWatchDailyLimit = value;
         SaveSettings();
     }
@@ -288,6 +294,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     partial void OnMaxRequestsPerHourChanged(int value)
     {
+        var clamped = Math.Clamp(value, RequestsPerHourMin, RequestsPerHourMax);
+        if (clamped != value) { MaxRequestsPerHour = clamped; return; }
         _settings.MaxRequestsPerHour = value;
         if (_client is not null) _client.MaxRequestsPerHour = value;
         SaveSettings();

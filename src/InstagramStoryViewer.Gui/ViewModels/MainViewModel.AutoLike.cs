@@ -49,7 +49,7 @@ public sealed partial class MainViewModel
         _autoLikeStories = _settings.AutoLikeStories;
         _autoLikePosts = _settings.AutoLikePosts;
         _autoLikeScope = _settings.AutoLikeScope;
-        _autoLikeDailyLimit = _settings.AutoLikeDailyLimit;
+        _autoLikeDailyLimit = Math.Clamp(_settings.AutoLikeDailyLimit, AutoLikeLimitMin, AutoLikeLimitMax);
 #pragma warning restore MVVMTK0034
     }
 
@@ -79,8 +79,12 @@ public sealed partial class MainViewModel
         SaveSettings();
     }
 
+    public const int AutoLikeLimitMin = 1, AutoLikeLimitMax = 500;
+
     partial void OnAutoLikeDailyLimitChanged(int value)
     {
+        var clamped = Math.Clamp(value, AutoLikeLimitMin, AutoLikeLimitMax);
+        if (clamped != value) { AutoLikeDailyLimit = clamped; return; }
         _settings.AutoLikeDailyLimit = value;
         SaveSettings();
     }
