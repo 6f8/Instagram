@@ -53,13 +53,13 @@ public sealed partial class MainViewModel
             string path;
             try
             {
-                path = await _downloader.DownloadAsync(row.Username, row.Item, _lifetimeCts.Token, progress);
+                path = await _downloader.DownloadAsync(row.FolderName, row.Item, _lifetimeCts.Token, progress);
             }
             catch (InstagramApiException ex) when (ex.Kind == InstagramErrorKind.MediaExpired)
             {
                 // The CDN link expired while the list was open: fetch a fresh one and retry once.
                 if (!await RefreshRowAsync(row, _lifetimeCts.Token)) throw;
-                path = await _downloader.DownloadAsync(row.Username, row.Item, _lifetimeCts.Token, progress);
+                path = await _downloader.DownloadAsync(row.FolderName, row.Item, _lifetimeCts.Token, progress);
             }
             row.LocalPath = path;
             row.SizeText = Format.Size(new FileInfo(path).Length);

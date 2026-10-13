@@ -52,7 +52,9 @@ public sealed class InstagramClient : IDisposable
     private int _preferredProfile;
     private string _wwwClaim = "0";
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task> _inflightDownloads =
+    // Lazy: ConcurrentDictionary.GetOrAdd may run its factory twice under contention; Lazy guarantees a
+    // single download even then (only the stored Lazy's value is ever started).
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<Task>> _inflightDownloads =
         new(StringComparer.OrdinalIgnoreCase);
 
     private readonly Action<string>? _log;
@@ -154,6 +156,14 @@ public sealed class InstagramClient : IDisposable
         return reel;
     }
 
+    /// <summary>The highlights (saved story collections) shown on a profile.</summary>
+    public async Task<List<Highlight>> GetHighlightsAsync(string userId, CancellationToken ct = default)
+    {
+        var res = await SendAsync<HighlightsTrayResponse>(
+            HttpMethod.Get, $"/api/v1/highlights/{Uri.EscapeDataString(userId)}/highlights_tray/", null, ct);
+        return res.Tray?.Where(h => h.Id is not null).ToList() ?? new List<Highlight>();
+    }
+
     /// <summary>Current stories of several users in one request (up to 20 ids per call).</summary>
     public async Task<List<Reel>> GetStoriesForUsersAsync(IEnumerable<string> userIds, CancellationToken ct = default)
     {
@@ -182,9 +192,11 @@ public sealed class InstagramClient : IDisposable
         var key = Path.GetFullPath(filePath);
         // The shared download is not tied to the first caller's token: a cancelled preview must not abort a
         // download another caller is waiting for. Each caller can still stop waiting via its own token.
-        var task = _inflightDownloads.GetOrAdd(key, _ => DownloadCoreAsync(url, key, progress, CancellationToken.None));
+        var lazy = _inflightDownloads.GetOrAdd(key,
+            _ => new Lazy<Task>(() => DownloadCoreAsync(url, key, progress, CancellationToken.None)));
+        var task = lazy.Value;
         // Remove the entry once finished (successfully or not) so a later retry starts fresh.
-        task.ContinueWith(t => _inflightDownloads.TryRemove(new KeyValuePair<string, Task>(key, task)),
+        task.ContinueWith(_ => _inflightDownloads.TryRemove(new KeyValuePair<string, Lazy<Task>>(key, lazy)),
             CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         return task.WaitAsync(ct);
     }

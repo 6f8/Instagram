@@ -116,6 +116,7 @@ public sealed partial class MainViewModel
         SelectedStory = null;
         CurrentUsername = displayName;
         _currentUserId = null;
+        ResetHighlights();
         EmptyMessage = null;
         IsLoadingStories = true;
         try
@@ -135,20 +136,7 @@ public sealed partial class MainViewModel
                 return;
             }
 
-            var i = 0;
-            foreach (var item in reel.Items)
-            {
-                var row = new StoryRowViewModel(item, username, userId, ++i);
-                var path = _downloader!.FindExistingPath(username, item);
-                if (path is not null)
-                {
-                    row.LocalPath = path;
-                    row.SizeText = Format.Size(new FileInfo(path).Length);
-                    row.State = DownloadState.Done;
-                }
-                Stories.Add(row);
-            }
-            SelectedStory = Stories.FirstOrDefault();
+            ShowReelItems(reel.Items, username, userId, highlightId: null);
         }
         catch (OperationCanceledException)
         {
@@ -165,13 +153,33 @@ public sealed partial class MainViewModel
         }
     }
 
+    /// <summary>Fills the table with a reel's items (current stories or one highlight).</summary>
+    private void ShowReelItems(IEnumerable<Models.StoryItem> items, string username, string userId, string? highlightId)
+    {
+        Stories.Clear();
+        var i = 0;
+        foreach (var item in items)
+        {
+            var row = new StoryRowViewModel(item, username, userId, ++i, highlightId);
+            var path = _downloader!.FindExistingPath(row.FolderName, item);
+            if (path is not null)
+            {
+                row.LocalPath = path;
+                row.SizeText = Format.Size(new FileInfo(path).Length);
+                row.State = DownloadState.Done;
+            }
+            Stories.Add(row);
+        }
+        SelectedStory = Stories.FirstOrDefault();
+    }
+
     /// <summary>Re-fetches a story whose CDN link expired and swaps in the fresh item.</summary>
     private async Task<bool> RefreshRowAsync(StoryRowViewModel row, CancellationToken ct)
     {
         if (_client is null) return false;
         try
         {
-            var reel = await _client.GetUserStoriesAsync(row.OwnerId, ct);
+            var reel = await _client.GetUserStoriesAsync(row.ReelId, ct);
             var fresh = reel?.Items?.FirstOrDefault(i => i.Pk == row.Item.Pk);
             if (fresh is null) return false;
             row.ReplaceItem(fresh);

@@ -38,11 +38,13 @@ public sealed class DownloadTests : IDisposable
         var client = TestClient.Create(handler);
         var path = Path.Combine(_dir, "v.mp4");
 
-        var a = Task.Run(() => client.DownloadAsync("https://cdn.example/v.mp4", path));
-        var b = Task.Run(() => client.DownloadAsync("https://cdn.example/v.mp4", path));
+        // Many simultaneous callers make the GetOrAdd race (factory running twice) likely to show up.
+        var callers = Enumerable.Range(0, 8)
+            .Select(_ => Task.Run(() => client.DownloadAsync("https://cdn.example/v.mp4", path)))
+            .ToList();
         await Task.Delay(200);
         gate.SetResult();
-        await Task.WhenAll(a, b);
+        await Task.WhenAll(callers);
 
         Assert.Single(handler.Requests);
     }

@@ -44,14 +44,16 @@ public sealed partial class TrayUserViewModel : ObservableObject
 /// <summary>A single story row in the table.</summary>
 public sealed partial class StoryRowViewModel : ObservableObject
 {
-    public StoryRowViewModel(StoryItem item, string username, string ownerId, int index)
+    /// <param name="highlightId">Set for items of a highlight ("highlight:…"); null for current stories.</param>
+    public StoryRowViewModel(StoryItem item, string username, string ownerId, int index, string? highlightId = null)
     {
         Item = item;
         Username = username;
         OwnerId = ownerId;
         Index = index;
+        HighlightId = highlightId;
         PostedText = Format.Ago(item.TakenAtTime);
-        ExpiresText = Format.Remaining(item.ExpiresAtTime);
+        ExpiresText = IsHighlight ? "—" : Format.Remaining(item.ExpiresAtTime);
         TypeText = item.IsVideo ? $"فيديو {Format.Duration(item.VideoDuration)}".Trim() : "صورة";
     }
 
@@ -66,6 +68,14 @@ public sealed partial class StoryRowViewModel : ObservableObject
     public string Username { get; }
     public string OwnerId { get; }
     public int Index { get; }
+    public string? HighlightId { get; }
+    public bool IsHighlight => HighlightId is not null;
+
+    /// <summary>The reel to re-fetch this item from (the user, or the highlight).</summary>
+    public string ReelId => HighlightId ?? OwnerId;
+
+    /// <summary>Download sub-folder: highlights are kept apart from regular stories.</summary>
+    public string FolderName => IsHighlight ? $"{Username}_highlights" : Username;
 
     public bool IsVideo => Item.IsVideo;
     public string TypeText { get; }

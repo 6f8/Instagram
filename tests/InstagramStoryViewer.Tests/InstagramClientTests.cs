@@ -133,3 +133,28 @@ public class InstagramClientTests
         Assert.Equal(["8", "9"], reel.Items!.Select(i => i.Pk)); // sorted oldest first
     }
 }
+
+public class HighlightTests
+{
+    [Fact]
+    public async Task Parses_highlights_and_loads_one_as_a_reel()
+    {
+        var handler = new FakeHandler(req => req.RequestUri!.AbsolutePath.Contains("highlights_tray")
+            ? FakeHandler.Json("""
+                {"tray":[{"id":"highlight:17890","title":"Travel","media_count":3,
+                          "cover_media":{"cropped_image_version":{"width":150,"height":150,"url":"cover"}}}],"status":"ok"}
+                """)
+            : FakeHandler.Json("""
+                {"reels":{"highlight:17890":{"id":"highlight:17890","items":[{"pk":"1","taken_at":5,"media_type":1}]}},"status":"ok"}
+                """));
+        var client = TestClient.Create(handler);
+
+        var h = Assert.Single(await client.GetHighlightsAsync("42"));
+        Assert.Equal("Travel", h.Title);
+        Assert.Equal("cover", h.CoverMedia!.CroppedImageVersion!.Url);
+
+        var reel = await client.GetUserStoriesAsync(h.Id!);
+        Assert.Single(reel!.Items!);
+        Assert.Contains("/api/v1/highlights/42/highlights_tray/", handler.Requests[0].RequestUri!.AbsolutePath);
+    }
+}

@@ -26,6 +26,11 @@ public sealed partial class MainViewModel
     {
         row ??= SelectedStory;
         if (row is null || _client is null) return;
+        if (row.IsHighlight)
+        {
+            ShowToast("لا يمكن تعليم الهايلايت كمشاهَد، فقط الستوريات الحالية.");
+            return;
+        }
         if (IsExcluded(row.OwnerId) &&
             !_dialogs.Confirm($"{row.Username} في قائمة الاستثناء من المشاهدة. هل تريد مشاهدة الستوري رغم ذلك؟"))
             return;
@@ -40,7 +45,7 @@ public sealed partial class MainViewModel
     private async Task MarkAllSeenAsync()
     {
         if (_client is null || Stories.Count == 0) return;
-        var pending = Stories.Where(s => !s.MarkedSeen).ToList();
+        var pending = Stories.Where(s => !s.MarkedSeen && !s.IsHighlight).ToList();
         if (pending.Count == 0)
         {
             ShowToast("كل الستوريات مشاهَدة مسبقاً");
@@ -172,7 +177,7 @@ public sealed partial class MainViewModel
     private async Task AutoWatchSelectedAsync()
     {
         var row = SelectedStory;
-        if (row is null || row.MarkedSeen || !AutoWatchOnPreview || IsAutoWatching || AutoWatchBudget == 0) return;
+        if (row is null || row.MarkedSeen || row.IsHighlight || !AutoWatchOnPreview || IsAutoWatching || AutoWatchBudget == 0) return;
         if (IsExcluded(row.OwnerId) || IsQuietNow) return;
         var n = await WatchAsync([ToTarget(row)], WatchMode.Preview);
         CountAutoWatched(n);

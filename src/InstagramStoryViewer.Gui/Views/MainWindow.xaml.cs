@@ -150,6 +150,7 @@ public partial class MainWindow : Window, IDialogService
 
     private async void UpdatePlayer()
     {
+        if (_fullscreenOpen) return; // the full-screen viewer plays the media instead
         try
         {
             await UpdatePlayerAsync();
@@ -238,6 +239,33 @@ public partial class MainWindow : Window, IDialogService
         _isPlaying = false;
         SetPlayGlyph();
         _vm.ShowToast("تعذّر تشغيل الفيديو هنا، جرّب تنزيله أو فتحه في المتصفح.", isError: true);
+    }
+
+    // ================================================================== full screen
+
+    private bool _fullscreenOpen;
+
+    private void OpenFullscreen_Click(object sender, RoutedEventArgs e) =>
+        OpenFullscreen(_vm.SelectedStory is { } row ? _vm.Stories.IndexOf(row) : 0);
+
+    private void Stories_DoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is ListBox { SelectedItem: StoryRowViewModel row })
+            OpenFullscreen(_vm.Stories.IndexOf(row));
+    }
+
+    private void OpenFullscreen(int index)
+    {
+        if (_vm.Stories.Count == 0) return;
+        _fullscreenOpen = true;
+        Player.Stop(); // do not play the same video twice
+        var viewer = new FullscreenViewer(_vm, Math.Max(0, index)) { Owner = this };
+        viewer.Closed += (_, _) =>
+        {
+            _fullscreenOpen = false;
+            UpdatePlayer();
+        };
+        viewer.Show();
     }
 
     // ================================================================== login

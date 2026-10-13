@@ -203,6 +203,13 @@
 
                                 <DockPanel Grid.Row="0">
                                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <Button Style="{StaticResource LinkButton}" Command="{Binding ToggleHighlightsCommand}"
+                                                Visibility="{Binding HasCurrentAccount, Converter={StaticResource Vis}}" Margin="0,0,6,0">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Style="{StaticResource Icon}" Text="&#xE431;" FontSize="13" Margin="0,0,6,0" />
+                                                <TextBlock Text="الهايلايت" />
+                                            </StackPanel>
+                                        </Button>
                                         <Button Style="{StaticResource LinkButton}" Command="{Binding MarkAllSeenCommand}">
                                             <StackPanel Orientation="Horizontal">
                                                 <TextBlock Style="{StaticResource Icon}" Text="&#xE8F4;" FontSize="13" Margin="0,0,6,0" />
@@ -264,8 +271,45 @@
                                     </StackPanel>
                                 </DockPanel>
 
-                                <ProgressBar Grid.Row="1" IsIndeterminate="True" Height="3" Margin="0,10,0,0"
-                                             Visibility="{Binding IsLoadingStories, Converter={StaticResource Vis}}" />
+                                <StackPanel Grid.Row="1">
+                                    <!-- highlights strip -->
+                                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" Margin="0,10,0,0"
+                                                  Visibility="{Binding ShowHighlights, Converter={StaticResource Vis}}">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                            <RadioButton Style="{StaticResource Chip}" GroupName="reelSource" Content="الستوريات الحالية"
+                                                         IsChecked="{Binding IsViewingHighlight, Converter={StaticResource ValueBool}, ConverterParameter=False, Mode=TwoWay}"
+                                                         Command="{Binding ShowCurrentStoriesCommand}" />
+                                            <ItemsControl ItemsSource="{Binding Highlights}">
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel Orientation="Horizontal" />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type vm:HighlightViewModel}">
+                                                        <RadioButton Style="{StaticResource Chip}" GroupName="reelSource" Padding="0"
+                                                                     IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                                     Command="{Binding DataContext.OpenHighlightCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                     CommandParameter="{Binding}">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <Ellipse Width="20" Height="20" Margin="0,0,6,0" FlowDirection="LeftToRight">
+                                                                    <Ellipse.Fill>
+                                                                        <ImageBrush ImageSource="{Binding CoverUrl, Converter={StaticResource Img}, ConverterParameter=48}" Stretch="UniformToFill" />
+                                                                    </Ellipse.Fill>
+                                                                </Ellipse>
+                                                                <TextBlock Text="{Binding Title}" VerticalAlignment="Center" MaxWidth="140" TextTrimming="CharacterEllipsis" />
+                                                            </StackPanel>
+                                                        </RadioButton>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </ScrollViewer>
+                                    <ProgressBar IsIndeterminate="True" Height="3" Margin="0,10,0,0"
+                                                 Visibility="{Binding IsLoadingStories, Converter={StaticResource Vis}}" />
+                                    <ProgressBar IsIndeterminate="True" Height="3" Margin="0,10,0,0"
+                                                 Visibility="{Binding IsLoadingHighlights, Converter={StaticResource Vis}}" />
+                                </StackPanel>
 
                                 <!-- column headers -->
                                 <Grid Grid.Row="2" Margin="8,12,8,6">
@@ -286,6 +330,7 @@
                                 </Grid>
 
                                 <ListBox Grid.Row="3" Style="{StaticResource PlainList}" ItemContainerStyle="{StaticResource RowItem}"
+                                         MouseDoubleClick="Stories_DoubleClick" ToolTip="انقر مرتين للعرض بملء الشاشة"
                                          ItemsSource="{Binding Stories}" SelectedItem="{Binding SelectedStory}"
                                          BorderBrush="{StaticResource BorderBrush}">
                                     <ListBox.ItemTemplate>
@@ -465,6 +510,10 @@
                             <Border Grid.Row="0" Style="{StaticResource Card}">
                                 <DockPanel>
                                     <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+                                        <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Padding="4,0" ToolTip="ملء الشاشة"
+                                                Click="OpenFullscreen_Click" Visibility="{Binding HasSelection, Converter={StaticResource Vis}}">
+                                            <TextBlock Style="{StaticResource Icon}" Text="&#xE5D0;" FontSize="16" />
+                                        </Button>
                                         <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Padding="4,0" ToolTip="فتح في المتصفح"
                                                 Command="{Binding OpenInBrowserCommand}" Visibility="{Binding HasSelection, Converter={StaticResource Vis}}">
                                             <TextBlock Style="{StaticResource Icon}" Text="&#xE89E;" FontSize="14" />

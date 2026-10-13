@@ -44,6 +44,30 @@ public sealed class UserInfoResponse : ApiResponseBase
     [JsonPropertyName("user")] public StoryUser? User { get; set; }
 }
 
+// ---------- /api/v1/highlights/{id}/highlights_tray/ ----------
+
+public sealed class HighlightsTrayResponse : ApiResponseBase
+{
+    [JsonPropertyName("tray")] public List<Highlight>? Tray { get; set; }
+}
+
+public sealed class Highlight
+{
+    /// <summary>"highlight:1789..." – usable as a reel id in reels_media.</summary>
+    [JsonPropertyName("id")]
+    [JsonConverter(typeof(FlexibleStringConverter))]
+    public string? Id { get; set; }
+
+    [JsonPropertyName("title")] public string? Title { get; set; }
+    [JsonPropertyName("media_count")] public int? MediaCount { get; set; }
+    [JsonPropertyName("cover_media")] public HighlightCover? CoverMedia { get; set; }
+}
+
+public sealed class HighlightCover
+{
+    [JsonPropertyName("cropped_image_version")] public MediaCandidate? CroppedImageVersion { get; set; }
+}
+
 // ---------- /api/v1/feed/reels_tray/ ----------
 
 public sealed class ReelsTrayResponse : ApiResponseBase
