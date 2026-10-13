@@ -22,7 +22,7 @@ jobs:
       # Signing runs only when the Azure Trusted Signing secrets exist (see the "Sign exe" step).
       SIGNING_ENABLED: ${{ secrets.AZURE_CLIENT_ID != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-dotnet@v4
         with:
