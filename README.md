@@ -13,7 +13,7 @@ It's a single self-contained file, so .NET doesn't need to be installed (Windows
 - **Following:** every account you follow that currently has stories. The gradient ring means there are stories you haven't seen yet.
 - **Search** for any public account, or a private account you follow.
 - **Downloads** at the highest available quality with a progress bar. Each file is saved to `<download folder>/<username>/`.
-- **Mark as seen** for one story or for all of them. The app asks first, because your name will appear in the story owner's viewers list.
+- **Mark as seen** for one story or for all of them. The app opens the story in the embedded browser and plays it for a few seconds, so Instagram records a real view. It asks first, because your name will appear in the story owner's viewers list.
 - **Downloads page** lists every downloaded file. You can open a file or show it in its folder.
 - **Settings:** download folder, confirm before marking as seen, video autoplay, and log out.
 
@@ -64,7 +64,7 @@ Building needs the .NET 8 SDK. It works on Windows, and also on Linux/macOS thro
 | Username to id | `GET /api/v1/users/web_profile_info/?username=` |
 | Stories of followed accounts | `GET /api/v1/feed/reels_tray/` |
 | A user's stories | `GET /api/v1/feed/reels_media/?reel_ids=` |
-| Mark as seen | `POST /api/v1/stories/reel/seen` |
+| Mark as seen | Opens the story in the embedded browser (`/stories/<user>/<id>/`) and presses "View story". Instagram retired the old REST endpoint, which now returns 404 |
 
 ## Important notes
 - These are unofficial Instagram endpoints and may change without notice.

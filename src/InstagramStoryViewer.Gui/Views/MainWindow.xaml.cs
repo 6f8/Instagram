@@ -165,6 +165,13 @@ public partial class MainWindow : Window, IDialogService
         return Task.FromResult(dialog.ShowDialog() == true ? dialog.CookieHeader : null);
     }
 
+    public Task<int> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls)
+    {
+        var dialog = new StoryWatchWindow(cookieHeader, storyUrls) { Owner = this };
+        dialog.ShowDialog();
+        return Task.FromResult(dialog.WatchedCount);
+    }
+
     public string? PickFolder(string initial)
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog

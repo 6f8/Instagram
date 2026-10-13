@@ -15,6 +15,12 @@ public interface IDialogService
     bool Confirm(string message);
     Task<string?> LoginWithBrowserAsync(bool clearExistingSession);
     string? PickFolder(string initial);
+
+    /// <summary>
+    /// Opens each story URL in the embedded browser so Instagram records a real view.
+    /// Returns how many stories were shown (in order).
+    /// </summary>
+    Task<int> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls);
 }
 
 public sealed partial class MainViewModel : ObservableObject, IDisposable
@@ -26,6 +32,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private InstagramClient? _client;
     private StoryDownloader? _downloader;
     private CancellationTokenSource _storiesCts = new();
+    private string? _sessionCookieHeader;
 
     public MainViewModel(IDialogService dialogs)
     {
@@ -247,6 +254,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
             _client?.Dispose();
             _client = client;
+            _sessionCookieHeader = cookies.ToHeader(); // normalised "name=value; ..." form
             _downloader = new StoryDownloader(client, DownloadFolder);
 
             if (persist)
@@ -552,14 +560,19 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     // ================================================================== seen
 
+    // Instagram retired the REST "seen" endpoints (they return 404), and the web app now uses internal
+    // GraphQL calls whose ids change all the time. A story is therefore marked as seen the way a person
+    // does it: by actually showing it in the embedded browser.
+
     [RelayCommand]
     private async Task MarkSeenAsync(StoryRowViewModel? row)
     {
         row ??= SelectedStory;
         if (row is null || _client is null) return;
-        if (ConfirmBeforeMarkSeen && !_dialogs.Confirm($"سيظهر اسمك في قائمة مشاهدي هذا الستوري لدى {row.Username}. متابعة؟"))
+        if (ConfirmBeforeMarkSeen && !_dialogs.Confirm($"سيُفتح الستوري في المتصفح المدمج وسيظهر اسمك في قائمة مشاهديه لدى {row.Username}. متابعة؟"))
             return;
-        if (await MarkRowSeenAsync(row)) ShowToast("تم تعليم الستوري كمشاهَد");
+        var ok = await WatchRowsAsync([row]);
+        if (ok > 0) ShowToast("تمت مشاهدة الستوري");
         UpdateTraySeen(row.Username);
     }
 
@@ -567,31 +580,33 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private async Task MarkAllSeenAsync()
     {
         if (_client is null || Stories.Count == 0) return;
-        if (ConfirmBeforeMarkSeen && !_dialogs.Confirm($"سيظهر اسمك في قائمة مشاهدي كل ستوريات {CurrentUsername}. متابعة؟"))
-            return;
-        var ok = 0;
-        foreach (var row in Stories.Where(s => !s.MarkedSeen).ToList())
+        var pending = Stories.Where(s => !s.MarkedSeen).ToList();
+        if (pending.Count == 0)
         {
-            if (await MarkRowSeenAsync(row)) ok++;
-            else break; // stop on the first failure (usually a rate limit)
+            ShowToast("كل الستوريات مشاهَدة مسبقاً");
+            return;
         }
-        ShowToast($"تم تعليم {ok} ستوري كمشاهَد");
+        if (ConfirmBeforeMarkSeen && !_dialogs.Confirm($"ستُعرض {pending.Count} ستوري في المتصفح المدمج وسيظهر اسمك في قائمة مشاهدي {CurrentUsername}. متابعة؟"))
+            return;
+        var ok = await WatchRowsAsync(pending);
+        ShowToast($"تمت مشاهدة {ok} من {pending.Count}", isError: ok < pending.Count);
         if (CurrentUsername is not null) UpdateTraySeen(CurrentUsername);
     }
 
-    private async Task<bool> MarkRowSeenAsync(StoryRowViewModel row)
+    private async Task<int> WatchRowsAsync(IReadOnlyList<StoryRowViewModel> rows)
     {
-        try
-        {
-            await _client!.MarkAsSeenAsync(row.Item, row.OwnerId, row.Username);
-            row.MarkedSeen = true;
-            return true;
-        }
-        catch (InstagramApiException ex)
-        {
-            await HandleErrorAsync(ex, silent: false);
-            return false;
-        }
+        if (_sessionCookieHeader is null) return 0;
+        var urls = rows.Select(r => StoryUrl(r)).ToList();
+        var watched = await _dialogs.WatchStoriesAsync(_sessionCookieHeader, urls);
+        for (var i = 0; i < Math.Min(watched, rows.Count); i++)
+            rows[i].MarkedSeen = true;
+        return watched;
+    }
+
+    private static string StoryUrl(StoryRowViewModel row)
+    {
+        var pk = row.Item.Pk ?? row.Item.Id?.Split('_')[0];
+        return $"https://www.instagram.com/stories/{Uri.EscapeDataString(row.Username)}/{pk}/";
     }
 
     private void UpdateTraySeen(string username)
