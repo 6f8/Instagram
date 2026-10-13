@@ -47,7 +47,7 @@ jobs:
           $branch = [math]::Round([double]$xml.coverage.'branch-rate' * 100, 1)
           "### Test coverage (core library)`n`nLines: **$line%** · Branches: **$branch%**" >> $env:GITHUB_STEP_SUMMARY
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: coverage/**/coverage.cobertura.xml
@@ -84,7 +84,7 @@ jobs:
           "version=$version" >> $env:GITHUB_OUTPUT
           "sha256=$hash" >> $env:GITHUB_OUTPUT
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: InstagramStoryViewer-win-x64
           path: |
