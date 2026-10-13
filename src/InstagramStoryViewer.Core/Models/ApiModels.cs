@@ -37,6 +37,13 @@ public sealed class ProfileUser
     [JsonPropertyName("followed_by_viewer")] public bool FollowedByViewer { get; set; }
 }
 
+// ---------- /api/v1/users/{id}/info/ ----------
+
+public sealed class UserInfoResponse : ApiResponseBase
+{
+    [JsonPropertyName("user")] public StoryUser? User { get; set; }
+}
+
 // ---------- /api/v1/feed/reels_tray/ ----------
 
 public sealed class ReelsTrayResponse : ApiResponseBase

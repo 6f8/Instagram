@@ -11,12 +11,28 @@ namespace InstagramStoryViewer.Api;
 /// </summary>
 public sealed class InstagramClient : IDisposable
 {
-    private const string BaseUrl = "https://www.instagram.com";
-    private const string WebAppId = "936619743392459";
-    private const string UserAgent =
+    private const string ChromeUserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36";
 
+    /// <summary>
+    /// Instagram serves the same /api/v1 endpoints from several hosts, and which one answers with JSON
+    /// (instead of an HTML page) for a browser session cookie varies over time and by account.
+    /// Requests try these in order and stick with the first one that works.
+    /// </summary>
+    private static readonly EndpointProfile[] Profiles =
+    [
+        new("web", "https://www.instagram.com", ChromeUserAgent, "936619743392459", BrowserHeaders: true),
+        new("web-i", "https://i.instagram.com", ChromeUserAgent, "936619743392459", BrowserHeaders: true),
+        // Same headers instaloader uses for its "iPhone" API calls with a web session.
+        new("ios", "https://i.instagram.com",
+            "Instagram 273.0.0.16.70 (iPad13,8; iOS 16_3; en_US; en-US; scale=2.00; 2048x2732; 452417278) AppleWebKit/420+",
+            "124024574287414", BrowserHeaders: false)
+    ];
+
+    private sealed record EndpointProfile(string Name, string BaseUrl, string UserAgent, string AppId, bool BrowserHeaders);
+
     private const int MaxRetries = 3;
+    private const int MaxSavedBody = 256 * 1024;
     private static readonly TimeSpan MinDelayBetweenRequests = TimeSpan.FromMilliseconds(1200);
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -29,6 +45,7 @@ public sealed class InstagramClient : IDisposable
     private readonly SessionCookies _cookies;
     private readonly SemaphoreSlim _throttle = new(1, 1);
     private DateTime _lastRequest = DateTime.MinValue;
+    private int _preferredProfile;
 
     private readonly Action<string>? _log;
 
@@ -43,14 +60,11 @@ public sealed class InstagramClient : IDisposable
             AllowAutoRedirect = false, // a redirect to /accounts/login means the session is dead
             AutomaticDecompression = DecompressionMethods.All
         };
-        _http = new HttpClient(handler) { BaseAddress = new Uri(BaseUrl), Timeout = TimeSpan.FromSeconds(30) };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
-        _http.DefaultRequestHeaders.Accept.ParseAdd("*/*");
-        _http.DefaultRequestHeaders.AcceptLanguage.ParseAdd("en-US,en;q=0.9");
-        _http.DefaultRequestHeaders.Add("X-IG-App-ID", WebAppId);
-        _http.DefaultRequestHeaders.Add("X-Requested-With", "XMLHttpRequest");
-        _http.DefaultRequestHeaders.Referrer = new Uri(BaseUrl + "/");
+        _http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
     }
+
+    /// <summary>Name of the host profile that last returned valid JSON (for diagnostics).</summary>
+    public string ActiveProfile => Profiles[_preferredProfile].Name;
 
     public string? ViewerId => _cookies.DsUserId;
 
@@ -67,6 +81,15 @@ public sealed class InstagramClient : IDisposable
         if (user?.Id is null)
             throw new InstagramApiException(InstagramErrorKind.NotFound, $"المستخدم @{username} غير موجود.");
         return user;
+    }
+
+    /// <summary>The logged-in account (also a cheap way to check that the session works).</summary>
+    public async Task<StoryUser> GetCurrentUserAsync(CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(ViewerId))
+            throw new InstagramApiException(InstagramErrorKind.LoginRequired, "تعذّر معرفة معرّف المستخدم من الكوكيز. الصق الكوكيز كاملة.");
+        var res = await SendAsync<UserInfoResponse>(HttpMethod.Get, $"/api/v1/users/{ViewerId}/info/", null, ct);
+        return res.User ?? throw new InstagramApiException(InstagramErrorKind.InvalidResponse, "لم تُرجع إنستجرام بيانات الحساب.");
     }
 
     /// <summary>Stories bar of the accounts the logged-in user follows.</summary>
@@ -154,18 +177,53 @@ public sealed class InstagramClient : IDisposable
 
     // ------------------------------------------------------------------ plumbing
 
+    /// <summary>Sends a request, falling back to the other host profiles when one answers with HTML.</summary>
     /// <param name="contentFactory">Builds a fresh body per attempt (a sent HttpContent is disposed and cannot be reused).</param>
     private async Task<T> SendAsync<T>(HttpMethod method, string path, Func<HttpContent>? contentFactory, CancellationToken ct)
         where T : ApiResponseBase
+    {
+        var attempts = new List<string>();
+        InstagramApiException? first = null;
+
+        for (var i = 0; i < Profiles.Length; i++)
+        {
+            var index = (_preferredProfile + i) % Profiles.Length;
+            try
+            {
+                var result = await SendWithProfileAsync<T>(Profiles[index], method, path, contentFactory, ct);
+                if (index != _preferredProfile)
+                {
+                    _log?.Invoke($"تم التبديل إلى مسار الاتصال: {Profiles[index].Name}");
+                    _preferredProfile = index;
+                }
+                return result;
+            }
+            catch (InstagramApiException ex) when (ex.TryAnotherHost)
+            {
+                first ??= ex;
+                attempts.Add($"{Profiles[index].Name}: HTTP {(int?)ex.StatusCode} {ex.ContentType}".TrimEnd());
+            }
+        }
+
+        // Every host answered with something other than JSON: report what we got.
+        throw new InstagramApiException(first!.Kind,
+            $"{first.Message}\nالمسارات التي جُرّبت: {string.Join("، ", attempts)}",
+            first.StatusCode, first)
+        {
+            ResponseBody = first.ResponseBody,
+            ContentType = first.ContentType,
+            RequestPath = path
+        };
+    }
+
+    private async Task<T> SendWithProfileAsync<T>(EndpointProfile profile, HttpMethod method, string path,
+        Func<HttpContent>? contentFactory, CancellationToken ct) where T : ApiResponseBase
     {
         for (var attempt = 1; ; attempt++)
         {
             await ThrottleAsync(ct);
 
-            using var req = new HttpRequestMessage(method, path);
-            req.Headers.Add("Cookie", _cookies.ToHeader());
-            if (!string.IsNullOrEmpty(_cookies.CsrfToken))
-                req.Headers.Add("X-CSRFToken", _cookies.CsrfToken);
+            using var req = BuildRequest(profile, method, path);
             if (contentFactory is not null)
                 req.Content = contentFactory();
 
@@ -201,14 +259,42 @@ public sealed class InstagramClient : IDisposable
                     continue;
                 }
 
-                return Interpret<T>(res, body);
+                return Interpret<T>(res, body, path);
             }
         }
     }
 
-    private static T Interpret<T>(HttpResponseMessage res, string body) where T : ApiResponseBase
+    private HttpRequestMessage BuildRequest(EndpointProfile profile, HttpMethod method, string path)
+    {
+        var req = new HttpRequestMessage(method, profile.BaseUrl + path);
+        var h = req.Headers;
+        h.TryAddWithoutValidation("User-Agent", profile.UserAgent);
+        h.TryAddWithoutValidation("Accept", "*/*");
+        h.TryAddWithoutValidation("Accept-Language", "en-US,en;q=0.9");
+        h.TryAddWithoutValidation("X-IG-App-ID", profile.AppId);
+        h.TryAddWithoutValidation("Cookie", _cookies.ToHeader());
+        if (!string.IsNullOrEmpty(_cookies.CsrfToken))
+            h.TryAddWithoutValidation("X-CSRFToken", _cookies.CsrfToken);
+
+        if (profile.BrowserHeaders)
+        {
+            // What instagram.com's own JavaScript sends; without these some endpoints return the HTML app shell.
+            h.TryAddWithoutValidation("X-Requested-With", "XMLHttpRequest");
+            h.TryAddWithoutValidation("X-ASBD-ID", "129477");
+            h.TryAddWithoutValidation("X-IG-WWW-Claim", "0");
+            h.TryAddWithoutValidation("Origin", "https://www.instagram.com");
+            h.TryAddWithoutValidation("Referer", "https://www.instagram.com/");
+            h.TryAddWithoutValidation("Sec-Fetch-Site", profile.BaseUrl.Contains("www.") ? "same-origin" : "same-site");
+            h.TryAddWithoutValidation("Sec-Fetch-Mode", "cors");
+            h.TryAddWithoutValidation("Sec-Fetch-Dest", "empty");
+        }
+        return req;
+    }
+
+    private static T Interpret<T>(HttpResponseMessage res, string body, string path) where T : ApiResponseBase
     {
         var status = res.StatusCode;
+        var contentType = res.Content.Headers.ContentType?.MediaType;
 
         // 3xx to the login page = invalid/expired session.
         if ((int)status is >= 300 and < 400)
@@ -217,19 +303,27 @@ public sealed class InstagramClient : IDisposable
             if (location.Contains("challenge", StringComparison.OrdinalIgnoreCase))
                 throw new InstagramApiException(InstagramErrorKind.Checkpoint,
                     "إنستجرام يطلب التحقق من الحساب. افتح إنستجرام في المتصفح وأكمل التحقق ثم حاول مجدداً.", status);
+            // Another host may still accept the session, so let the caller try it.
             throw new InstagramApiException(InstagramErrorKind.LoginRequired,
-                "الجلسة منتهية أو غير صالحة. سجّل الدخول من المتصفح وانسخ sessionid جديد.", status);
+                "الجلسة منتهية أو غير صالحة. سجّل الدخول من جديد.", status)
+            {
+                TryAnotherHost = true, ContentType = contentType, RequestPath = path,
+                ResponseBody = $"Redirect → {location}"
+            };
         }
 
         T? parsed = null;
-        var trimmed = body.TrimStart();
-        if (trimmed.StartsWith('{'))
+        var json = StripJsonPrefix(body);
+        if (json.StartsWith('{'))
         {
-            try { parsed = JsonSerializer.Deserialize<T>(body, JsonOptions); }
+            try { parsed = JsonSerializer.Deserialize<T>(json, JsonOptions); }
             catch (JsonException ex)
             {
                 throw new InstagramApiException(InstagramErrorKind.InvalidResponse,
-                    $"تعذّر تحليل استجابة JSON: {ex.Message}", status, ex);
+                    $"تعذّر تحليل استجابة JSON: {ex.Message}", status, ex)
+                {
+                    ResponseBody = Truncate(body), ContentType = contentType, RequestPath = path
+                };
             }
         }
 
@@ -250,25 +344,49 @@ public sealed class InstagramClient : IDisposable
             throw new InstagramApiException(InstagramErrorKind.LoginRequired,
                 "الجلسة منتهية أو غير صالحة. سجّل الدخول من المتصفح وانسخ sessionid جديد.", status);
 
-        if (status == HttpStatusCode.NotFound)
+        if (status == HttpStatusCode.NotFound && parsed is not null)
             throw new InstagramApiException(InstagramErrorKind.NotFound, "العنصر المطلوب غير موجود.", status);
 
-        if (status == HttpStatusCode.Forbidden)
+        if (status == HttpStatusCode.Forbidden && parsed is not null)
             throw new InstagramApiException(InstagramErrorKind.PrivateAccount,
                 "ليس لديك صلاحية لعرض هذا المحتوى (قد يكون الحساب خاصاً).", status);
 
-        if (!res.IsSuccessStatusCode || parsed is null)
-            throw new InstagramApiException(
-                parsed is null ? InstagramErrorKind.InvalidResponse : InstagramErrorKind.Unknown,
-                parsed is null
-                    ? $"استجابة غير متوقعة من الخادم (HTTP {(int)status}). قد تكون الجلسة منتهية."
-                    : $"خطأ من إنستجرام (HTTP {(int)status}): {msg}",
-                status);
+        if (parsed is null)
+            throw new InstagramApiException(InstagramErrorKind.InvalidResponse,
+                $"أرسل إنستجرام صفحة بدلاً من البيانات (HTTP {(int)status}, {contentType ?? "?"}): {Snippet(body)}", status)
+            {
+                TryAnotherHost = true, ResponseBody = Truncate(body), ContentType = contentType, RequestPath = path
+            };
+
+        if (!res.IsSuccessStatusCode)
+            throw new InstagramApiException(InstagramErrorKind.Unknown, $"خطأ من إنستجرام (HTTP {(int)status}): {msg}", status);
 
         if (string.Equals(parsed.Status, "fail", StringComparison.OrdinalIgnoreCase))
             throw new InstagramApiException(InstagramErrorKind.Unknown, $"خطأ من إنستجرام: {msg}", status);
 
         return parsed;
+    }
+
+    /// <summary>Removes anti-JSON-hijacking prefixes such as "for (;;);" that some Meta endpoints add.</summary>
+    private static string StripJsonPrefix(string body)
+    {
+        var t = body.TrimStart();
+        foreach (var prefix in new[] { "for (;;);", "while(1);", ")]}'" })
+            if (t.StartsWith(prefix, StringComparison.Ordinal))
+                return t[prefix.Length..].TrimStart();
+        return t;
+    }
+
+    private static string Truncate(string body) => body.Length > MaxSavedBody ? body[..MaxSavedBody] : body;
+
+    /// <summary>First readable words of a response (tags stripped) for error messages.</summary>
+    private static string Snippet(string body)
+    {
+        var title = System.Text.RegularExpressions.Regex.Match(body, "<title[^>]*>(.*?)</title>",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline);
+        var text = title.Success ? "<title> " + title.Groups[1].Value : body;
+        text = System.Text.RegularExpressions.Regex.Replace(text, "\\s+", " ").Trim();
+        return text.Length > 120 ? text[..120] + "…" : text.Length == 0 ? "(فارغة)" : text;
     }
 
     private async Task ThrottleAsync(CancellationToken ct)

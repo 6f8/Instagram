@@ -19,6 +19,14 @@ public sealed class InstagramApiException : Exception
     public InstagramErrorKind Kind { get; }
     public HttpStatusCode? StatusCode { get; }
 
+    /// <summary>Raw response (truncated) when Instagram sent something unexpected; useful for diagnosing.</summary>
+    public string? ResponseBody { get; init; }
+    public string? ContentType { get; init; }
+    public string? RequestPath { get; init; }
+
+    /// <summary>The failure is specific to the host that was called; another host may answer properly.</summary>
+    internal bool TryAnotherHost { get; init; }
+
     public InstagramApiException(InstagramErrorKind kind, string message, HttpStatusCode? statusCode = null, Exception? inner = null)
         : base(message, inner)
     {

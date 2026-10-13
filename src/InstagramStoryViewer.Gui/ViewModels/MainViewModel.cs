@@ -166,8 +166,22 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         {
             var cookies = SessionCookies.Parse(cookieText);
             var client = new InstagramClient(cookies, msg => ShowToast(msg));
-            // Fetching the tray doubles as a session check.
-            var tray = await client.GetStoriesTrayAsync();
+
+            // The tray doubles as a session check. If only the tray endpoint misbehaves, fall back to
+            // the account-info endpoint so the user can still log in and search for accounts.
+            List<Models.Reel> tray;
+            InstagramApiException? trayError = null;
+            try
+            {
+                tray = await client.GetStoriesTrayAsync();
+            }
+            catch (InstagramApiException ex) when (ex.Kind is InstagramErrorKind.InvalidResponse or InstagramErrorKind.Unknown)
+            {
+                trayError = ex;
+                SaveDiagnostics(ex);
+                await client.GetCurrentUserAsync(); // throws if the session itself is bad
+                tray = new List<Models.Reel>();
+            }
 
             _client?.Dispose();
             _client = client;
@@ -183,7 +197,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(ViewerId));
             ApplyTray(tray);
             _trayTimer.Start();
-            ShowToast("تم تسجيل الدخول بنجاح");
+            if (trayError is null) ShowToast("تم تسجيل الدخول بنجاح");
+            else ShowToast($"تم تسجيل الدخول، لكن تعذّر جلب ستوريات من تتابعهم. يمكنك البحث عن أي حساب.\n{DiagnosticsHint}", isError: true);
         }
         catch (ArgumentException ex)
         {
@@ -191,7 +206,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
         catch (InstagramApiException ex)
         {
-            LoginError = ex.Message;
+            LoginError = SaveDiagnostics(ex) ? $"{ex.Message}\n{DiagnosticsHint}" : ex.Message;
             if (ex.Kind == InstagramErrorKind.LoginRequired && _settings.ProtectedSession is not null)
             {
                 _settings.ProtectedSession = null;
@@ -530,8 +545,30 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
 
     // ================================================================== helpers
 
+    private static string DiagnosticsPath => Path.Combine(SettingsStore.AppDataFolder, "last-response.txt");
+    private static string DiagnosticsHint => $"حُفظت استجابة الخادم في: {DiagnosticsPath}";
+
+    /// <summary>Writes the unexpected server response to disk so it can be inspected or shared.</summary>
+    private static bool SaveDiagnostics(InstagramApiException ex)
+    {
+        if (ex.ResponseBody is null) return false;
+        try
+        {
+            Directory.CreateDirectory(SettingsStore.AppDataFolder);
+            File.WriteAllText(DiagnosticsPath,
+                $"Time: {DateTime.Now:u}\nRequest: {ex.RequestPath}\nStatus: {(int?)ex.StatusCode}\nContent-Type: {ex.ContentType}\n" +
+                $"Error: {ex.Message}\n\n----- response body -----\n{ex.ResponseBody}");
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     private void HandleError(InstagramApiException ex, bool silent)
     {
+        SaveDiagnostics(ex);
         if (ex.Kind is InstagramErrorKind.LoginRequired or InstagramErrorKind.Checkpoint)
         {
             SignOut(ex.Message);
