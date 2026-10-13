@@ -1,3 +1,4 @@
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using InstagramStoryViewer.Diagnostics;
@@ -54,11 +55,26 @@ public sealed partial class MainViewModel
 
     private static Version CurrentVersion => typeof(MainViewModel).Assembly.GetName().Version ?? new Version(0, 0);
 
-    /// <summary>At most once a day, in the background.</summary>
+    private static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromHours(6);
+
+    // Minimum spacing between automatic checks, so restarting the app repeatedly does not hammer GitHub.
+    // (A once-a-day gate here hid releases published later the same day.)
+    private static readonly TimeSpan UpdateCheckMinGap = TimeSpan.FromMinutes(10);
+
+    private DispatcherTimer? _updateTimer;
+    private string? _announcedUpdate;
+
+    /// <summary>At every start and every few hours while running, in the background.</summary>
     private async Task CheckForUpdatesIfDueAsync()
     {
+        if (_updateTimer is null)
+        {
+            _updateTimer = new DispatcherTimer { Interval = UpdateCheckInterval };
+            _updateTimer.Tick += async (_, _) => await SafeAsync(() => CheckForUpdatesIfDueAsync());
+            _updateTimer.Start();
+        }
         if (!CheckForUpdates) return;
-        if (_settings.LastUpdateCheck is { } last && DateTime.UtcNow - last < TimeSpan.FromDays(1)) return;
+        if (_settings.LastUpdateCheck is { } last && DateTime.UtcNow - last < UpdateCheckMinGap) return;
         await CheckForUpdatesCoreAsync(manual: false);
     }
 
@@ -73,8 +89,10 @@ public sealed partial class MainViewModel
         SaveSettings();
         AvailableUpdate = update;
         UpdateStatus = update is null ? $"لديك أحدث إصدار ({CurrentVersion.ToString(3)})" : UpdateText;
-        if (update is not null)
+        // Announce a given version only once (the periodic check would otherwise repeat it every few hours).
+        if (update is not null && (manual || _announcedUpdate != update.Tag))
         {
+            _announcedUpdate = update.Tag;
             AppLog.Info($"Update available: {update.Tag}");
             if (!manual) _dialogs.Notify("تحديث متاح", $"{UpdateText}. افتح البرنامج لتنزيله.");
         }

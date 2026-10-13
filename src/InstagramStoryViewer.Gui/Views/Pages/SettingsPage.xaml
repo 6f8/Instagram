@@ -221,7 +221,7 @@
                 <TextBlock Text="التشغيل والتحديثات" Style="{StaticResource H3}" Margin="0,0,0,12" />
                 <CheckBox IsChecked="{Binding MinimizeToTray}" Content="عند إغلاق النافذة، أبقِ البرنامج يعمل في منطقة الإشعارات" />
                 <CheckBox IsChecked="{Binding StartWithWindows}" Content="شغّل البرنامج مع ويندوز (مصغّراً في منطقة الإشعارات)" Margin="0,12,0,0" />
-                <CheckBox IsChecked="{Binding CheckForUpdates}" Content="تحقق من التحديثات تلقائياً (مرة يومياً)" Margin="0,12,0,0" />
+                <CheckBox IsChecked="{Binding CheckForUpdates}" Content="تحقق من التحديثات تلقائياً (عند التشغيل وكل 6 ساعات)" Margin="0,12,0,0" />
                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
                     <Button Content="تحقق الآن" Command="{Binding CheckForUpdatesNowCommand}" />
                     <Button Style="{StaticResource PrimaryButton}" Content="تنزيل التحديث" Margin="8,0,0,0"

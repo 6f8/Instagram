@@ -11,7 +11,7 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
 - It's a single self-contained file, so .NET doesn't need to be installed (Windows 10/11, 64-bit). Double-click to run it.
 - Next to it is `InstagramStoryViewer.exe.sha256`, which you can use to verify the file (`Get-FileHash InstagramStoryViewer.exe` in PowerShell).
 - The file isn't digitally signed, so Windows SmartScreen may warn you the first time: click **More info**, then **Run anyway**.
-- The app checks for new versions daily and shows an update banner when one is available.
+- The app checks for new versions on every start and every 6 hours, and shows an update banner when one is available. You can also check manually from Settings: **Check now**.
 
 ## Features
 
