@@ -79,8 +79,12 @@ public partial class StoryWatchWindow : Window
 
     private void Stop_Click(object sender, RoutedEventArgs e) => _batchCts.Cancel();
 
+    /// <summary>Stops the batch that is running (same as the window's Stop button).</summary>
+    public void StopCurrent() => _batchCts.Cancel();
+
     /// <summary>Plays the given stories in order. Returns, per URL, whether it was shown.</summary>
-    public async Task<IReadOnlyList<bool>> PlayAsync(string cookieHeader, IReadOnlyList<string> urls)
+    /// <param name="onShown">Called after each story is shown, with the number shown so far (live progress).</param>
+    public async Task<IReadOnlyList<bool>> PlayAsync(string cookieHeader, IReadOnlyList<string> urls, Action<int>? onShown = null)
     {
         _batchCts = new CancellationTokenSource();
         var ct = _batchCts.Token;
@@ -111,6 +115,7 @@ public partial class StoryWatchWindow : Window
                 // Vary the dwell time slightly, like a person would.
                 await Task.Delay(ViewDuration + TimeSpan.FromMilliseconds(Random.Shared.Next(0, 1500)), ct);
                 shown[i] = true;
+                onShown?.Invoke(shown.Count(x => x));
             }
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or InvalidOperationException

@@ -86,12 +86,16 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
                     <DockPanel Grid.Row="0">
                         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                            <TextBox Style="{StaticResource SearchBox}" Width="340" Tag="ابحث عن مستخدم واضغط Enter"
+                            <!-- one-click auto-watch: watches every new story without any interaction -->
+                            <CheckBox IsChecked="{Binding AutoWatchNew}" Content="مشاهدة تلقائية" VerticalAlignment="Center" Margin="0,0,16,0"
+                                      ToolTip="عند التفعيل يشاهد البرنامج كل الستوريات الجديدة لمن تتابعهم تلقائياً، ثم يكمل مع كل جديد" />
+                            <TextBox Style="{StaticResource SearchBox}" Width="300" Tag="ابحث عن مستخدم واضغط Enter"
                                      Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}">
                                 <TextBox.InputBindings>
                                     <KeyBinding Key="Enter" Command="{Binding SearchCommand}" />
@@ -111,14 +115,7 @@
                                     <TextBlock Text="{Binding UpdateText}" FontSize="12" />
                                 </StackPanel>
                             </Button>
-                            <Border Margin="14,0,0,0" CornerRadius="10" Padding="10,3" VerticalAlignment="Center" Background="#337B2FF7"
-                                    Visibility="{Binding IsAutoWatching, Converter={StaticResource Vis}}">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE8F4;" FontSize="13" Foreground="{StaticResource VideoPillText}" Margin="0,0,6,0" />
-                                    <TextBlock Text="مشاهدة تلقائية..." FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource VideoPillText}" />
-                                </StackPanel>
-                            </Border>
-                            <Border Margin="8,0,0,0" CornerRadius="10" Padding="10,3" VerticalAlignment="Center" Background="#33FF2D95"
+                            <Border Margin="14,0,0,0" CornerRadius="10" Padding="10,3" VerticalAlignment="Center" Background="#33FF2D95"
                                     Visibility="{Binding IsAutoLiking, Converter={StaticResource Vis}}">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Style="{StaticResource Icon}" Text="&#xE87D;" FontSize="13" Foreground="{StaticResource PinkBrush}" Margin="0,0,6,0" />
@@ -128,8 +125,29 @@
                         </StackPanel>
                     </DockPanel>
 
+                    <!-- auto-watch progress (only while it runs) -->
+                    <Border Grid.Row="1" Margin="0,12,0,0" CornerRadius="12" Padding="14,8" Background="#1F7B2FF7"
+                            BorderBrush="#447B2FF7" BorderThickness="1"
+                            Visibility="{Binding IsAutoWatching, Converter={StaticResource Vis}}">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Command="{Binding StopAutoWatchCommand}" Padding="8,2">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE034;" FontSize="14" Margin="0,0,4,0" />
+                                    <TextBlock Text="إيقاف" />
+                                </StackPanel>
+                            </Button>
+                            <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE8F4;" FontSize="15" Foreground="{StaticResource VideoPillText}" Margin="0,0,8,0" />
+                                <TextBlock Text="{Binding AutoWatchProgressText}" FontWeight="SemiBold" Foreground="{StaticResource VideoPillText}"
+                                           VerticalAlignment="Center" MinWidth="250" />
+                            </StackPanel>
+                            <ProgressBar Height="6" Margin="16,0" VerticalAlignment="Center"
+                                         Maximum="{Binding AutoWatchTotal}" Value="{Binding AutoWatchDone, Mode=OneWay}" />
+                        </DockPanel>
+                    </Border>
+
                     <!-- stats -->
-                    <Grid Grid.Row="1" Margin="0,14,0,0">
+                    <Grid Grid.Row="2" Margin="0,14,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition /><ColumnDefinition /><ColumnDefinition /><ColumnDefinition />
                         </Grid.ColumnDefinitions>
@@ -191,7 +209,7 @@
                     </Grid>
 
                     <!-- main area -->
-                    <Grid Grid.Row="2" Margin="0,12,0,0">
+                    <Grid Grid.Row="3" Margin="0,12,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="12" />

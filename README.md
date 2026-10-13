@@ -41,6 +41,9 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
 ### Watching (marking as seen)
 - **How it works:** the story actually plays in a small embedded-browser window in the corner of the screen, so Instagram records a real view.
 - **Verification:** after watching, the app asks Instagram whether the view was recorded (**confirmed / unconfirmed / failed**).
+- **"Auto-watch" box on the dashboard:**
+  - Turn it on and the app watches every new story from the accounts you follow, with no interaction from you, then keeps up with anything new after each refresh.
+  - A progress bar shows "watched X of Y · Z remaining" and has a Stop button.
 - **Auto-watch (optional):**
   - When you preview a story.
   - Or your followed accounts' new stories, in the background.

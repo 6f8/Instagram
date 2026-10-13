@@ -23,7 +23,12 @@ public interface IDialogService
     /// </summary>
     /// <param name="background">Run in the small corner window without stealing focus (auto-watch).</param>
     /// <returns>For each URL, whether the story was actually shown.</returns>
-    Task<IReadOnlyList<bool>> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls, bool background);
+    /// <param name="onShown">Called after each story is shown, with the number shown so far in this batch.</param>
+    Task<IReadOnlyList<bool>> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls, bool background,
+        Action<int>? onShown = null);
+
+    /// <summary>Stops the watch batch that is currently playing.</summary>
+    void StopWatching();
 
     /// <summary>Likes stories/posts in the small corner window (background, never steals focus).</summary>
     Task<IReadOnlyList<LikeOutcome>> LikeAsync(string cookieHeader, IReadOnlyList<LikeRequest> requests);
@@ -218,6 +223,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SaveSettings();
         ScheduleTrayRefresh();
         if (value) _ = SafeAsync(() => RunAutoWatchAsync());
+        else if (IsAutoWatching) StopAutoWatch(); // unticking stops the running pass right away
     }
 
     partial void OnAutoWatchDailyLimitChanged(int value)

@@ -308,8 +308,14 @@ public partial class MainWindow : Window, IDialogService
     /// same window. It has no Owner on purpose, so background watching keeps working while this window is
     /// minimised.
     /// </summary>
-    public Task<IReadOnlyList<bool>> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls, bool background) =>
-        RunInWatcherAsync(w => w.PlayAsync(cookieHeader, storyUrls), background);
+    public Task<IReadOnlyList<bool>> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls, bool background,
+        Action<int>? onShown = null) =>
+        RunInWatcherAsync(w => w.PlayAsync(cookieHeader, storyUrls, onShown), background);
+
+    public void StopWatching()
+    {
+        if (_watcher is { IsAlive: true }) _watcher.StopCurrent();
+    }
 
     public Task<IReadOnlyList<LikeOutcome>> LikeAsync(string cookieHeader, IReadOnlyList<LikeRequest> requests) =>
         RunInWatcherAsync(w => w.LikeAsync(cookieHeader, requests), background: true);

@@ -68,13 +68,13 @@ public sealed partial class MainViewModel
     /// Every attempt is written to the watch history. Returns how many were shown and not contradicted
     /// by Instagram (verified, or unknown when Instagram gave no "seen" marker).
     /// </summary>
-    private async Task<int> WatchAsync(IReadOnlyList<WatchTarget> targets, WatchMode mode)
+    private async Task<int> WatchAsync(IReadOnlyList<WatchTarget> targets, WatchMode mode, Action<int>? onShown = null)
     {
         if (_client is null || targets.Count == 0) return 0;
         var urls = targets.Select(t => StoryUrl(t.Username, t.Item)).ToList();
         AppLog.Info($"Watch start: {targets.Count} stories, mode {mode}");
 
-        var shown = await _dialogs.WatchStoriesAsync(_client.Cookies.ToHeader(), urls, background: mode != WatchMode.Manual);
+        var shown = await _dialogs.WatchStoriesAsync(_client.Cookies.ToHeader(), urls, background: mode != WatchMode.Manual, onShown);
         var verified = await VerifySeenAsync(targets.Where((_, i) => i < shown.Count && shown[i]).ToList());
 
         var records = new List<WatchRecord>();
@@ -189,19 +189,57 @@ public sealed partial class MainViewModel
     /// the daily limit, outside quiet hours and never for excluded accounts. Stories newer than the
     /// reel's "seen" marker are the unseen ones.
     /// </summary>
+    private const int AutoWatchChunk = 10;
+    private CancellationTokenSource? _autoWatchCts;
+
+    // Live progress of the running auto-watch (shown on the dashboard).
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AutoWatchProgressText), nameof(AutoWatchRemaining))]
+    private int _autoWatchDone;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AutoWatchProgressText), nameof(AutoWatchRemaining))]
+    private int _autoWatchTotal;
+
+    public int AutoWatchRemaining => Math.Max(0, AutoWatchTotal - AutoWatchDone);
+
+    public string AutoWatchProgressText => AutoWatchTotal == 0
+        ? "جاري تجهيز قائمة الستوريات..."
+        : $"تمت مشاهدة {AutoWatchDone} من {AutoWatchTotal} · باقي {AutoWatchRemaining}";
+
+    /// <summary>Stops the running auto-watch immediately (the setting stays on for the next refresh).</summary>
+    [RelayCommand]
+    private void StopAutoWatch()
+    {
+        _autoWatchCts?.Cancel();
+        _dialogs.StopWatching();
+    }
+
+    /// <summary>
+    /// Background auto-watch: plays every unseen story of followed accounts in the corner window, without
+    /// any interaction, in chunks of <see cref="AutoWatchChunk"/> (each chunk is verified and recorded before
+    /// the next). Bounded by the daily limit, quiet hours and the exclusion list. Stories newer than the
+    /// reel's "seen" marker are the unseen ones.
+    /// </summary>
     private async Task RunAutoWatchAsync()
     {
         if (!AutoWatchNew || IsAutoWatching || _client is null || IsQuietNow) return;
         var budget = AutoWatchBudget;
         if (budget == 0) return;
 
-        var candidates = TrayUsers.Where(u => u.HasUnseen && !IsExcluded(u.UserId)).Take(20).ToList();
+        var candidates = TrayUsers.Where(u => u.HasUnseen && !IsExcluded(u.UserId)).ToList();
         if (candidates.Count == 0) return;
 
+        _autoWatchCts = CancellationTokenSource.CreateLinkedTokenSource(_lifetimeCts.Token);
+        var ct = _autoWatchCts.Token;
+        AutoWatchDone = 0;
+        AutoWatchTotal = 0;
         IsAutoWatching = true;
+        var watchedTotal = 0;
         try
         {
-            var reels = await _client.GetStoriesForUsersAsync(candidates.Select(t => t.UserId), _lifetimeCts.Token);
+            // One reels request per 20 accounts gives the full list (and the total for the progress bar).
+            var reels = await _client.GetStoriesForUsersAsync(candidates.Select(t => t.UserId), ct);
             var queue = new List<WatchTarget>();
             foreach (var reel in reels)
             {
@@ -212,21 +250,24 @@ public sealed partial class MainViewModel
                     queue.Add(new WatchTarget(user.Username, user.UserId, item, Stories.FirstOrDefault(r => r.Item.Pk == item.Pk)));
             }
             queue = queue.Take(budget).ToList();
+            AutoWatchTotal = queue.Count;
             if (queue.Count == 0) return;
+            AppLog.Info($"Auto-watch: {queue.Count} stories from {candidates.Count} accounts");
 
-            var watched = await WatchAsync(queue, WatchMode.Auto);
-            CountAutoWatched(watched);
-
-            // Accounts whose every queued story counted are now fully seen.
-            var history = History.Take(queue.Count).ToList();
-            foreach (var user in candidates)
+            foreach (var chunk in queue.Chunk(AutoWatchChunk))
             {
-                var mine = history.Where(h => h.Username == user.Username).ToList();
-                if (mine.Count > 0 && mine.All(h => h.Outcome is WatchOutcome.Verified or WatchOutcome.Shown))
-                    user.HasUnseen = false;
+                // Turned off, stopped, or quiet hours started: stop between chunks.
+                if (ct.IsCancellationRequested || !AutoWatchNew || IsQuietNow) break;
+
+                var doneBefore = AutoWatchDone;
+                var watched = await WatchAsync(chunk, WatchMode.Auto, shownSoFar => AutoWatchDone = doneBefore + shownSoFar);
+                AutoWatchDone = doneBefore + chunk.Length; // count skipped/unavailable ones as processed too
+                watchedTotal += watched;
+                CountAutoWatched(watched);
+                MarkFullyWatchedAccounts(chunk);
             }
-            UnseenAccounts = TrayUsers.Count(u => u.HasUnseen);
-            if (watched > 0) ShowToast($"المشاهدة التلقائية: شوهد {watched} ستوري");
+
+            if (watchedTotal > 0) _dialogs.Notify("المشاهدة التلقائية", $"تمت مشاهدة {watchedTotal} ستوري");
         }
         catch (InstagramApiException ex)
         {
@@ -234,12 +275,26 @@ public sealed partial class MainViewModel
         }
         catch (OperationCanceledException)
         {
-            // signed out
+            // stopped or signed out
         }
         finally
         {
             IsAutoWatching = false;
+            AppLog.Info($"Auto-watch finished: {watchedTotal} watched, {AutoWatchDone}/{AutoWatchTotal} processed");
         }
+    }
+
+    /// <summary>Accounts whose every queued story counted are no longer shown as having new stories.</summary>
+    private void MarkFullyWatchedAccounts(IReadOnlyList<WatchTarget> chunk)
+    {
+        var recent = History.Take(chunk.Count).ToList();
+        foreach (var name in chunk.Select(c => c.Username).Distinct())
+        {
+            var mine = recent.Where(h => h.Username == name).ToList();
+            if (mine.Count == 0 || !mine.All(h => h.Outcome is WatchOutcome.Verified or WatchOutcome.Shown)) continue;
+            foreach (var u in TrayUsers.Where(u => u.Username == name)) u.HasUnseen = false;
+        }
+        UnseenAccounts = TrayUsers.Count(u => u.HasUnseen);
     }
 
     private void UpdateTraySeen(string username)
