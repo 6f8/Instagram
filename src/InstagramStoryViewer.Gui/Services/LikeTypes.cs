@@ -11,3 +11,13 @@ public enum LikeOutcome
     Liked,        // clicked, and the button now reads "Unlike"
     Failed        // clicked, but the button did not change
 }
+
+public enum CommentOutcome
+{
+    NotShown,       // the post could not be opened (deleted, private, stopped)
+    LoginRequired,  // the embedded browser is not logged in
+    CommentsOff,    // the owner turned comments off or limited them
+    Rejected,       // Instagram showed an error ("Couldn't post comment")
+    Unconfirmed,    // sent, but the comment did not show up on the page in time
+    Posted          // the comment appears under the post
+}

@@ -1,3 +1,5 @@
+using InstagramStoryViewer.Gui.Resources;
+using System.Globalization;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -12,7 +14,7 @@ public sealed partial class HighlightViewModel : ObservableObject
     public HighlightViewModel(Highlight h)
     {
         Id = h.Id!;
-        Title = string.IsNullOrWhiteSpace(h.Title) ? "بدون عنوان" : h.Title!;
+        Title = string.IsNullOrWhiteSpace(h.Title) ? Strings.HighlightUntitled : h.Title!;
         CoverUrl = h.CoverMedia?.CroppedImageVersion?.Url;
         Count = h.MediaCount;
     }
@@ -60,7 +62,7 @@ public sealed partial class MainViewModel
         {
             var list = await _client.GetHighlightsAsync(_currentUserId, _storiesCts.Token);
             foreach (var h in list) Highlights.Add(new HighlightViewModel(h));
-            if (Highlights.Count == 0) ShowToast($"لا توجد هايلايت لدى {CurrentUsername}");
+            if (Highlights.Count == 0) ShowToast(string.Format(CultureInfo.CurrentCulture, Strings.NoHighlights, CurrentUsername));
         }
         catch (InstagramApiException ex)
         {
@@ -92,7 +94,7 @@ public sealed partial class MainViewModel
             var reel = await _client.GetUserStoriesAsync(highlight.Id, _storiesCts.Token);
             if (reel?.Items is null)
             {
-                EmptyMessage = $"الهايلايت \"{highlight.Title}\" فارغ";
+                EmptyMessage = string.Format(CultureInfo.CurrentCulture, Strings.HighlightEmpty, highlight.Title);
                 return;
             }
             ShowReelItems(reel.Items, username, userId, highlight.Id);
@@ -126,7 +128,7 @@ public sealed partial class MainViewModel
         try
         {
             var reel = await _client.GetUserStoriesAsync(_currentUserId, _storiesCts.Token);
-            if (reel?.Items is null) EmptyMessage = $"لا توجد ستوريات حالية لدى {CurrentUsername}";
+            if (reel?.Items is null) EmptyMessage = string.Format(CultureInfo.CurrentCulture, Strings.NoCurrentStories, CurrentUsername);
             else ShowReelItems(reel.Items, CurrentUsername, _currentUserId, highlightId: null);
         }
         catch (InstagramApiException ex)

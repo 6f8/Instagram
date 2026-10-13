@@ -55,6 +55,18 @@
     <SolidColorBrush x:Key="SeenRingBrush" Color="#3A3F55" />
 
     <!-- ============================================================ fonts -->
+    <!-- Keyboard focus: a visible ring (mouse clicks do not show it; WPF only uses this for keyboard focus). -->
+    <Style x:Key="FocusRing">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Rectangle Margin="-2" RadiusX="10" RadiusY="10" StrokeThickness="1.5" Stroke="{StaticResource PinkBrush}"
+                               StrokeDashArray="2 1.5" SnapsToDevicePixels="True" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <FontFamily x:Key="AppFont">pack://application:,,,/Fonts/#Cairo</FontFamily>
     <FontFamily x:Key="IconFont">pack://application:,,,/Fonts/#Material Icons Round</FontFamily>
 
@@ -95,6 +107,7 @@
 
     <!-- ============================================================ buttons -->
     <Style x:Key="BaseButton" TargetType="ButtonBase">
+        <Setter Property="AutomationProperties.Name" Value="{Binding ToolTip, RelativeSource={RelativeSource Self}}" />
         <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
         <Setter Property="Background" Value="{StaticResource InputBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}" />
@@ -103,7 +116,7 @@
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ButtonBase">
@@ -154,13 +167,14 @@
 
     <!-- window caption buttons -->
     <Style x:Key="CaptionButton" TargetType="Button">
+        <Setter Property="AutomationProperties.Name" Value="{Binding ToolTip, RelativeSource={RelativeSource Self}}" />
         <Setter Property="Width" Value="46" />
         <Setter Property="Height" Value="38" />
         <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="FontFamily" Value="{StaticResource IconFont}" />
         <Setter Property="FontSize" Value="15" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -197,12 +211,13 @@
 
     <!-- navigation rail -->
     <Style x:Key="RailButton" TargetType="RadioButton">
+        <Setter Property="AutomationProperties.Name" Value="{Binding ToolTip, RelativeSource={RelativeSource Self}}" />
         <Setter Property="Width" Value="44" />
         <Setter Property="Height" Value="44" />
         <Setter Property="Margin" Value="0,5" />
         <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
@@ -234,7 +249,7 @@
         <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
         <Setter Property="Margin" Value="0,0,8,0" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
@@ -353,7 +368,7 @@
         <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
@@ -466,12 +481,14 @@
         <Setter Property="Padding" Value="0" />
         <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled" />
         <Setter Property="VirtualizingPanel.ScrollUnit" Value="Pixel" />
+        <Setter Property="VirtualizingPanel.IsVirtualizing" Value="True" />
+        <Setter Property="VirtualizingPanel.VirtualizationMode" Value="Recycling" />
     </Style>
 
     <Style x:Key="RowItem" TargetType="ListBoxItem">
         <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
             <Setter.Value>
@@ -518,10 +535,11 @@
 
     <!-- flat clickable row -->
     <Style x:Key="RowButton" TargetType="Button">
+        <Setter Property="AutomationProperties.Name" Value="{Binding ToolTip, RelativeSource={RelativeSource Self}}" />
         <Setter Property="Foreground" Value="{StaticResource TextBrush}" />
         <Setter Property="HorizontalContentAlignment" Value="Stretch" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">

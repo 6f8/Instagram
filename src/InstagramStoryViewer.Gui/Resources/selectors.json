@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "viewStory": "^(view story|watch story|عرض القصة|مشاهدة القصة|عرض الستوري|ver historia|voir la story|story ansehen|hikayeyi gör)",
+  "liked": "^(unlike|إلغاء الإعجاب|ya no me gusta|je n.aime plus|gefällt mir nicht mehr|beğenmekten vazgeç)$",
+  "like": "^(like|أعجبني|me gusta|j.aime|gefällt mir|beğen)$",
+  "commentBox": "textarea[aria-label], form textarea",
+  "commentIcon": "^(comment|تعليق|comentar|commenter|kommentieren|yorum yap)$",
+  "postButton": "^(post|نشر|publicar|publier|posten|paylaş)$",
+  "commentError": "(couldn.t post|could not post|تعذر نشر|تعذّر نشر|no se pudo publicar|impossible de publier|konnte nicht gepostet|paylaşılamadı)",
+  "commentsOff": "(comments on this post have been (limited|turned off)|تم (إيقاف|تقييد) التعليقات|los comentarios .* desactivado)"
+}

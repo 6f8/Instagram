@@ -49,7 +49,7 @@
                     <TextBlock Grid.Column="3" Text="النتيجة" Style="{StaticResource ColHeader}" />
                 </Grid>
                 <ListBox Grid.Row="1" Style="{StaticResource PlainList}" ItemContainerStyle="{StaticResource RowItem}"
-                         ItemsSource="{Binding History}" VirtualizingPanel.IsVirtualizing="True">
+                         ItemsSource="{Binding History}">
                     <ListBox.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:WatchRecordViewModel}">
                             <Grid Height="38">
@@ -62,7 +62,12 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{Binding TimeText}" FlowDirection="LeftToRight" HorizontalAlignment="Left"
                                            VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" />
-                                <TextBlock Grid.Column="1" Text="{Binding Username}" VerticalAlignment="Center" FontWeight="SemiBold" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" ToolTip="{Binding Detail}">
+                                    <TextBlock Text="{Binding Username}" FontWeight="SemiBold" />
+                                    <!-- comments: the text that was posted -->
+                                    <TextBlock Text="{Binding Detail}" Style="{StaticResource Muted}" FontSize="11" TextTrimming="CharacterEllipsis"
+                                               Visibility="{Binding HasDetail, Converter={StaticResource Vis}}" />
+                                </StackPanel>
                                 <TextBlock Grid.Column="2" Text="{Binding ModeText}" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}" />
                                 <TextBlock Grid.Column="3" Text="{Binding ResultText}" VerticalAlignment="Center" FontWeight="SemiBold">
                                     <TextBlock.Style>
@@ -82,7 +87,7 @@
                                         </Style>
                                     </TextBlock.Style>
                                 </TextBlock>
-                                <Button Grid.Column="4" Style="{StaticResource IconButton}" Width="30" Height="30" ToolTip="فتح الستوري"
+                                <Button Grid.Column="4" Style="{StaticResource IconButton}" Width="30" Height="30" ToolTip="فتح في المتصفح"
                                         Command="{Binding DataContext.OpenUrlCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                         CommandParameter="{Binding StoryUrl}">
                                     <TextBlock Style="{StaticResource Icon}" Text="&#xE89E;" FontSize="13" />

@@ -1,9 +1,12 @@
+using InstagramStoryViewer.Gui.Resources;
+using System.Globalization;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using InstagramStoryViewer.Api;
+using InstagramStoryViewer.Automation;
 using InstagramStoryViewer.Diagnostics;
 using InstagramStoryViewer.Gui.Services;
 using InstagramStoryViewer.Services;
@@ -33,14 +36,27 @@ public interface IDialogService
     /// <summary>Likes stories/posts in the small corner window (background, never steals focus).</summary>
     Task<IReadOnlyList<LikeOutcome>> LikeAsync(string cookieHeader, IReadOnlyList<LikeRequest> requests);
 
+    /// <summary>Types the user's comment into a post's comment box in the corner window and checks it appeared.</summary>
+    Task<CommentOutcome> CommentAsync(string cookieHeader, string postUrl, string text);
+
     /// <summary>Shows a Windows notification (from the notification-area icon).</summary>
     void Notify(string title, string message);
+
+    /// <summary>Opens a link or folder in Windows.</summary>
+    void OpenUrl(string target);
+
+    /// <summary>Quits the app for real (also from the notification area), e.g. to let an update replace it.</summary>
+    void ExitApplication();
 }
 
-public sealed partial class MainViewModel : ObservableObject, IDisposable
+public sealed partial class MainViewModel : ObservableObject, IMainContext, IDisposable
 {
     private readonly IDialogService _dialogs;
+    private readonly SettingsService _settingsService;
     private readonly AppSettings _settings;
+    private readonly HistoryService _history;
+    private readonly JobQueue _jobs;
+    private readonly TimeProvider _clock;
     private readonly DispatcherTimer _trayTimer;
     private readonly DispatcherTimer _toastTimer;
     private readonly Dispatcher _dispatcher = Dispatcher.CurrentDispatcher;
@@ -55,10 +71,15 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     private bool _isWindowActive = true;
     private DateTime _lastTrayRefresh = DateTime.MinValue;
 
-    public MainViewModel(IDialogService dialogs)
+    public MainViewModel(IDialogService dialogs, SettingsService settings, HistoryService history, JobQueue jobs, TimeProvider clock)
     {
         _dialogs = dialogs;
-        _settings = SettingsStore.Load();
+        _settingsService = settings;
+        _settings = settings.Current;
+        _history = history;
+        _jobs = jobs;
+        _clock = clock;
+        settings.SaveFailed += ex => ShowToast(string.Format(CultureInfo.CurrentCulture, Strings.SettingsSaveFailed, ex.Message), isError: true);
         _downloadFolder = _settings.DownloadFolder;
         _confirmBeforeMarkSeen = _settings.ConfirmBeforeMarkSeen;
         _autoPlayVideos = _settings.AutoPlayVideos;
@@ -70,8 +91,10 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _quietFrom = _settings.QuietFrom;
         _quietTo = _settings.QuietTo;
         InitializeAccountLists();
-        InitializeAutoLike();
         InitializeAppOptions();
+        AutoLike = new AutoLikeViewModel(this, dialogs, settings, history, jobs);
+        Updates = new UpdatesViewModel(this, dialogs, settings);
+        Comments = new CommentViewModel(this, dialogs, History);
 
         _trayTimer = new DispatcherTimer();
         _trayTimer.Tick += async (_, _) => await SafeAsync(async () =>
@@ -103,6 +126,31 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         Downloads.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasDownloads));
     }
 
+    // ================================================================== feature view models
+
+    public AutoLikeViewModel AutoLike { get; }
+    public UpdatesViewModel Updates { get; }
+    public CommentViewModel Comments { get; }
+
+    // ================================================================== IMainContext
+
+    public InstagramClient? Client => _client;
+    public IReadOnlyCollection<TrayUserViewModel> TrayAccounts => TrayUsers;
+    public IReadOnlyList<AccountRef> FavoriteRefs => _settings.Favorites;
+    public DateTimeOffset Now => _clock.GetLocalNow();
+
+    public void AddHistory(IReadOnlyList<WatchRecord> records)
+    {
+        _history.Append(records);
+        foreach (var r in records) History.Insert(0, new WatchRecordViewModel(r));
+        while (History.Count > 1000) History.RemoveAt(History.Count - 1);
+    }
+
+    public void MarkStoryShown(string mediaPk)
+    {
+        foreach (var row in Stories.Where(r => r.Item.Pk == mediaPk)) row.SeenState = WatchOutcome.Shown;
+    }
+
     // ================================================================== state
 
     [ObservableProperty] private AppPage _page = AppPage.Dashboard;
@@ -110,6 +158,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SessionText))]
     private bool _isLoggedIn;
+
+    partial void OnIsLoggedInChanged(bool value) => Comments.Refresh();
 
     [ObservableProperty] private bool _isLoggingIn;
     [ObservableProperty] private string? _loginError;
@@ -139,7 +189,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(HasSelection))]
     private StoryRowViewModel? _selectedStory;
 
-    [ObservableProperty] private string? _emptyMessage = "اختر حساباً من القائمة أو ابحث عن مستخدم لعرض ستورياته";
+    [ObservableProperty] private string? _emptyMessage = Strings.EmptyStoriesHint;
 
     // stats
     [ObservableProperty] private int _accountsWithStories;
@@ -160,7 +210,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(QuietHoursText))] private int _quietFrom;
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(QuietHoursText))] private int _quietTo;
 
-    public string QuietHoursText => $"من {QuietFrom:00}:00 إلى {QuietTo:00}:00";
+    public string QuietHoursText => string.Format(CultureInfo.CurrentCulture, Strings.QuietHoursRange, QuietFrom, QuietTo);
 
     public int RequestsLastHour => _client?.RequestsLastHour ?? 0;
     public bool DisclaimerAccepted => _settings.AcceptedDisclaimer;
@@ -171,23 +221,16 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         SaveSettings();
     }
     public string AutoWatchStatus =>
-        $"شوهد تلقائياً اليوم: {AutoWatchedToday} من {AutoWatchDailyLimit}" + (IsAutoWatching ? " · جارٍ الآن..." : "");
+        string.Format(CultureInfo.CurrentCulture, Strings.AutoWatchTodayStatus, AutoWatchedToday, AutoWatchDailyLimit) + (IsAutoWatching ? Strings.RunningNowSuffix : "");
 
-    private int AutoWatchedToday
-    {
-        get
-        {
-            ResetDailyCounterIfNeeded();
-            return _settings.AutoWatchedToday;
-        }
-    }
+    private int AutoWatchedToday => _settings.AutoWatchCount.Today(Now);
 
     public bool HasCurrentUser => CurrentUsername is not null;
     public bool ShowEmpty => Stories.Count == 0 && !IsLoadingStories;
     public bool HasDownloads => Downloads.Count > 0;
     public bool HasSelection => SelectedStory is not null;
-    public string StoriesTitle => CurrentUsername is null ? "الستوريات" : $"ستوريات {CurrentUsername}";
-    public string SessionText => IsLoggedIn ? "متصل" : "غير متصل";
+    public string StoriesTitle => CurrentUsername is null ? Strings.StoriesTitle : string.Format(CultureInfo.CurrentCulture, Strings.StoriesOfUser, CurrentUsername);
+    public string SessionText => IsLoggedIn ? Strings.SessionConnected : Strings.SessionDisconnected;
     public string? ViewerId => _client?.ViewerId;
     public string AppVersion => typeof(MainViewModel).Assembly.GetName().Version?.ToString(3) ?? "";
 
@@ -222,7 +265,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _settings.AutoWatchNew = value;
         SaveSettings();
         ScheduleTrayRefresh();
-        if (value) _ = SafeAsync(() => RunAutoWatchAsync());
+        if (value) QueueAutoWatch();
         else if (IsAutoWatching) StopAutoWatch(); // unticking stops the running pass right away
     }
 
@@ -273,8 +316,8 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void ClearHistory()
     {
-        if (!_dialogs.Confirm("حذف سجل المشاهدات بالكامل؟")) return;
-        WatchHistory.Clear();
+        if (!_dialogs.Confirm(Strings.ClearHistoryConfirm)) return;
+        _history.Clear();
         History.Clear();
     }
 
@@ -324,14 +367,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             AppLog.Error("Unexpected error in background task", ex);
-            ShowToast($"خطأ غير متوقع: {ex.Message}", isError: true);
+            ShowToast(string.Format(CultureInfo.CurrentCulture, Strings.UnexpectedError, ex.Message), isError: true);
         }
     }
 
     // ================================================================== helpers
 
     private static string DiagnosticsPath => Path.Combine(SettingsStore.AppDataFolder, "last-response.txt");
-    private static string DiagnosticsHint => $"حُفظت استجابة الخادم في: {DiagnosticsPath}";
+    private static string DiagnosticsHint => string.Format(CultureInfo.CurrentCulture, Strings.DiagnosticsSavedAt, DiagnosticsPath);
 
     /// <summary>Writes the unexpected server response to disk so it can be inspected or shared.</summary>
     private static bool SaveDiagnostics(InstagramApiException ex)
@@ -353,7 +396,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task HandleErrorAsync(InstagramApiException ex, bool silent)
+    public async Task HandleErrorAsync(InstagramApiException ex, bool silent)
     {
         AppLog.Warn($"API error: {ex.Kind} HTTP {(int?)ex.StatusCode} {ex.RequestPath} {ex.Message}");
         var saved = SaveDiagnostics(ex);
@@ -366,7 +409,7 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
                 SignOut(ex.Message);
                 return;
             }
-            if (!silent) ShowToast("رفض إنستجرام هذا الطلب، لكن جلستك ما زالت صالحة." + (saved ? $"\n{DiagnosticsHint}" : ""), isError: true);
+            if (!silent) ShowToast(Strings.RequestRejectedSessionOk + (saved ? $"\n{DiagnosticsHint}" : ""), isError: true);
             return;
         }
         if (!silent) ShowToast(saved ? $"{ex.Message}\n{DiagnosticsHint}" : ex.Message, isError: true);
@@ -405,26 +448,14 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _toastTimer.Start();
     }
 
-    private void SaveSettings()
-    {
-        try { SettingsStore.Save(_settings); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            ShowToast($"تعذّر حفظ الإعدادات: {ex.Message}", isError: true);
-        }
-    }
+    /// <summary>Marks the settings dirty; the file is written shortly after the last change.</summary>
+    private void SaveSettings() => _settingsService.Save();
 
-    private void Shell(string target)
-    {
-        try { Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }); }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
-        {
-            ShowToast($"تعذّر الفتح: {ex.Message}", isError: true);
-        }
-    }
+    private void Shell(string target) => _dialogs.OpenUrl(target);
 
     public void Dispose()
     {
+        _jobs.CancelAll();
         _trayTimer.Stop();
         _statsTimer.Stop();
         _autoWatchPreviewTimer.Stop();
@@ -437,5 +468,6 @@ public sealed partial class MainViewModel : ObservableObject, IDisposable
         _storiesCts.Cancel();
         _storiesCts.Dispose();
         _client?.Dispose();
+        _settingsService.Flush();
     }
 }

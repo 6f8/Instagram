@@ -1,3 +1,5 @@
+using InstagramStoryViewer.Gui.Resources;
+using System.Globalization;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows.Threading;
@@ -17,8 +19,8 @@ public sealed partial class MainViewModel
     {
         CleanVideoCache();
         RefreshDownloads();
-        foreach (var r in WatchHistory.Load()) History.Add(new WatchRecordViewModel(r));
-        _ = SafeAsync(() => CheckForUpdatesIfDueAsync());
+        foreach (var r in _history.Load()) History.Add(new WatchRecordViewModel(r));
+        _ = SafeAsync(() => Updates.StartAsync());
         var saved = SettingsStore.Unprotect(_settings.ProtectedSession);
         if (saved is not null)
             await TryLoginAsync(saved, persist: true);
@@ -29,7 +31,7 @@ public sealed partial class MainViewModel
     {
         if (string.IsNullOrWhiteSpace(cookieText))
         {
-            LoginError = "الصق قيمة sessionid أولاً.";
+            LoginError = Strings.PasteSessionIdFirst;
             return;
         }
         await TryLoginAsync(cookieText, persist: RememberSession);
@@ -50,7 +52,7 @@ public sealed partial class MainViewModel
             // login window would close instantly and fail the same way every time.
             _settings.ClearBrowserOnNextLogin = true;
             SaveSettings();
-            LoginError += "\nاضغط \"تسجيل الدخول عبر إنستجرام\" مرة أخرى لتسجيل الدخول من جديد.";
+            LoginError += Strings.LoginRetryHint;
         }
     }
 
@@ -102,12 +104,10 @@ public sealed partial class MainViewModel
             ApplyTray(tray);
             _lastTrayRefresh = DateTime.UtcNow;
             ScheduleTrayRefresh();
-            if (AutoWatchNew) _ = SafeAsync(() => RunAutoWatchAsync());
-            if (AutoLikeEnabled) _ = SafeAsync(() => RunAutoLikeAsync());
-            _ = SafeAsync(() => ProcessFavoritesAsync());
+            QueueAutomation();
             AppLog.Info($"Logged in (tray: {tray.Count} accounts, host profile: {client.ActiveProfile})");
-            if (trayError is null) ShowToast("تم تسجيل الدخول بنجاح");
-            else ShowToast($"تم تسجيل الدخول، لكن تعذّر جلب ستوريات من تتابعهم. يمكنك البحث عن أي حساب.\n{DiagnosticsHint}", isError: true);
+            if (trayError is null) ShowToast(Strings.LoginSucceeded);
+            else ShowToast(string.Format(CultureInfo.CurrentCulture, Strings.LoginWithoutTray, DiagnosticsHint), isError: true);
         }
         catch (ArgumentException ex)
         {
@@ -133,7 +133,7 @@ public sealed partial class MainViewModel
     [RelayCommand]
     private void Logout()
     {
-        if (!_dialogs.Confirm("هل تريد تسجيل الخروج وحذف الجلسة المحفوظة؟")) return;
+        if (!_dialogs.Confirm(Strings.LogoutConfirm)) return;
         SignOut(null);
     }
 
@@ -144,6 +144,7 @@ public sealed partial class MainViewModel
         _autoWatchPreviewTimer.Stop();
         _saveCookiesTimer.Stop();
         _storiesCts.Cancel();
+        _jobs.CancelAll(); // stops a running auto-watch/like round and drops the queued ones
         _lifetimeCts.Cancel();
         _lifetimeCts = new CancellationTokenSource();
         _client?.Dispose();
@@ -175,13 +176,11 @@ public sealed partial class MainViewModel
         IsLoadingTray = true;
         try
         {
-            ApplyTray(await _client.GetStoriesTrayAsync());
+            ApplyTray(await _client.GetStoriesTrayAsync(_lifetimeCts.Token));
             _lastTrayRefresh = DateTime.UtcNow;
             AppLog.Info($"Tray refreshed: {TrayUsers.Count} accounts, {UnseenAccounts} with new stories, {_client?.RequestsLastHour} requests in the last hour");
-            if (!silent) ShowToast("تم تحديث القائمة");
-            if (AutoWatchNew) _ = SafeAsync(() => RunAutoWatchAsync());
-            if (AutoLikeEnabled) _ = SafeAsync(() => RunAutoLikeAsync());
-            _ = SafeAsync(() => ProcessFavoritesAsync());
+            if (!silent) ShowToast(Strings.ListRefreshed);
+            QueueAutomation();
         }
         catch (InstagramApiException ex)
         {
@@ -228,16 +227,32 @@ public sealed partial class MainViewModel
     /// Refreshes at irregular intervals, and only while the window is in use (or auto-watch is on, at a much
     /// slower pace). A fixed 5-minute loop running all day is a classic bot signature.
     /// </summary>
-    private void ScheduleTrayRefresh()
+    public void ScheduleTrayRefresh()
     {
         _trayTimer.Stop();
         if (!IsLoggedIn) return;
         double minutes;
         if (_isWindowActive) minutes = 6 + Random.Shared.NextDouble() * 4;        // 6–10 min
-        else if (AutoWatchNew || AutoLikeEnabled) minutes = 20 + Random.Shared.NextDouble() * 10; // 20–30 min
+        else if (AutoWatchNew || AutoLike.Enabled) minutes = 20 + Random.Shared.NextDouble() * 10; // 20–30 min
         else return;                                                               // idle: no traffic
         _trayTimer.Interval = TimeSpan.FromMinutes(minutes);
         _trayTimer.Start();
+    }
+
+    /// <summary>
+    /// Queues this round's background work. The queue runs one job at a time and never queues a job that is
+    /// already waiting or running, so frequent refreshes cannot pile up overlapping rounds.
+    /// </summary>
+    private void QueueAutomation()
+    {
+        QueueAutoWatch();
+        AutoLike.Queue();
+        _jobs.Enqueue("favorites", ProcessFavoritesAsync);
+    }
+
+    private void QueueAutoWatch()
+    {
+        if (AutoWatchNew && IsLoggedIn) _jobs.Enqueue("auto-watch", RunAutoWatchAsync);
     }
 
     // ================================================================== session persistence

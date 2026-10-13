@@ -1,0 +1,15 @@
+# Weekly pull requests for outdated NuGet packages and GitHub Actions.
+version: 2
+updates:
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      test-packages:
+        patterns: ["xunit*", "Microsoft.NET.Test.Sdk", "coverlet*"]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

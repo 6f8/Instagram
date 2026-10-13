@@ -97,8 +97,8 @@
                 <TextBlock Text="الإعجاب التلقائي" Style="{StaticResource H3}" Margin="0,0,0,4" />
                 <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,12"
                            Text="بعد كل تحديث يضغط البرنامج زر الإعجاب في نافذة صغيرة بزاوية الشاشة، ويتحقق أنه سُجّل. يحترم الساعات الهادئة والحسابات المستثناة وحد الطلبات. الإفراط في الإعجاب الآلي قد يؤدي إلى تقييد حسابك." />
-                <CheckBox IsChecked="{Binding AutoLikeEnabled}" Content="تفعيل الإعجاب التلقائي" />
-                <StackPanel Margin="28,10,0,0" IsEnabled="{Binding AutoLikeEnabled}">
+                <CheckBox IsChecked="{Binding AutoLike.Enabled}" Content="تفعيل الإعجاب التلقائي" />
+                <StackPanel Margin="28,10,0,0" IsEnabled="{Binding AutoLike.Enabled}">
                     <StackPanel.Style>
                         <Style TargetType="StackPanel">
                             <Style.Triggers>
@@ -108,24 +108,24 @@
                             </Style.Triggers>
                         </Style>
                     </StackPanel.Style>
-                    <CheckBox IsChecked="{Binding AutoLikeStories}" Content="الستوريات الجديدة" />
-                    <StackPanel Orientation="Horizontal" Margin="28,8,0,0" IsEnabled="{Binding AutoLikeStories}">
+                    <CheckBox IsChecked="{Binding AutoLike.Stories}" Content="الستوريات الجديدة" />
+                    <StackPanel Orientation="Horizontal" Margin="28,8,0,0" IsEnabled="{Binding AutoLike.Stories}">
                         <TextBlock Text="من:" VerticalAlignment="Center" Margin="0,0,10,0" Foreground="{StaticResource MutedBrush}" />
                         <RadioButton Style="{StaticResource Chip}" Content="المفضّلة" GroupName="likeScope"
-                                     IsChecked="{Binding AutoLikeScope, Converter={StaticResource ValueBool}, ConverterParameter=Favorites}" />
+                                     IsChecked="{Binding AutoLike.Scope, Converter={StaticResource ValueBool}, ConverterParameter=Favorites}" />
                         <RadioButton Style="{StaticResource Chip}" Content="كل من أتابعهم" GroupName="likeScope"
-                                     IsChecked="{Binding AutoLikeScope, Converter={StaticResource ValueBool}, ConverterParameter=All}" />
+                                     IsChecked="{Binding AutoLike.Scope, Converter={StaticResource ValueBool}, ConverterParameter=All}" />
                     </StackPanel>
-                    <CheckBox IsChecked="{Binding AutoLikePosts}" Content="المنشورات الجديدة (حسابات المفضّلة، آخر 3 أيام)" Margin="0,12,0,0" />
+                    <CheckBox IsChecked="{Binding AutoLike.Posts}" Content="المنشورات الجديدة (حسابات المفضّلة، آخر 3 أيام)" Margin="0,12,0,0" />
                     <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
                         <TextBlock Text="الحد اليومي:" VerticalAlignment="Center" Margin="0,0,10,0" />
                         <TextBox Style="{StaticResource FieldBox}" Width="90" FlowDirection="LeftToRight" HorizontalContentAlignment="Center"
                                  v:NumericInput.IsEnabled="True" MaxLength="6" ToolTip="اكتب الرقم الذي تريده ثم Enter"
-                                 Text="{Binding AutoLikeDailyLimit, UpdateSourceTrigger=Explicit}" />
+                                 Text="{Binding AutoLike.DailyLimit, UpdateSourceTrigger=Explicit}" />
                         <TextBlock Text="إعجاب يومياً" VerticalAlignment="Center" Margin="10,0,0,0" Foreground="{StaticResource MutedBrush}" />
                     </StackPanel>
                 </StackPanel>
-                <TextBlock Text="{Binding AutoLikeStatus}" Style="{StaticResource Muted}" Margin="0,10,0,0" />
+                <TextBlock Text="{Binding AutoLike.Status}" Style="{StaticResource Muted}" Margin="0,10,0,0" />
             </StackPanel>
         </Border>
 
@@ -216,12 +216,15 @@
                 <TextBlock Text="التشغيل والتحديثات" Style="{StaticResource H3}" Margin="0,0,0,12" />
                 <CheckBox IsChecked="{Binding MinimizeToTray}" Content="عند إغلاق النافذة، أبقِ البرنامج يعمل في منطقة الإشعارات" />
                 <CheckBox IsChecked="{Binding StartWithWindows}" Content="شغّل البرنامج مع ويندوز (مصغّراً في منطقة الإشعارات)" Margin="0,12,0,0" />
-                <CheckBox IsChecked="{Binding CheckForUpdates}" Content="تحقق من التحديثات تلقائياً (عند التشغيل وكل 6 ساعات)" Margin="0,12,0,0" />
+                <CheckBox IsChecked="{Binding Updates.CheckForUpdates}" Content="تحقق من التحديثات تلقائياً (عند التشغيل وكل 6 ساعات)" Margin="0,12,0,0" />
                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                    <Button Content="تحقق الآن" Command="{Binding CheckForUpdatesNowCommand}" />
-                    <Button Style="{StaticResource PrimaryButton}" Content="تنزيل التحديث" Margin="8,0,0,0"
-                            Command="{Binding OpenUpdateCommand}" Visibility="{Binding HasUpdate, Converter={StaticResource Vis}}" />
-                    <TextBlock Text="{Binding UpdateStatus}" Style="{StaticResource Muted}" Margin="12,0,0,0" />
+                    <Button Content="تحقق الآن" Command="{Binding Updates.CheckNowCommand}" />
+                    <Button Style="{StaticResource PrimaryButton}" Content="تحديث الآن" Margin="8,0,0,0"
+                            ToolTip="ينزّل التحديث ويتحقق من بصمته (SHA-256) ثم يعيد تشغيل البرنامج"
+                            Command="{Binding Updates.InstallCommand}" Visibility="{Binding Updates.HasUpdate, Converter={StaticResource Vis}}" />
+                    <Button Style="{StaticResource LinkButton}" Content="صفحة الإصدار" Margin="8,0,0,0"
+                            Command="{Binding Updates.OpenCommand}" Visibility="{Binding Updates.HasUpdate, Converter={StaticResource Vis}}" />
+                    <TextBlock Text="{Binding Updates.Status}" Style="{StaticResource Muted}" Margin="12,0,0,0" />
                 </StackPanel>
             </StackPanel>
         </Border>

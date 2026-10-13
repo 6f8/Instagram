@@ -1,5 +1,10 @@
 using System.Windows;
 using System.Windows.Threading;
+using InstagramStoryViewer.Automation;
+using InstagramStoryViewer.Diagnostics;
+using InstagramStoryViewer.Gui.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace InstagramStoryViewer.Gui;
 
@@ -10,6 +15,7 @@ public partial class App : Application
 
     private Mutex? _instanceMutex;
     private EventWaitHandle? _activateSignal;
+    private IHost? _host;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -40,10 +46,24 @@ public partial class App : Application
             $"Start v{typeof(App).Assembly.GetName().Version?.ToString(3)} on {Environment.OSVersion}");
 
         DispatcherUnhandledException += OnUnhandledException;
-        TaskScheduler.UnobservedTaskException += (_, args) => args.SetObserved(); // never crash on a forgotten task
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            // Last chance (a crash on a background thread): leave a report behind before the process ends.
+            if (args.ExceptionObject is Exception ex) CrashReport.Write(ex, args.IsTerminating ? "background thread (fatal)" : "background thread");
+        };
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            // A task nobody awaited failed: never crash for it, but do not lose the error either.
+            AppLog.Error("Unobserved task exception", args.Exception);
+            args.SetObserved();
+        };
         base.OnStartup(e);
 
-        var window = new Views.MainWindow();
+        _host = BuildHost();
+        _host.Start();
+        _ = Task.Run(ImageDiskCache.Prune);
+
+        var window = new Views.MainWindow(_host.Services);
         MainWindow = window;
         var minimized = e.Args.Contains(Services.StartupRegistration.MinimizedArg);
         if (minimized && window.CanStartHidden)
@@ -66,17 +86,34 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// The app's services, created once and shared (settings, history database, background job queue, clock).
+    /// Disposed in reverse order on exit, which flushes pending settings and closes the database.
+    /// </summary>
+    private static IHost BuildHost() =>
+        Host.CreateDefaultBuilder()
+            .ConfigureServices(services =>
+            {
+                services.AddSingleton<SettingsService>();
+                services.AddSingleton<HistoryService>();
+                services.AddSingleton(TimeProvider.System);
+                services.AddSingleton(_ => new JobQueue((name, ex) => AppLog.Error($"Background job '{name}' failed", ex)));
+            })
+            .Build();
+
     protected override void OnExit(ExitEventArgs e)
     {
+        _host?.Dispose();
         _instanceMutex?.Dispose();
         base.OnExit(e);
     }
 
     private static void OnUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        InstagramStoryViewer.Diagnostics.AppLog.Error("Unhandled UI exception", e.Exception);
+        var report = CrashReport.Write(e.Exception, "UI thread");
         // Keep the app alive on unexpected errors and tell the user what happened.
-        MessageBox.Show(e.Exception.Message, "خطأ غير متوقع", MessageBoxButton.OK, MessageBoxImage.Error,
+        var details = report is null ? "" : $"\n\nحُفظ تقرير بالتفاصيل في:\n{report}";
+        MessageBox.Show(e.Exception.Message + details, "خطأ غير متوقع", MessageBoxButton.OK, MessageBoxImage.Error,
             MessageBoxResult.OK, MessageBoxOptions.RtlReading | MessageBoxOptions.RightAlign);
         e.Handled = true;
     }

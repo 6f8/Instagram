@@ -1,26 +1,34 @@
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using InstagramStoryViewer.Diagnostics;
 using InstagramStoryViewer.Gui.Services;
 using InstagramStoryViewer.Gui.ViewModels;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace InstagramStoryViewer.Gui.Views;
 
 public partial class MainWindow : Window, IDialogService
 {
     private readonly MainViewModel _vm;
+    private readonly SettingsService _settings;
     private readonly TrayIcon _tray;
+    private PageSelectors _selectors = PageSelectors.Load();
     private bool _isPlaying;
     private bool _started;
     private bool _exitRequested;
     private bool _trayHintShown;
 
-    public MainWindow()
+    public MainWindow(IServiceProvider services)
     {
         InitializeComponent();
-        _vm = new MainViewModel(this);
+        _settings = services.GetRequiredService<SettingsService>();
+        // The window is the view model's dialog service, so it is handed in rather than resolved.
+        _vm = ActivatorUtilities.CreateInstance<MainViewModel>(services, (IDialogService)this);
         DataContext = _vm;
+        SourceInitialized += (_, _) => RestorePlacement();
         _vm.PropertyChanged += OnViewModelPropertyChanged;
 
         StateChanged += (_, _) =>
@@ -41,6 +49,7 @@ public partial class MainWindow : Window, IDialogService
         Closing += OnClosing;
         Closed += (_, _) =>
         {
+            SavePlacement();
             if (_watcher is { IsAlive: true }) _watcher.Close();
             _tray.Dispose();
             _vm.Dispose();
@@ -95,6 +104,7 @@ public partial class MainWindow : Window, IDialogService
             ExitApp();
             return;
         }
+        _ = RefreshSelectorsAsync();
         try
         {
             await _vm.InitializeAsync();
@@ -103,6 +113,62 @@ public partial class MainWindow : Window, IDialogService
         {
             _vm.ShowToast($"تعذّر بدء البرنامج بشكل كامل: {ex.Message}", isError: true);
         }
+    }
+
+    /// <summary>Picks up fixed page selectors from the repository (at most once a day).</summary>
+    private async Task RefreshSelectorsAsync()
+    {
+        if (await PageSelectors.RefreshAsync(_settings.Current, _selectors) is { } fresh)
+        {
+            _selectors = fresh;
+            if (_watcher is { IsAlive: true }) _watcher.Close(); // the next batch opens with the new selectors
+        }
+        _settings.Save();
+    }
+
+    // ================================================================== window placement
+
+    /// <summary>Restores the last position and size, unless that spot is no longer on any screen.</summary>
+    private void RestorePlacement()
+    {
+        if (_settings.Current.Window is not { Width: > 0, Height: > 0 } p) return;
+        var screen = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop,
+            SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
+        var saved = new Rect(p.Left, p.Top, Math.Max(MinWidth, p.Width), Math.Max(MinHeight, p.Height));
+        var visible = Rect.Intersect(screen, saved);
+        if (visible.IsEmpty || visible.Width < 200 || visible.Height < 120) return; // a monitor was unplugged
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Left = saved.Left;
+        Top = saved.Top;
+        Width = saved.Width;
+        Height = saved.Height;
+        if (p.Maximized) WindowState = WindowState.Maximized;
+    }
+
+    private void SavePlacement()
+    {
+        var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
+        if (bounds.IsEmpty || bounds.Width <= 0) return;
+        _settings.Current.Window = new WindowPlacement
+        {
+            Left = bounds.Left, Top = bounds.Top, Width = bounds.Width, Height = bounds.Height,
+            Maximized = WindowState == WindowState.Maximized
+        };
+        _settings.Save();
+    }
+
+    // ================================================================== keyboard
+
+    /// <summary>Ctrl+F jumps to the search box.</summary>
+    private void FocusSearch_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        if (!_vm.IsLoggedIn) return;
+        _vm.Page = AppPage.Dashboard;
+        Dispatcher.BeginInvoke(() =>
+        {
+            SearchBox.Focus();
+            SearchBox.SelectAll();
+        }, System.Windows.Threading.DispatcherPriority.Input);
     }
 
     /// <summary>First start only: explains the risks of using unofficial Instagram endpoints.</summary>
@@ -320,6 +386,21 @@ public partial class MainWindow : Window, IDialogService
     public Task<IReadOnlyList<LikeOutcome>> LikeAsync(string cookieHeader, IReadOnlyList<LikeRequest> requests) =>
         RunInWatcherAsync(w => w.LikeAsync(cookieHeader, requests), background: true);
 
+    /// <summary>Comments are typed into the page, so the corner window comes to the front for them.</summary>
+    public Task<CommentOutcome> CommentAsync(string cookieHeader, string postUrl, string text) =>
+        RunInWatcherAsync(w => w.CommentAsync(cookieHeader, postUrl, text), background: false);
+
+    public void OpenUrl(string target)
+    {
+        try { Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }); }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+        {
+            _vm.ShowToast($"تعذّر الفتح: {ex.Message}", isError: true);
+        }
+    }
+
+    public void ExitApplication() => ExitApp();
+
     /// <summary>Runs one batch (watch or like) in the shared corner window; batches queue behind each other.</summary>
     private async Task<T> RunInWatcherAsync<T>(Func<StoryWatchWindow, Task<T>> batch, bool background)
     {
@@ -328,7 +409,7 @@ public partial class MainWindow : Window, IDialogService
         {
             if (_watcher is not { IsAlive: true })
             {
-                _watcher = new StoryWatchWindow();
+                _watcher = new StoryWatchWindow(_selectors);
                 _watcher.PlaceInCorner();
             }
             if (!_watcher.IsVisible) _watcher.Show();

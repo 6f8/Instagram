@@ -1,11 +1,16 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using InstagramStoryViewer.Automation;
 
 namespace InstagramStoryViewer.Gui.Services;
 
 public sealed class AppSettings
 {
+    /// <summary>Layout version of this file; <see cref="SettingsMigrations"/> upgrades older files on load.</summary>
+    public int SchemaVersion { get; set; }
+
     public string DownloadFolder { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Instagram Stories");
 
@@ -32,10 +37,12 @@ public sealed class AppSettings
 
     public int AutoWatchDailyLimit { get; set; } = 200;
 
-    /// <summary>Local date (yyyy-MM-dd) that <see cref="AutoWatchedToday"/> counts for.</summary>
-    public string? AutoWatchDay { get; set; }
+    /// <summary>Stories watched automatically today.</summary>
+    public DailyCount AutoWatchCount { get; set; } = new();
 
-    public int AutoWatchedToday { get; set; }
+    // Schema 0 kept the daily counters as loose fields; read once by the migration, never written again.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? AutoWatchDay { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? AutoWatchedToday { get; set; }
 
     /// <summary>Accounts that are never watched automatically (manual watching asks first).</summary>
     public List<AccountRef> ExcludedFromWatch { get; set; } = new();
@@ -70,14 +77,62 @@ public sealed class AppSettings
     public string AutoLikeScope { get; set; } = "Favorites";
 
     public int AutoLikeDailyLimit { get; set; } = 60;
-    public string? AutoLikeDay { get; set; }
-    public int AutoLikedToday { get; set; }
 
-    /// <summary>Recently handled media ids, so nothing is attempted twice (bounded list).</summary>
-    public List<string> AutoLikeHandled { get; set; } = new();
+    /// <summary>Likes given automatically today.</summary>
+    public DailyCount AutoLikeCount { get; set; } = new();
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public string? AutoLikeDay { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public int? AutoLikedToday { get; set; }
+
+    /// <summary>Schema 0 only: handled media ids, now kept in the history database.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] public List<string>? AutoLikeHandled { get; set; }
 
     /// <summary>Round-robin position over favorites for the posts check.</summary>
     public int AutoLikePostCursor { get; set; }
+
+    /// <summary>Main window position and size, restored on the next start.</summary>
+    public WindowPlacement? Window { get; set; }
+
+    /// <summary>Last time the page selectors were refreshed from GitHub.</summary>
+    public DateTime? LastSelectorsCheck { get; set; }
+}
+
+public sealed class WindowPlacement
+{
+    public double Left { get; set; }
+    public double Top { get; set; }
+    public double Width { get; set; }
+    public double Height { get; set; }
+    public bool Maximized { get; set; }
+}
+
+/// <summary>Upgrades settings written by older versions.</summary>
+public static class SettingsMigrations
+{
+    public const int Current = 1;
+
+    /// <summary>
+    /// Returns the handled media ids found in an old file (to move into the history database), or null.
+    /// The settings object is upgraded in place.
+    /// </summary>
+    public static List<string>? Upgrade(AppSettings s)
+    {
+        List<string>? handled = null;
+        if (s.SchemaVersion < 1)
+        {
+            // 0 → 1: loose daily counters become DailyCount objects; the handled list leaves settings.json.
+            if (s.AutoWatchDay is not null)
+                s.AutoWatchCount = new DailyCount { Day = s.AutoWatchDay, Count = s.AutoWatchedToday ?? 0 };
+            if (s.AutoLikeDay is not null)
+                s.AutoLikeCount = new DailyCount { Day = s.AutoLikeDay, Count = s.AutoLikedToday ?? 0 };
+            handled = s.AutoLikeHandled;
+            s.AutoWatchDay = s.AutoLikeDay = null;
+            s.AutoWatchedToday = s.AutoLikedToday = null;
+            s.AutoLikeHandled = null;
+        }
+        s.SchemaVersion = Current;
+        return handled;
+    }
 }
 
 /// <summary>An Instagram account remembered by the app (username can change; the id cannot).</summary>

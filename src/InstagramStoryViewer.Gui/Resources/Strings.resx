@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="AutoLikeTodayStatus" xml:space="preserve"><value>إعجابات اليوم: {0} من {1}</value></data>
+  <data name="RunningNowSuffix" xml:space="preserve"><value> · جارٍ الآن...</value></data>
+  <data name="AutoLikeTitle" xml:space="preserve"><value>إعجاب تلقائي</value></data>
+  <data name="AutoLikeDoneMessage" xml:space="preserve"><value>تم الإعجاب بـ {0} من الستوريات والمنشورات الجديدة</value></data>
+  <data name="CommentLinkInvalid" xml:space="preserve"><value>هذا ليس رابط منشور أو ريل. مثال: https://www.instagram.com/p/XXXXXXXX/</value></data>
+  <data name="CommentsDisabledByOwner" xml:space="preserve"><value>صاحب المنشور أوقف التعليقات عليه.</value></data>
+  <data name="CommentDuplicateConfirm" xml:space="preserve"><value>سبق أن نشرت هذا التعليق نفسه على هذا المنشور. نشره مرة أخرى؟</value></data>
+  <data name="CommentTargetOwnerPost" xml:space="preserve"><value>منشور {0}</value></data>
+  <data name="CommentTargetPost" xml:space="preserve"><value>المنشور</value></data>
+  <data name="CommentConfirm" xml:space="preserve"><value>سيُنشر هذا التعليق باسمك على {0}:
+
+«{1}»
+
+متابعة؟</value></data>
+  <data name="CommentPosting" xml:space="preserve"><value>جاري فتح المنشور ونشر التعليق...</value></data>
+  <data name="CommentPosted" xml:space="preserve"><value>تم نشر التعليق ✓</value></data>
+  <data name="CommentUnconfirmed" xml:space="preserve"><value>أُرسل التعليق، لكن لم يظهر في الصفحة بعد. افتح المنشور للتأكد.</value></data>
+  <data name="CommentCommentsOff" xml:space="preserve"><value>التعليقات على هذا المنشور متوقفة أو مقيّدة.</value></data>
+  <data name="CommentRejected" xml:space="preserve"><value>رفض إنستجرام نشر التعليق (قد يكون مؤقتاً). حاول لاحقاً.</value></data>
+  <data name="CommentBrowserLoggedOut" xml:space="preserve"><value>المتصفح المدمج غير مسجّل الدخول. سجّل الدخول من جديد.</value></data>
+  <data name="CommentPostUnavailable" xml:space="preserve"><value>تعذّر فتح المنشور (قد يكون محذوفاً أو خاصاً، أو أُوقف).</value></data>
+  <data name="TypeVideo" xml:space="preserve"><value>فيديو {0}</value></data>
+  <data name="TypeImage" xml:space="preserve"><value>صورة</value></data>
+  <data name="SeenVerifiedTooltip" xml:space="preserve"><value>شوهد (أكّد إنستجرام ذلك)</value></data>
+  <data name="SeenShownTooltip" xml:space="preserve"><value>عُرض، لكن لم يتأكد إنستجرام بعد</value></data>
+  <data name="SeenFailedTooltip" xml:space="preserve"><value>عُرض لكن إنستجرام لم يسجّله كمشاهَد</value></data>
+  <data name="MarkSeenTooltip" xml:space="preserve"><value>تعليم كمشاهَد</value></data>
+  <data name="DownloadDone" xml:space="preserve"><value>تم</value></data>
+  <data name="DownloadQueued" xml:space="preserve"><value>في الانتظار</value></data>
+  <data name="DownloadFailed" xml:space="preserve"><value>فشل</value></data>
+  <data name="ModeManual" xml:space="preserve"><value>يدوي</value></data>
+  <data name="ModePreview" xml:space="preserve"><value>عند المعاينة</value></data>
+  <data name="ModeLikePost" xml:space="preserve"><value>إعجاب بمنشور</value></data>
+  <data name="ModeLikeStory" xml:space="preserve"><value>إعجاب بستوري</value></data>
+  <data name="ModeComment" xml:space="preserve"><value>تعليق</value></data>
+  <data name="ModeAuto" xml:space="preserve"><value>تلقائي</value></data>
+  <data name="ResultLiked" xml:space="preserve"><value>أُعجب (مؤكَّد)</value></data>
+  <data name="ResultLikeFailed" xml:space="preserve"><value>فشل الإعجاب</value></data>
+  <data name="ResultCommentPosted" xml:space="preserve"><value>نُشر</value></data>
+  <data name="ResultCommentSent" xml:space="preserve"><value>أُرسل (غير مؤكَّد)</value></data>
+  <data name="ResultCommentFailed" xml:space="preserve"><value>لم يُنشر</value></data>
+  <data name="ResultVerified" xml:space="preserve"><value>مؤكَّد</value></data>
+  <data name="ResultShown" xml:space="preserve"><value>عُرض (غير مؤكَّد)</value></data>
+  <data name="ResultNotRecorded" xml:space="preserve"><value>لم يُسجَّل</value></data>
+  <data name="ResultNotShown" xml:space="preserve"><value>لم يُعرض</value></data>
+  <data name="HistoryPostFallbackName" xml:space="preserve"><value>منشور</value></data>
+  <data name="NameSeparator" xml:space="preserve"><value>، </value></data>
+  <data name="AndMoreSuffix" xml:space="preserve"><value> و{0} غيرهم</value></data>
+  <data name="FavoriteNewStoryTitle" xml:space="preserve"><value>ستوري جديد من المفضّلة</value></data>
+  <data name="AutoDownloadTitle" xml:space="preserve"><value>تنزيل تلقائي</value></data>
+  <data name="FavoritesDownloadedMessage" xml:space="preserve"><value>تم تنزيل {0} ستوري جديد من المفضّلة</value></data>
+  <data name="StartupRegistrationFailed" xml:space="preserve"><value>تعذّر تعديل إعداد التشغيل مع ويندوز.</value></data>
+  <data name="AllAlreadyDownloaded" xml:space="preserve"><value>كل الستوريات منزّلة مسبقاً</value></data>
+  <data name="DownloadedXOfY" xml:space="preserve"><value>تم تنزيل {0} من {1}</value></data>
+  <data name="DownloadFailedMessage" xml:space="preserve"><value>فشل التنزيل: {0}</value></data>
+  <data name="DownloadFolderUnreadable" xml:space="preserve"><value>تعذّر قراءة مجلد التنزيل: {0}</value></data>
+  <data name="HighlightUntitled" xml:space="preserve"><value>بدون عنوان</value></data>
+  <data name="NoHighlights" xml:space="preserve"><value>لا توجد هايلايت لدى {0}</value></data>
+  <data name="HighlightEmpty" xml:space="preserve"><value>الهايلايت "{0}" فارغ</value></data>
+  <data name="NoCurrentStories" xml:space="preserve"><value>لا توجد ستوريات حالية لدى {0}</value></data>
+  <data name="PasteSessionIdFirst" xml:space="preserve"><value>الصق قيمة sessionid أولاً.</value></data>
+  <data name="LoginRetryHint" xml:space="preserve"><value>
+اضغط "تسجيل الدخول عبر إنستجرام" مرة أخرى لتسجيل الدخول من جديد.</value></data>
+  <data name="LoginSucceeded" xml:space="preserve"><value>تم تسجيل الدخول بنجاح</value></data>
+  <data name="LoginWithoutTray" xml:space="preserve"><value>تم تسجيل الدخول، لكن تعذّر جلب ستوريات من تتابعهم. يمكنك البحث عن أي حساب.
+{0}</value></data>
+  <data name="LogoutConfirm" xml:space="preserve"><value>هل تريد تسجيل الخروج وحذف الجلسة المحفوظة؟</value></data>
+  <data name="ListRefreshed" xml:space="preserve"><value>تم تحديث القائمة</value></data>
+  <data name="PreviewVideoFailed" xml:space="preserve"><value>تعذّر تحميل الفيديو للمعاينة: {0}</value></data>
+  <data name="PrivateAccountNotFollowed" xml:space="preserve"><value>{0} حساب خاص ولا تتابعه، لا يمكن عرض ستورياته.</value></data>
+  <data name="HighlightCannotBeSeen" xml:space="preserve"><value>لا يمكن تعليم الهايلايت كمشاهَد، فقط الستوريات الحالية.</value></data>
+  <data name="ExcludedWatchConfirm" xml:space="preserve"><value>{0} في قائمة الاستثناء من المشاهدة. هل تريد مشاهدة الستوري رغم ذلك؟</value></data>
+  <data name="WatchOneConfirm" xml:space="preserve"><value>سيُفتح الستوري في المتصفح المدمج وسيظهر اسمك في قائمة مشاهديه لدى {0}. متابعة؟</value></data>
+  <data name="WatchedOne" xml:space="preserve"><value>تمت مشاهدة الستوري</value></data>
+  <data name="NotWatchedOne" xml:space="preserve"><value>لم تتم مشاهدة الستوري (راجع سجل المشاهدات)</value></data>
+  <data name="AllAlreadySeen" xml:space="preserve"><value>كل الستوريات مشاهَدة مسبقاً</value></data>
+  <data name="ExcludedContinueConfirm" xml:space="preserve"><value>{0} في قائمة الاستثناء من المشاهدة. هل تريد المتابعة رغم ذلك؟</value></data>
+  <data name="WatchAllConfirm" xml:space="preserve"><value>ستُعرض {0} ستوري في المتصفح المدمج وسيظهر اسمك في قائمة مشاهدي {1}. متابعة؟</value></data>
+  <data name="WatchedXOfY" xml:space="preserve"><value>تمت مشاهدة {0} من {1}</value></data>
+  <data name="AutoWatchPreparing" xml:space="preserve"><value>جاري تجهيز قائمة الستوريات...</value></data>
+  <data name="AutoWatchProgress" xml:space="preserve"><value>تمت مشاهدة {0} من {1} · باقي {2}</value></data>
+  <data name="AutoWatchTitle" xml:space="preserve"><value>المشاهدة التلقائية</value></data>
+  <data name="AutoWatchDoneMessage" xml:space="preserve"><value>تمت مشاهدة {0} ستوري</value></data>
+  <data name="SettingsSaveFailed" xml:space="preserve"><value>تعذّر حفظ الإعدادات: {0}</value></data>
+  <data name="EmptyStoriesHint" xml:space="preserve"><value>اختر حساباً من القائمة أو ابحث عن مستخدم لعرض ستورياته</value></data>
+  <data name="QuietHoursRange" xml:space="preserve"><value>من {0:00}:00 إلى {1:00}:00</value></data>
+  <data name="AutoWatchTodayStatus" xml:space="preserve"><value>شوهد تلقائياً اليوم: {0} من {1}</value></data>
+  <data name="StoriesTitle" xml:space="preserve"><value>الستوريات</value></data>
+  <data name="StoriesOfUser" xml:space="preserve"><value>ستوريات {0}</value></data>
+  <data name="SessionConnected" xml:space="preserve"><value>متصل</value></data>
+  <data name="SessionDisconnected" xml:space="preserve"><value>غير متصل</value></data>
+  <data name="ClearHistoryConfirm" xml:space="preserve"><value>حذف سجل المشاهدات بالكامل؟</value></data>
+  <data name="UnexpectedError" xml:space="preserve"><value>خطأ غير متوقع: {0}</value></data>
+  <data name="DiagnosticsSavedAt" xml:space="preserve"><value>حُفظت استجابة الخادم في: {0}</value></data>
+  <data name="RequestRejectedSessionOk" xml:space="preserve"><value>رفض إنستجرام هذا الطلب، لكن جلستك ما زالت صالحة.</value></data>
+  <data name="UpdateAvailable" xml:space="preserve"><value>الإصدار {0} متاح</value></data>
+  <data name="UpdateChecking" xml:space="preserve"><value>جاري التحقق...</value></data>
+  <data name="UpToDate" xml:space="preserve"><value>لديك أحدث إصدار ({0})</value></data>
+  <data name="UpdateAvailableTitle" xml:space="preserve"><value>تحديث متاح</value></data>
+  <data name="UpdateAvailableNotify" xml:space="preserve"><value>{0}. افتح البرنامج واضغط "تحديث الآن".</value></data>
+  <data name="UpdateInstallConfirm" xml:space="preserve"><value>سيُنزَّل الإصدار {0} ويُتحقق من سلامته، ثم يُعاد تشغيل البرنامج تلقائياً. متابعة؟</value></data>
+  <data name="UpdateDownloading" xml:space="preserve"><value>جاري تنزيل التحديث...</value></data>
+  <data name="UpdateVerifiedRestarting" xml:space="preserve"><value>تم التحقق من التحديث، جاري إعادة التشغيل...</value></data>
+  <data name="UpdateFailedStatus" xml:space="preserve"><value>تعذّر التحديث التلقائي: {0}</value></data>
+  <data name="UpdateFailedToast" xml:space="preserve"><value>تعذّر التحديث التلقائي ({0}). سيُفتح رابط التنزيل لتنزيله يدوياً.</value></data>
+</root>

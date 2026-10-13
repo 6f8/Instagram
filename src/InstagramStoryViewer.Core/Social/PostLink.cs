@@ -8,6 +8,28 @@ public sealed partial record PostLink(string Shortcode, string Kind)
     /// <summary>Canonical URL of the post (what the embedded browser opens).</summary>
     public string Url => $"https://www.instagram.com/{Kind}/{Shortcode}/";
 
+    private const string Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
+    /// <summary>
+    /// The numeric media id the shortcode encodes (base 64 over <see cref="Alphabet"/>), or null for the longer
+    /// shortcodes of private posts, which carry extra data and do not decode to the id.
+    /// </summary>
+    public string? MediaId
+    {
+        get
+        {
+            if (Shortcode.Length > 11) return null;
+            UInt128 id = 0;
+            foreach (var c in Shortcode)
+            {
+                var digit = Alphabet.IndexOf(c);
+                if (digit < 0) return null;
+                id = id * 64 + (uint)digit;
+            }
+            return id > ulong.MaxValue ? null : id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+    }
+
     // instagram.com/p/CODE, /reel/CODE, /reels/CODE, /tv/CODE, optionally after a username
     // (instagram.com/name/p/CODE), with or without scheme, www, trailing slash or query string.
     [GeneratedRegex(@"^(?:https?://)?(?:www\.|m\.)?instagram\.com/(?:[A-Za-z0-9._]+/)?(p|reel|reels|tv)/([A-Za-z0-9_-]{5,64})/?(?:[?#].*)?$",

@@ -1,3 +1,5 @@
+using InstagramStoryViewer.Gui.Resources;
+using System.Globalization;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows.Threading;
@@ -30,7 +32,7 @@ public sealed partial class MainViewModel
         var pending = Stories.Where(s => s.State is DownloadState.None or DownloadState.Failed).ToList();
         if (pending.Count == 0)
         {
-            ShowToast("كل الستوريات منزّلة مسبقاً");
+            ShowToast(Strings.AllAlreadyDownloaded);
             return;
         }
         foreach (var r in pending) r.State = DownloadState.Queued;
@@ -38,7 +40,7 @@ public sealed partial class MainViewModel
         foreach (var r in pending)
             if (await DownloadRowAsync(r)) ok++;
         RefreshDownloads();
-        ShowToast($"تم تنزيل {ok} من {pending.Count}", isError: ok < pending.Count);
+        ShowToast(string.Format(CultureInfo.CurrentCulture, Strings.DownloadedXOfY, ok, pending.Count), isError: ok < pending.Count);
     }
 
     private async Task<bool> DownloadRowAsync(StoryRowViewModel row)
@@ -78,7 +80,7 @@ public sealed partial class MainViewModel
             row.State = DownloadState.Failed;
             row.Error = ex.Message;
             AppLog.Warn($"Download failed {row.Username}/{row.Item.Pk}: {ex.Message}");
-            ShowToast($"فشل التنزيل: {ex.Message}", isError: true);
+            ShowToast(string.Format(CultureInfo.CurrentCulture, Strings.DownloadFailedMessage, ex.Message), isError: true);
             return false;
         }
     }
@@ -110,7 +112,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            ShowToast($"تعذّر قراءة مجلد التنزيل: {ex.Message}", isError: true);
+            ShowToast(string.Format(CultureInfo.CurrentCulture, Strings.DownloadFolderUnreadable, ex.Message), isError: true);
         }
     }
 

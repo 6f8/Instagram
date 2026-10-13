@@ -13,7 +13,11 @@
     <RootNamespace>InstagramStoryViewer.Gui</RootNamespace>
     <AssemblyName>InstagramStoryViewer</AssemblyName>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>2.3.3</Version>
+    <!-- Per-monitor DPI v2: crisp text on high-DPI screens and when the window moves between monitors. -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- WFAC010 is the WinForms advice to set DPI in code instead; this is a WPF app (WinForms is only the tray icon). -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
+    <Version>2.4.0</Version>
     <Product>IG Story Viewer Pro</Product>
     <!-- File metadata shown in Explorer's Properties; unsigned binaries without it look more suspicious to AV/SmartScreen. -->
     <Company>IG Story Viewer Pro</Company>
@@ -29,6 +33,8 @@
     <PublishSingleFile>true</PublishSingleFile>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <!-- Precompiled (ReadyToRun) code: noticeably faster start, at the cost of a somewhat larger exe. -->
+    <PublishReadyToRun>true</PublishReadyToRun>
     <DebugType>None</DebugType>
     <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
   </PropertyGroup>
@@ -39,6 +45,7 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2792.45" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
@@ -53,5 +60,27 @@
     <Resource Include="Fonts\*.otf" />
     <Resource Include="app.ico" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!-- User-facing texts of the view models; Strings.Designer.cs is generated at build time. -->
+    <EmbeddedResource Update="Resources\Strings.resx"
+                      StronglyTypedLanguage="C#"
+                      StronglyTypedClassName="Strings"
+                      StronglyTypedNamespace="InstagramStoryViewer.Gui.Resources"
+                      StronglyTypedFileName="$(IntermediateOutputPath)Strings.Designer.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Default selectors for Instagram's web page; can be overridden without a new release (see PageSelectors). -->
+    <EmbeddedResource Include="Resources\selectors.json" LogicalName="selectors.json" />
+  </ItemGroup>
+
+  <!-- WPF compiles a temporary assembly for the XAML before resources are normally processed; generate
+       Strings.Designer.cs first so that pass sees the Strings class too. -->
+  <Target Name="GenerateStringsBeforeXaml" BeforeTargets="MarkupCompilePass1" DependsOnTargets="PrepareResourceNames;ResGen">
+    <ItemGroup>
+      <_GeneratedCodeFiles Include="@(EmbeddedResource->'%(StronglyTypedFileName)')" Condition="'%(EmbeddedResource.StronglyTypedFileName)' != ''" />
+    </ItemGroup>
+  </Target>
 
 </Project>

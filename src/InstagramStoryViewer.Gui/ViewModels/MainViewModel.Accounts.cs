@@ -1,3 +1,5 @@
+using InstagramStoryViewer.Gui.Resources;
+using System.Globalization;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Data;
@@ -66,7 +68,7 @@ public sealed partial class MainViewModel
     {
         _settings.AutoDownloadFavorites = value;
         SaveSettings();
-        if (value) _ = SafeAsync(() => ProcessFavoritesAsync());
+        if (value) _jobs.Enqueue("favorites", ProcessFavoritesAsync);
     }
 
     partial void OnNotifyFavoritesChanged(bool value)
@@ -176,7 +178,7 @@ public sealed partial class MainViewModel
     /// For favorites with a story newer than the one last handled: announce it (once) and, when enabled,
     /// download every story that is not on disk yet.
     /// </summary>
-    private async Task ProcessFavoritesAsync()
+    private async Task ProcessFavoritesAsync(CancellationToken ct)
     {
         if (_favoritesBusy || _client is null || _downloader is null) return;
         var fresh = TrayUsers
@@ -189,14 +191,14 @@ public sealed partial class MainViewModel
         {
             if (NotifyFavorites)
             {
-                var names = string.Join("، ", fresh.Take(3).Select(u => u.Username)) + (fresh.Count > 3 ? $" و{fresh.Count - 3} غيرهم" : "");
-                _dialogs.Notify("ستوري جديد من المفضّلة", names);
+                var names = string.Join(Strings.NameSeparator, fresh.Take(3).Select(u => u.Username)) + (fresh.Count > 3 ? string.Format(CultureInfo.CurrentCulture, Strings.AndMoreSuffix, fresh.Count - 3) : "");
+                _dialogs.Notify(Strings.FavoriteNewStoryTitle, names);
             }
 
             var downloaded = 0;
             if (AutoDownloadFavorites)
             {
-                var reels = await _client.GetStoriesForUsersAsync(fresh.Select(u => u.UserId), _lifetimeCts.Token);
+                var reels = await _client.GetStoriesForUsersAsync(fresh.Select(u => u.UserId), ct);
                 foreach (var reel in reels)
                 {
                     var user = fresh.FirstOrDefault(u => u.UserId == (reel.User?.Pk ?? reel.Id));
@@ -206,7 +208,7 @@ public sealed partial class MainViewModel
                         if (_downloader.FindExistingPath(user.Username, item) is not null) continue;
                         try
                         {
-                            await _downloader.DownloadAsync(user.Username, item, _lifetimeCts.Token);
+                            await _downloader.DownloadAsync(user.Username, item, ct);
                             downloaded++;
                         }
                         catch (Exception ex) when (ex is InstagramApiException or HttpRequestException or IOException)
@@ -219,7 +221,7 @@ public sealed partial class MainViewModel
                 {
                     RefreshDownloads();
                     AppLog.Info($"Favorites auto-download: {downloaded} new files");
-                    _dialogs.Notify("تنزيل تلقائي", $"تم تنزيل {downloaded} ستوري جديد من المفضّلة");
+                    _dialogs.Notify(Strings.AutoDownloadTitle, string.Format(CultureInfo.CurrentCulture, Strings.FavoritesDownloadedMessage, downloaded));
                 }
             }
 

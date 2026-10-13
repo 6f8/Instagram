@@ -17,6 +17,20 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d">
 
+    <!-- keyboard: Ctrl+1…6 pages, F5 refresh, Ctrl+F search -->
+    <Window.InputBindings>
+        <KeyBinding Modifiers="Control" Key="D1" Command="{Binding NavigateCommand}" CommandParameter="Dashboard" />
+        <KeyBinding Modifiers="Control" Key="D2" Command="{Binding NavigateCommand}" CommandParameter="Following" />
+        <KeyBinding Modifiers="Control" Key="D3" Command="{Binding NavigateCommand}" CommandParameter="Downloads" />
+        <KeyBinding Modifiers="Control" Key="D4" Command="{Binding NavigateCommand}" CommandParameter="History" />
+        <KeyBinding Modifiers="Control" Key="D5" Command="{Binding NavigateCommand}" CommandParameter="Comment" />
+        <KeyBinding Modifiers="Control" Key="D6" Command="{Binding NavigateCommand}" CommandParameter="Settings" />
+        <KeyBinding Key="F5" Command="{Binding RefreshTrayCommand}" />
+    </Window.InputBindings>
+    <Window.CommandBindings>
+        <CommandBinding Command="Find" Executed="FocusSearch_Executed" />
+    </Window.CommandBindings>
+
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="38" ResizeBorderThickness="6" GlassFrameThickness="0"
                       CornerRadius="0" UseAeroCaptionButtons="False" />
@@ -55,26 +69,30 @@
                 <!-- navigation rail -->
                 <Border Grid.Column="0" Background="{StaticResource RailBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
                     <DockPanel Margin="0,14">
-                        <RadioButton DockPanel.Dock="Bottom" Style="{StaticResource RailButton}" ToolTip="الإعدادات"
+                        <RadioButton DockPanel.Dock="Bottom" Style="{StaticResource RailButton}" ToolTip="الإعدادات (Ctrl+6)"
                                      IsChecked="{Binding Page, Converter={StaticResource EnumBool}, ConverterParameter=Settings}">
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE8B8;" FontSize="18" />
                         </RadioButton>
                         <StackPanel HorizontalAlignment="Center">
-                            <RadioButton Style="{StaticResource RailButton}" ToolTip="لوحة التحكم"
+                            <RadioButton Style="{StaticResource RailButton}" ToolTip="لوحة التحكم (Ctrl+1)"
                                          IsChecked="{Binding Page, Converter={StaticResource EnumBool}, ConverterParameter=Dashboard}">
                                 <TextBlock Style="{StaticResource Icon}" Text="&#xE88A;" FontSize="18" />
                             </RadioButton>
-                            <RadioButton Style="{StaticResource RailButton}" ToolTip="من تتابعهم"
+                            <RadioButton Style="{StaticResource RailButton}" ToolTip="من تتابعهم (Ctrl+2)"
                                          IsChecked="{Binding Page, Converter={StaticResource EnumBool}, ConverterParameter=Following}">
                                 <TextBlock Style="{StaticResource Icon}" Text="&#xE7FB;" FontSize="18" />
                             </RadioButton>
-                            <RadioButton Style="{StaticResource RailButton}" ToolTip="التنزيلات"
+                            <RadioButton Style="{StaticResource RailButton}" ToolTip="التنزيلات (Ctrl+3)"
                                          IsChecked="{Binding Page, Converter={StaticResource EnumBool}, ConverterParameter=Downloads}">
                                 <TextBlock Style="{StaticResource Icon}" Text="&#xF090;" FontSize="18" />
                             </RadioButton>
-                            <RadioButton Style="{StaticResource RailButton}" ToolTip="سجل المشاهدات"
+                            <RadioButton Style="{StaticResource RailButton}" ToolTip="سجل المشاهدات (Ctrl+4)"
                                          IsChecked="{Binding Page, Converter={StaticResource EnumBool}, ConverterParameter=History}">
                                 <TextBlock Style="{StaticResource Icon}" Text="&#xE889;" FontSize="18" />
+                            </RadioButton>
+                            <RadioButton Style="{StaticResource RailButton}" ToolTip="تعليق على منشور (Ctrl+5)"
+                                         IsChecked="{Binding Page, Converter={StaticResource EnumBool}, ConverterParameter=Comment}">
+                                <TextBlock Style="{StaticResource Icon}" Text="&#xE0B9;" FontSize="18" />
                             </RadioButton>
                         </StackPanel>
                     </DockPanel>
@@ -95,28 +113,34 @@
                             <!-- one-click auto-watch: watches every new story without any interaction -->
                             <CheckBox IsChecked="{Binding AutoWatchNew}" Content="مشاهدة تلقائية" VerticalAlignment="Center" Margin="0,0,16,0"
                                       ToolTip="عند التفعيل يشاهد البرنامج كل الستوريات الجديدة لمن تتابعهم تلقائياً، ثم يكمل مع كل جديد" />
-                            <TextBox Style="{StaticResource SearchBox}" Width="300" Tag="ابحث عن مستخدم واضغط Enter"
+                            <TextBox x:Name="SearchBox" Style="{StaticResource SearchBox}" Width="300" Tag="ابحث عن مستخدم واضغط Enter" ToolTip="بحث (Ctrl+F)"
+                                     AutomationProperties.Name="ابحث عن مستخدم"
                                      Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}">
                                 <TextBox.InputBindings>
                                     <KeyBinding Key="Enter" Command="{Binding SearchCommand}" />
                                 </TextBox.InputBindings>
                             </TextBox>
                             <Button Style="{StaticResource IconButton}" Margin="8,0,0,0" Height="40" Width="40"
-                                    Command="{Binding RefreshTrayCommand}" ToolTip="تحديث">
+                                    Command="{Binding RefreshTrayCommand}" ToolTip="تحديث (F5)">
                                 <TextBlock Style="{StaticResource Icon}" Text="&#xE5D5;" />
                             </Button>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="لوحة التحكم" Style="{StaticResource H1}" VerticalAlignment="Center" />
                             <Button Margin="14,0,0,0" Padding="10,3" VerticalAlignment="Center" Style="{StaticResource PrimaryButton}"
-                                    Command="{Binding OpenUpdateCommand}" Visibility="{Binding HasUpdate, Converter={StaticResource Vis}}">
+                                    Command="{Binding Updates.InstallCommand}" Visibility="{Binding Updates.HasUpdate, Converter={StaticResource Vis}}"
+                                    ToolTip="ينزّل التحديث ويتحقق منه ثم يعيد تشغيل البرنامج">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Style="{StaticResource Icon}" Text="&#xE923;" FontSize="13" Margin="0,0,6,0" />
-                                    <TextBlock Text="{Binding UpdateText}" FontSize="12" />
+                                    <TextBlock Text="{Binding Updates.UpdateText}" FontSize="12" />
+                                    <TextBlock Text=" · تحديث الآن" FontSize="12" FontWeight="Bold" />
                                 </StackPanel>
                             </Button>
+                            <ProgressBar Width="90" Height="4" Margin="10,0,0,0" VerticalAlignment="Center" Maximum="1"
+                                         Value="{Binding Updates.Progress, Mode=OneWay}"
+                                         Visibility="{Binding Updates.IsInstalling, Converter={StaticResource Vis}}" />
                             <Border Margin="14,0,0,0" CornerRadius="10" Padding="10,3" VerticalAlignment="Center" Background="#33FF2D95"
-                                    Visibility="{Binding IsAutoLiking, Converter={StaticResource Vis}}">
+                                    Visibility="{Binding AutoLike.IsRunning, Converter={StaticResource Vis}}">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Style="{StaticResource Icon}" Text="&#xE87D;" FontSize="13" Foreground="{StaticResource PinkBrush}" Margin="0,0,6,0" />
                                     <TextBlock Text="إعجاب تلقائي..." FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource PinkBrush}" />
@@ -620,13 +644,27 @@
                                     </DockPanel>
                                     <ProgressBar Grid.Row="1" IsIndeterminate="True" Height="3" Margin="4,0,4,6"
                                                  Visibility="{Binding IsLoadingTray, Converter={StaticResource Vis}}" />
-                                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-                                        <ItemsControl ItemsSource="{Binding TrayUsers}">
+                                    <!-- virtualized: only the visible rows exist, even with hundreds of accounts -->
+                                    <ItemsControl Grid.Row="2" ItemsSource="{Binding TrayUsers}"
+                                                  VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
+                                                  VirtualizingPanel.ScrollUnit="Pixel" ScrollViewer.CanContentScroll="True">
+                                            <ItemsControl.Template>
+                                                <ControlTemplate TargetType="ItemsControl">
+                                                    <ScrollViewer VerticalScrollBarVisibility="Auto" CanContentScroll="True" Focusable="False">
+                                                        <ItemsPresenter />
+                                                    </ScrollViewer>
+                                                </ControlTemplate>
+                                            </ItemsControl.Template>
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <VirtualizingStackPanel />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate DataType="{x:Type vm:TrayUserViewModel}">
                                                     <Button Style="{StaticResource RowButton}" Padding="6,5"
                                                             Command="{Binding DataContext.OpenUserCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                            CommandParameter="{Binding}">
+                                                            CommandParameter="{Binding}" AutomationProperties.Name="{Binding Username}">
                                                         <DockPanel>
                                                             <Viewbox Width="40" Height="40" DockPanel.Dock="Left">
                                                                 <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource Avatar}" />
@@ -646,7 +684,6 @@
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
-                                    </ScrollViewer>
                                 </Grid>
                             </Border>
                         </Grid>
@@ -664,6 +701,8 @@
                 <!-- ==================================================== page: settings -->
                 <pages:HistoryPage Grid.Column="1"
                                  Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=History}" />
+                <pages:CommentPage Grid.Column="1"
+                                 Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=Comment}" />
                 <pages:SettingsPage Grid.Column="1"
                                  Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=Settings}" />
 

@@ -1,10 +1,12 @@
+using InstagramStoryViewer.Gui.Resources;
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using InstagramStoryViewer.Gui.Services;
 using InstagramStoryViewer.Models;
 
 namespace InstagramStoryViewer.Gui.ViewModels;
 
-public enum AppPage { Dashboard, Following, Downloads, History, Settings }
+public enum AppPage { Dashboard, Following, Downloads, History, Comment, Settings }
 
 public enum DownloadState { None, Queued, Downloading, Done, Failed }
 
@@ -54,7 +56,7 @@ public sealed partial class StoryRowViewModel : ObservableObject
         HighlightId = highlightId;
         PostedText = Format.Ago(item.TakenAtTime);
         ExpiresText = IsHighlight ? "—" : Format.Remaining(item.ExpiresAtTime);
-        TypeText = item.IsVideo ? $"فيديو {Format.Duration(item.VideoDuration)}".Trim() : "صورة";
+        TypeText = item.IsVideo ? string.Format(CultureInfo.CurrentCulture, Strings.TypeVideo, Format.Duration(item.VideoDuration)).Trim() : Strings.TypeImage;
     }
 
     public StoryItem Item { get; private set; }
@@ -107,10 +109,10 @@ public sealed partial class StoryRowViewModel : ObservableObject
 
     public string SeenTooltip => SeenState switch
     {
-        WatchOutcome.Verified => "شوهد (أكّد إنستجرام ذلك)",
-        WatchOutcome.Shown => "عُرض، لكن لم يتأكد إنستجرام بعد",
-        WatchOutcome.Failed => "عُرض لكن إنستجرام لم يسجّله كمشاهَد",
-        _ => "تعليم كمشاهَد"
+        WatchOutcome.Verified => Strings.SeenVerifiedTooltip,
+        WatchOutcome.Shown => Strings.SeenShownTooltip,
+        WatchOutcome.Failed => Strings.SeenFailedTooltip,
+        _ => Strings.MarkSeenTooltip
     };
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(StatusText))] private string? _error;
 
@@ -118,10 +120,10 @@ public sealed partial class StoryRowViewModel : ObservableObject
 
     public string StatusText => State switch
     {
-        DownloadState.Done => "تم",
-        DownloadState.Queued => "في الانتظار",
+        DownloadState.Done => Strings.DownloadDone,
+        DownloadState.Queued => Strings.DownloadQueued,
         DownloadState.Downloading => "",
-        DownloadState.Failed => "فشل",
+        DownloadState.Failed => Strings.DownloadFailed,
         _ => "—"
     };
 }
@@ -161,24 +163,32 @@ public sealed class WatchRecordViewModel
         TimeText = r.Time.ToString("yyyy/MM/dd  HH:mm");
         ModeText = r.Mode switch
         {
-            WatchMode.Manual => "يدوي",
-            WatchMode.Preview => "عند المعاينة",
-            WatchMode.AutoLike => r.IsPost ? "إعجاب بمنشور" : "إعجاب بستوري",
-            _ => "تلقائي"
+            WatchMode.Manual => Strings.ModeManual,
+            WatchMode.Preview => Strings.ModePreview,
+            WatchMode.AutoLike => r.IsPost ? Strings.ModeLikePost : Strings.ModeLikeStory,
+            WatchMode.Comment => Strings.ModeComment,
+            _ => Strings.ModeAuto
         };
         ResultText = (r.Mode, r.Outcome) switch
         {
-            (WatchMode.AutoLike, WatchOutcome.Verified) => "أُعجب (مؤكَّد)",
-            (WatchMode.AutoLike, WatchOutcome.Failed) => "فشل الإعجاب",
-            (_, WatchOutcome.Verified) => "مؤكَّد",
-            (_, WatchOutcome.Shown) => "عُرض (غير مؤكَّد)",
-            (_, WatchOutcome.Failed) => "لم يُسجَّل",
-            _ => "لم يُعرض"
+            (WatchMode.AutoLike, WatchOutcome.Verified) => Strings.ResultLiked,
+            (WatchMode.AutoLike, WatchOutcome.Failed) => Strings.ResultLikeFailed,
+            (WatchMode.Comment, WatchOutcome.Verified) => Strings.ResultCommentPosted,
+            (WatchMode.Comment, WatchOutcome.Shown) => Strings.ResultCommentSent,
+            (WatchMode.Comment, WatchOutcome.Failed) => Strings.ResultCommentFailed,
+            (_, WatchOutcome.Verified) => Strings.ResultVerified,
+            (_, WatchOutcome.Shown) => Strings.ResultShown,
+            (_, WatchOutcome.Failed) => Strings.ResultNotRecorded,
+            _ => Strings.ResultNotShown
         };
     }
 
     public WatchRecord Record { get; }
-    public string Username => Record.Username;
+    public string Username => Record.Username.Length > 0 ? Record.Username : Strings.HistoryPostFallbackName;
+
+    /// <summary>The comment text (comments only), shown under the row.</summary>
+    public string? Detail => Record.Text;
+    public bool HasDetail => !string.IsNullOrEmpty(Record.Text);
     public WatchOutcome Outcome => Record.Outcome;
     public string TimeText { get; }
     public string ModeText { get; }

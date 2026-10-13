@@ -244,6 +244,14 @@ public sealed class InstagramClient : IDisposable
         return res.Items?.Where(p => p.Code is not null).OrderByDescending(p => p.TakenAt).ToList() ?? new List<FeedPost>();
     }
 
+    /// <summary>One post by its numeric media id (owner, like state, whether comments are off).</summary>
+    public async Task<FeedPost?> GetMediaInfoAsync(string mediaId, CancellationToken ct = default)
+    {
+        var res = await SendAsync<MediaInfoResponse>(
+            HttpMethod.Get, $"/api/v1/media/{Uri.EscapeDataString(mediaId)}/info/", null, ct).ConfigureAwait(false);
+        return res.Items?.FirstOrDefault();
+    }
+
     /// <summary>The highlights (saved story collections) shown on a profile.</summary>
     public async Task<List<Highlight>> GetHighlightsAsync(string userId, CancellationToken ct = default)
     {

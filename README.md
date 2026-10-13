@@ -11,7 +11,10 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
 - It's a single self-contained file, so .NET doesn't need to be installed (Windows 10/11, 64-bit). Double-click to run it.
 - Next to it is `InstagramStoryViewer.exe.sha256`, which you can use to verify the file (`Get-FileHash InstagramStoryViewer.exe` in PowerShell).
 - The file isn't digitally signed, so Windows SmartScreen may warn you the first time: click **More info**, then **Run anyway**.
-- The app checks for new versions on every start and every 6 hours, and shows an update banner when one is available. You can also check manually from Settings: **Check now**.
+- The app checks for new versions on every start and every 6 hours. When one is available, press **Update now** (on the dashboard or in Settings):
+  - It downloads the new exe and checks it against the published SHA-256.
+  - It then replaces itself and restarts.
+  - If it can't (for example, the exe is in a protected folder), it opens the download page instead.
 
 ## Features
 
@@ -63,6 +66,28 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
 - **History:** every like is recorded in the history.
 - Overusing automated likes can get your account restricted.
 
+### Commenting on a post
+- **Comment** page (`Ctrl+5`):
+  1. Paste the link of a post or reel.
+  2. Write your comment.
+  3. Press **Post comment**.
+- The app first checks the comment against Instagram's limits:
+  - At most 2,200 characters.
+  - At most 30 hashtags.
+  - At most 5 mentions.
+- Before posting, it shows you the comment and the post owner and asks you to confirm. It warns you if you already posted the same comment on that post.
+- **How it works:**
+  - The post opens in the embedded browser.
+  - The comment is typed into the post's own comment box and **Post** is pressed.
+  - The app then waits until the comment actually appears on the page: **posted**, **sent but unconfirmed**, or **not posted** (comments off, or an error from Instagram).
+- Every comment is recorded in the history together with its text.
+
+### Keyboard
+- `Ctrl+1` … `Ctrl+6`: switch pages.
+- `F5`: refresh.
+- `Ctrl+F`: search.
+- `Tab`: moves between controls with a visible focus ring. Icon buttons have names for screen readers.
+
 ![Following](docs/screenshots/following.png)
 
 | History | Full screen |
@@ -79,6 +104,24 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
 - The session is stored encrypted with Windows DPAPI.
 - The diagnostics file and the log mask tokens and account identifiers.
 
+### Reliability
+- **Requests to Instagram:**
+  - Retried with exponential backoff and jitter. `Retry-After` is honored.
+  - If Instagram itself says "too many requests", **all** requests pause for 10 minutes, to protect the account.
+- **Background jobs:** auto-watch, auto-like and favorites run in one queue, one at a time. A refresh never starts an overlapping round.
+- **Storage:**
+  - History and the list of already-handled posts live in a small SQLite database. Old rows expire on their own: 180 days for history, 30 days for handled posts.
+  - Settings are written once changes settle, not on every click. Older settings files are upgraded automatically.
+- **Page selectors:** the button labels and the comment box the embedded browser looks for are kept in `config/selectors.json`.
+  - When Instagram changes its page, fixing that file in the repository updates every copy of the app within a day, with no new release.
+  - Only data is downloaded, never code.
+  - A local override can be placed in `%AppData%\InstagramStoryViewer\selectors.json`.
+- **Images:**
+  - Profile pictures and thumbnails are cached on disk at the size they are shown (7 days, at most 150 MB).
+  - Long lists only create the rows that are visible.
+- **Crashes:** anything unexpected writes a crash report (sensitive values masked) next to the run log, and the app keeps running when it can.
+- **Display:** per-monitor DPI, and the window reopens where you left it.
+
 ### Running in the background
 - Closing the window keeps the app running in the **notification area** next to the clock (Open / Refresh / Auto-watch / Quit).
 - An option to **start with Windows**, minimized.
@@ -93,25 +136,36 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
 | What | Where |
 |---|---|
 | Settings and encrypted session | `%AppData%\InstagramStoryViewer\settings.json` (+ `.bak`) |
-| Watch history | `%AppData%\InstagramStoryViewer\watch-history.jsonl` |
+| History (watched, liked, commented) | `%AppData%\InstagramStoryViewer\history.db` (SQLite; the old `watch-history.jsonl` is imported once) |
+| Page selectors fetched from GitHub / local override | `%AppData%\InstagramStoryViewer\selectors.remote.json` / `selectors.json` |
 | Last unexpected server response (tokens masked) | `%AppData%\InstagramStoryViewer\last-response.txt` |
-| Daily run log (7 days) | `%LocalAppData%\InstagramStoryViewer\logs\` |
+| Daily run log (7 days) and crash reports | `%LocalAppData%\InstagramStoryViewer\logs\` |
+| Image cache | `%LocalAppData%\InstagramStoryViewer\cache\images\` |
 | Embedded browser data | `%LocalAppData%\InstagramStoryViewer\WebView2\` |
 
 ## Project structure
 ```
 InstagramStoryViewer.sln
 src/
-├── InstagramStoryViewer.Core/     # Instagram API: requests, response parsing, errors, downloads, log
-├── InstagramStoryViewer.Gui/      # WPF interface (MVVM) → InstagramStoryViewer.exe
-│   ├── Views/                     # main window, Pages/ (pages), full-screen viewer, watch window, login window
-│   ├── ViewModels/                # MainViewModel split by function (Session, Stories, Downloads, Watch, Accounts, ...)
-│   ├── Services/                  # settings, watch history, tray icon, startup with Windows, update check
+├── InstagramStoryViewer.Core/     # no UI; fully unit-tested
+│   ├── Api/                       # Instagram client (Polly retries, rate-limit cool-down), cookies, errors
+│   ├── Json/                      # source-generated JSON (de)serializers
+│   ├── Automation/                # Planner (what to watch/like), DailyCount, QuietHours, JobQueue
+│   ├── Social/                    # post links, comment rules
+│   ├── Storage/                   # SQLite history + handled media
+│   └── Diagnostics/               # daily log, crash reports, sanitizer
+├── InstagramStoryViewer.Gui/      # WPF interface (MVVM, dependency injection) → InstagramStoryViewer.exe
+│   ├── Views/                     # main window, Pages/, full-screen viewer, embedded-browser window, login
+│   ├── ViewModels/                # MainViewModel (partials) + AutoLike, Comment and Updates view models
+│   ├── Services/                  # settings (debounced), history, image cache, page selectors, updater, tray
+│   ├── Resources/                 # Strings.resx (view-model texts), built-in selectors.json
 │   ├── Themes/Theme.xaml          # colors, styles and shared templates
 │   └── Fonts/                     # Cairo + Material Icons (embedded)
 └── InstagramStoryViewer/          # command-line version
-tests/InstagramStoryViewer.Tests/  # xUnit tests for the core library
-.github/workflows/build.yml        # CI: tests + exe build; tags v* publish a Release
+config/selectors.json              # page selectors served to installed copies
+tests/InstagramStoryViewer.Tests/  # xUnit tests + Fixtures/ (sample Instagram responses)
+.github/workflows/build.yml        # CI: tests + coverage, exe build, optional signing, Releases
+.github/dependabot.yml             # weekly dependency updates
 designs/                           # the five proposed interface designs
 ```
 
@@ -127,6 +181,10 @@ To publish a new version, bump `<Version>` in `InstagramStoryViewer.Gui.csproj`,
 
 In both cases, GitHub Actions builds the exe and adds it to Releases.
 
+- Warnings fail the build (`Directory.Build.props`, `.editorconfig`).
+- The core library must use `ConfigureAwait(false)` (CA2007).
+- **Code signing:** add the repository secrets `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT` and `AZURE_CERT_PROFILE` (Azure Trusted Signing), and every release is signed automatically. Without them it stays unsigned.
+
 ## Instagram endpoints used
 | Purpose | Endpoint |
 |---|---|
@@ -136,6 +194,8 @@ In both cases, GitHub Actions builds the exe and adds it to Releases.
 | Stories of an account or highlight, or several accounts at once | `GET /api/v1/feed/reels_media/?reel_ids=..` |
 | An account's latest posts (auto-like) | `GET /api/v1/feed/user/{id}/?count=..` |
 | Like | Presses the like button in the embedded browser |
+| Post info for a comment (owner, comments off) | `GET /api/v1/media/{id}/info/` |
+| Comment | Typed into the post's comment box in the embedded browser |
 | An account's highlights | `GET /api/v1/highlights/{id}/highlights_tray/` |
 | Mark as seen | Plays the story in the embedded browser (the old REST endpoint returns 404) |
 

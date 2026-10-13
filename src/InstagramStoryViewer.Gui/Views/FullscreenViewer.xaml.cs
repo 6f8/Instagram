@@ -84,6 +84,19 @@ public partial class FullscreenViewer : Window
         }
     }
 
+    /// <summary>Fire-and-forget wrapper for key and timer handlers: a failure is logged, never lost or fatal.</summary>
+    private async void Show(int index)
+    {
+        try
+        {
+            await ShowAsync(index);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            InstagramStoryViewer.Diagnostics.AppLog.Error("Full-screen viewer failed to show a story", ex);
+        }
+    }
+
     private async Task ShowAsync(int index)
     {
         if (_vm.Stories.Count == 0)
@@ -157,7 +170,7 @@ public partial class FullscreenViewer : Window
             if (progress >= 1)
             {
                 _tick.Stop();
-                _ = ShowAsync(_index + 1);
+                Show(_index + 1);
                 return;
             }
         }
@@ -183,8 +196,8 @@ public partial class FullscreenViewer : Window
         }
     }
 
-    private void Next() => _ = ShowAsync(_index + 1);
-    private void Prev() => _ = ShowAsync(Math.Max(0, _index - 1));
+    private void Next() => Show(_index + 1);
+    private void Prev() => Show(Math.Max(0, _index - 1));
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {

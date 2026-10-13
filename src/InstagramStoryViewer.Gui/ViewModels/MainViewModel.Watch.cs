@@ -1,9 +1,12 @@
+using InstagramStoryViewer.Gui.Resources;
+using System.Globalization;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using InstagramStoryViewer.Api;
+using InstagramStoryViewer.Automation;
 using InstagramStoryViewer.Diagnostics;
 using InstagramStoryViewer.Gui.Services;
 using InstagramStoryViewer.Services;
@@ -28,16 +31,16 @@ public sealed partial class MainViewModel
         if (row is null || _client is null) return;
         if (row.IsHighlight)
         {
-            ShowToast("لا يمكن تعليم الهايلايت كمشاهَد، فقط الستوريات الحالية.");
+            ShowToast(Strings.HighlightCannotBeSeen);
             return;
         }
         if (IsExcluded(row.OwnerId) &&
-            !_dialogs.Confirm($"{row.Username} في قائمة الاستثناء من المشاهدة. هل تريد مشاهدة الستوري رغم ذلك؟"))
+            !_dialogs.Confirm(string.Format(CultureInfo.CurrentCulture, Strings.ExcludedWatchConfirm, row.Username)))
             return;
-        if (ConfirmBeforeMarkSeen && !_dialogs.Confirm($"سيُفتح الستوري في المتصفح المدمج وسيظهر اسمك في قائمة مشاهديه لدى {row.Username}. متابعة؟"))
+        if (ConfirmBeforeMarkSeen && !_dialogs.Confirm(string.Format(CultureInfo.CurrentCulture, Strings.WatchOneConfirm, row.Username)))
             return;
         var ok = await WatchAsync([ToTarget(row)], WatchMode.Manual);
-        ShowToast(ok > 0 ? "تمت مشاهدة الستوري" : "لم تتم مشاهدة الستوري (راجع سجل المشاهدات)", isError: ok == 0);
+        ShowToast(ok > 0 ? Strings.WatchedOne : Strings.NotWatchedOne, isError: ok == 0);
         UpdateTraySeen(row.Username);
     }
 
@@ -48,16 +51,16 @@ public sealed partial class MainViewModel
         var pending = Stories.Where(s => !s.MarkedSeen && !s.IsHighlight).ToList();
         if (pending.Count == 0)
         {
-            ShowToast("كل الستوريات مشاهَدة مسبقاً");
+            ShowToast(Strings.AllAlreadySeen);
             return;
         }
         if (IsExcluded(pending[0].OwnerId) &&
-            !_dialogs.Confirm($"{CurrentUsername} في قائمة الاستثناء من المشاهدة. هل تريد المتابعة رغم ذلك؟"))
+            !_dialogs.Confirm(string.Format(CultureInfo.CurrentCulture, Strings.ExcludedContinueConfirm, CurrentUsername)))
             return;
-        if (ConfirmBeforeMarkSeen && !_dialogs.Confirm($"ستُعرض {pending.Count} ستوري في المتصفح المدمج وسيظهر اسمك في قائمة مشاهدي {CurrentUsername}. متابعة؟"))
+        if (ConfirmBeforeMarkSeen && !_dialogs.Confirm(string.Format(CultureInfo.CurrentCulture, Strings.WatchAllConfirm, pending.Count, CurrentUsername)))
             return;
         var ok = await WatchAsync(pending.Select(ToTarget).ToList(), WatchMode.Manual);
-        ShowToast($"تمت مشاهدة {ok} من {pending.Count}", isError: ok < pending.Count);
+        ShowToast(string.Format(CultureInfo.CurrentCulture, Strings.WatchedXOfY, ok, pending.Count), isError: ok < pending.Count);
         if (CurrentUsername is not null) UpdateTraySeen(CurrentUsername);
     }
 
@@ -71,7 +74,7 @@ public sealed partial class MainViewModel
     private async Task<int> WatchAsync(IReadOnlyList<WatchTarget> targets, WatchMode mode, Action<int>? onShown = null)
     {
         if (_client is null || targets.Count == 0) return 0;
-        var urls = targets.Select(t => StoryUrl(t.Username, t.Item)).ToList();
+        var urls = targets.Select(t => Planner.StoryUrl(t.Username, t.Item)).ToList();
         AppLog.Info($"Watch start: {targets.Count} stories, mode {mode}");
 
         var shown = await _dialogs.WatchStoriesAsync(_client.Cookies.ToHeader(), urls, background: mode != WatchMode.Manual, onShown);
@@ -93,12 +96,10 @@ public sealed partial class MainViewModel
                 };
             if (outcome is WatchOutcome.Verified or WatchOutcome.Shown) ok++;
             if (t.Row is not null && outcome != WatchOutcome.NotShown) t.Row.SeenState = outcome;
-            records.Add(new WatchRecord(DateTime.Now, t.Username, key, mode, outcome));
+            records.Add(new WatchRecord(Now.LocalDateTime, t.Username, key, mode, outcome));
         }
 
-        WatchHistory.Append(records);
-        foreach (var r in records) History.Insert(0, new WatchRecordViewModel(r));
-        while (History.Count > 1000) History.RemoveAt(History.Count - 1);
+        AddHistory(records);
 
         AppLog.Info($"Watch done: {ok}/{targets.Count} ok; outcomes " +
                     string.Join(", ", records.GroupBy(r => r.Outcome).Select(g => $"{g.Key}={g.Count()}")));
@@ -133,42 +134,19 @@ public sealed partial class MainViewModel
         return result;
     }
 
-    private static string StoryUrl(string username, Models.StoryItem item)
-    {
-        var pk = item.Pk ?? item.Id?.Split('_')[0];
-        return $"https://www.instagram.com/stories/{Uri.EscapeDataString(username)}/{pk}/";
-    }
-
     // ================================================================== auto-watch rules
 
-    private bool IsExcluded(string userId) => _settings.ExcludedFromWatch.Any(a => a.UserId == userId);
+    public bool IsExcluded(string userId) => _settings.ExcludedFromWatch.Any(a => a.UserId == userId);
 
     /// <summary>True inside the configured quiet hours (wrapping past midnight, e.g. 1 → 8 or 23 → 7).</summary>
-    public bool IsQuietNow
-    {
-        get
-        {
-            if (!QuietHoursEnabled || QuietFrom == QuietTo) return false;
-            var h = DateTime.Now.Hour;
-            return QuietFrom < QuietTo ? h >= QuietFrom && h < QuietTo : h >= QuietFrom || h < QuietTo;
-        }
-    }
+    public bool IsQuietNow => QuietHours.Contains(QuietHoursEnabled, QuietFrom, QuietTo, Now.Hour);
 
-    private void ResetDailyCounterIfNeeded()
-    {
-        var today = DateTime.Now.ToString("yyyy-MM-dd");
-        if (_settings.AutoWatchDay == today) return;
-        _settings.AutoWatchDay = today;
-        _settings.AutoWatchedToday = 0;
-    }
-
-    private int AutoWatchBudget => Math.Max(0, AutoWatchDailyLimit - AutoWatchedToday);
+    private int AutoWatchBudget => _settings.AutoWatchCount.Remaining(AutoWatchDailyLimit, Now);
 
     private void CountAutoWatched(int n)
     {
         if (n <= 0) return;
-        ResetDailyCounterIfNeeded();
-        _settings.AutoWatchedToday += n;
+        _settings.AutoWatchCount.Add(n, Now);
         SaveSettings();
         OnPropertyChanged(nameof(AutoWatchStatus));
     }
@@ -204,8 +182,8 @@ public sealed partial class MainViewModel
     public int AutoWatchRemaining => Math.Max(0, AutoWatchTotal - AutoWatchDone);
 
     public string AutoWatchProgressText => AutoWatchTotal == 0
-        ? "جاري تجهيز قائمة الستوريات..."
-        : $"تمت مشاهدة {AutoWatchDone} من {AutoWatchTotal} · باقي {AutoWatchRemaining}";
+        ? Strings.AutoWatchPreparing
+        : string.Format(CultureInfo.CurrentCulture, Strings.AutoWatchProgress, AutoWatchDone, AutoWatchTotal, AutoWatchRemaining);
 
     /// <summary>Stops the running auto-watch immediately (the setting stays on for the next refresh).</summary>
     [RelayCommand]
@@ -221,16 +199,17 @@ public sealed partial class MainViewModel
     /// the next). Bounded by the daily limit, quiet hours and the exclusion list. Stories newer than the
     /// reel's "seen" marker are the unseen ones.
     /// </summary>
-    private async Task RunAutoWatchAsync()
+    private async Task RunAutoWatchAsync(CancellationToken jobToken)
     {
         if (!AutoWatchNew || IsAutoWatching || _client is null || IsQuietNow) return;
         var budget = AutoWatchBudget;
         if (budget == 0) return;
 
-        var candidates = TrayUsers.Where(u => u.HasUnseen && !IsExcluded(u.UserId)).ToList();
+        var candidates = TrayUsers.Where(u => u.HasUnseen && !IsExcluded(u.UserId))
+            .Select(u => new AccountTarget(u.UserId, u.Username)).ToList();
         if (candidates.Count == 0) return;
 
-        _autoWatchCts = CancellationTokenSource.CreateLinkedTokenSource(_lifetimeCts.Token);
+        _autoWatchCts = CancellationTokenSource.CreateLinkedTokenSource(jobToken, _lifetimeCts.Token);
         var ct = _autoWatchCts.Token;
         AutoWatchDone = 0;
         AutoWatchTotal = 0;
@@ -240,16 +219,9 @@ public sealed partial class MainViewModel
         {
             // One reels request per 20 accounts gives the full list (and the total for the progress bar).
             var reels = await _client.GetStoriesForUsersAsync(candidates.Select(t => t.UserId), ct);
-            var queue = new List<WatchTarget>();
-            foreach (var reel in reels)
-            {
-                var user = candidates.FirstOrDefault(t => t.UserId == (reel.User?.Pk ?? reel.Id));
-                if (user is null) continue;
-                var seen = reel.Seen ?? 0;
-                foreach (var item in reel.Items!.Where(i => i.TakenAt > seen))
-                    queue.Add(new WatchTarget(user.Username, user.UserId, item, Stories.FirstOrDefault(r => r.Item.Pk == item.Pk)));
-            }
-            queue = queue.Take(budget).ToList();
+            var queue = Planner.UnseenStories(reels, candidates, budget)
+                .Select(p => new WatchTarget(p.Account.Username, p.Account.UserId, p.Story!, Stories.FirstOrDefault(r => r.Item.Pk == p.MediaPk)))
+                .ToList();
             AutoWatchTotal = queue.Count;
             if (queue.Count == 0) return;
             AppLog.Info($"Auto-watch: {queue.Count} stories from {candidates.Count} accounts");
@@ -267,7 +239,7 @@ public sealed partial class MainViewModel
                 MarkFullyWatchedAccounts(chunk);
             }
 
-            if (watchedTotal > 0) _dialogs.Notify("المشاهدة التلقائية", $"تمت مشاهدة {watchedTotal} ستوري");
+            if (watchedTotal > 0) _dialogs.Notify(Strings.AutoWatchTitle, string.Format(CultureInfo.CurrentCulture, Strings.AutoWatchDoneMessage, watchedTotal));
         }
         catch (InstagramApiException ex)
         {

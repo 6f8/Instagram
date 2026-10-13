@@ -36,9 +36,15 @@ public sealed class ImageSourceConverter : IValueConverter
         if (!Uri.TryCreate(s, UriKind.Absolute, out var uri)) return null;
         try
         {
+            // Remote thumbnails come from the disk cache when possible, and are added to it once downloaded.
+            var remote = width > 0 && uri.Scheme is "http" or "https";
+            var diskCopy = remote ? Services.ImageDiskCache.TryGet(uri, width) : null;
+
             var bmp = new BitmapImage();
             bmp.BeginInit();
-            bmp.UriSource = uri;
+            bmp.UriSource = diskCopy is not null ? new Uri(diskCopy) : uri;
+            if (remote && diskCopy is null)
+                bmp.DownloadCompleted += (_, _) => Services.ImageDiskCache.Store(uri, width, bmp);
             if (width > 0) bmp.DecodePixelWidth = width;
             // OnLoad releases local files right away so they can be deleted or moved.
             bmp.CacheOption = BitmapCacheOption.OnLoad;

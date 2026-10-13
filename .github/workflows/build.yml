@@ -18,6 +18,9 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      # Signing runs only when the Azure Trusted Signing secrets exist (see the "Sign exe" step).
+      SIGNING_ENABLED: ${{ secrets.AZURE_CLIENT_ID != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -25,11 +28,50 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Test
-        run: dotnet test tests/InstagramStoryViewer.Tests -c Release
+      # NuGet packages are restored from cache when no project file changed.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Test (with coverage)
+        run: dotnet test tests/InstagramStoryViewer.Tests -c Release --collect "XPlat Code Coverage" --results-directory coverage
+
+      - name: Coverage summary
+        shell: pwsh
+        run: |
+          $report = Get-ChildItem coverage -Recurse -Filter coverage.cobertura.xml | Select-Object -First 1
+          [xml]$xml = Get-Content $report.FullName
+          $line = [math]::Round([double]$xml.coverage.'line-rate' * 100, 1)
+          $branch = [math]::Round([double]$xml.coverage.'branch-rate' * 100, 1)
+          "### Test coverage (core library)`n`nLines: **$line%** · Branches: **$branch%**" >> $env:GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/**/coverage.cobertura.xml
 
       - name: Publish single-file exe
         run: dotnet publish src/InstagramStoryViewer.Gui -c Release -r win-x64 -o out
+
+      # Optional code signing (removes the SmartScreen warning). Runs only when the repository has the
+      # Azure Trusted Signing secrets configured; without them the exe is published unsigned, as before.
+      - name: Sign exe
+        if: env.SIGNING_ENABLED == 'true'
+        uses: azure/trusted-signing-action@v0.5.1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
+          files-folder: out
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
 
       - name: Checksum and version
         id: meta

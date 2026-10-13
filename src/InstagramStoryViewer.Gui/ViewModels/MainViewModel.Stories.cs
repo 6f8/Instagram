@@ -1,3 +1,5 @@
+using InstagramStoryViewer.Gui.Resources;
+using System.Globalization;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows.Threading;
@@ -49,7 +51,7 @@ public sealed partial class MainViewModel
         }
         catch (Exception ex) when (ex is InstagramApiException or HttpRequestException or IOException or UnauthorizedAccessException)
         {
-            ShowToast($"تعذّر تحميل الفيديو للمعاينة: {ex.Message}", isError: true);
+            ShowToast(string.Format(CultureInfo.CurrentCulture, Strings.PreviewVideoFailed, ex.Message), isError: true);
             return null;
         }
         finally
@@ -85,7 +87,7 @@ public sealed partial class MainViewModel
             var profile = await _client.GetProfileAsync(name, ct);
             if (profile.IsPrivate && !profile.FollowedByViewer && profile.Id != _client.ViewerId)
             {
-                EmptyMessage = $"{profile.Username} حساب خاص ولا تتابعه، لا يمكن عرض ستورياته.";
+                EmptyMessage = string.Format(CultureInfo.CurrentCulture, Strings.PrivateAccountNotFollowed, profile.Username);
                 return null;
             }
             return (profile.Username ?? name, profile.Id!);
@@ -132,7 +134,7 @@ public sealed partial class MainViewModel
             ct.ThrowIfCancellationRequested();
             if (reel?.Items is null)
             {
-                EmptyMessage = $"لا توجد ستوريات حالية لدى {username}";
+                EmptyMessage = string.Format(CultureInfo.CurrentCulture, Strings.NoCurrentStories, username);
                 return;
             }
 
