@@ -23,6 +23,8 @@
 
   <!-- dotnet publish -c Release -r win-x64 → single self-contained .exe (no .NET install needed) -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <!-- explicit RID: a self-contained build otherwise targets the build machine (fails on Linux/macOS) -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
