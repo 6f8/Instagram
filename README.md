@@ -85,8 +85,9 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
 ### Not following back
 - The **Not following back** page (`Ctrl+6`) lists the accounts you follow that don't follow you.
 - **How it works:** press **Check now**. The app reads your *following* and *followers* lists and compares them.
+- **Where the lists are read:** from inside the logged-in instagram.com page in the embedded browser, with the same requests the site makes when you scroll the followers dialog. Instagram answers the same requests sent from outside the browser with "please wait a few minutes".
 - **Request cost:**
-  - Every 50 accounts cost one request, with a short pause between requests. Instagram's own site requests small pages too, and large pages are what triggers "please wait a few minutes".
+  - Every 12 accounts cost one request (the page size the site uses), with a pause of 1.5–3.5 s between requests.
   - The app tells you the cost first, and asks to confirm if it is more than 10 requests.
   - It refuses to start if the hourly request cap would cut the check short, because a partial followers list would give wrong results.
 - It warns you if Instagram returned fewer followers than your profile shows.
@@ -208,7 +209,7 @@ In both cases, GitHub Actions builds the exe and adds it to Releases.
 | Stories of followed accounts | `GET /api/v1/feed/reels_tray/` |
 | Stories of an account or highlight, or several accounts at once | `GET /api/v1/feed/reels_media/?reel_ids=..` |
 | An account's latest posts (auto-like) | `GET /api/v1/feed/user/{id}/?count=..` |
-| Following / followers (not following back) | `GET /api/v1/friendships/{id}/following/` and `/followers/?count=50&max_id=..` |
+| Following / followers (not following back) | `GET /api/v1/friendships/{id}/following/` and `/followers/?count=12&max_id=..`, fetched inside the embedded browser |
 | Like | Presses the like button in the embedded browser |
 | Post info for a comment (owner, comments off) | `GET /api/v1/media/{id}/info/` |
 | Comment | Typed into the post's comment box in the embedded browser |

@@ -47,6 +47,13 @@ public interface IDialogService
 
     void CopyToClipboard(string text);
 
+    /// <summary>
+    /// Runs <paramref name="work"/> with a function that fetches Instagram API paths from inside the logged-in
+    /// instagram.com page in the embedded browser (for requests Instagram refuses from outside the browser).
+    /// </summary>
+    Task<T> WithInstagramPageAsync<T>(string cookieHeader,
+        Func<Func<string, CancellationToken, Task<Social.PageResult>>, CancellationToken, Task<T>> work);
+
     /// <summary>Quits the app for real (also from the notification area), e.g. to let an update replace it.</summary>
     void ExitApplication();
 }

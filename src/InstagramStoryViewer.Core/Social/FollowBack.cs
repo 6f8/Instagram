@@ -13,6 +13,6 @@ public static class FollowBack
     }
 
     /// <summary>Requests needed to read both lists (<paramref name="pageSize"/> accounts per page, at least one page each).</summary>
-    public static int EstimateRequests(int following, int followers, int pageSize = Api.InstagramClient.FollowListPageSize) =>
+    public static int EstimateRequests(int following, int followers, int pageSize = FollowListReader.PageSize) =>
         Math.Max(1, (following + pageSize - 1) / pageSize) + Math.Max(1, (followers + pageSize - 1) / pageSize);
 }

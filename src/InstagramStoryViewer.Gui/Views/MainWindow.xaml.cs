@@ -401,6 +401,10 @@ public partial class MainWindow : Window, IDialogService
 
     public void ExitApplication() => ExitApp();
 
+    public Task<T> WithInstagramPageAsync<T>(string cookieHeader,
+        Func<Func<string, CancellationToken, Task<InstagramStoryViewer.Social.PageResult>>, CancellationToken, Task<T>> work) =>
+        RunInWatcherAsync(w => w.UseInstagramPageAsync(cookieHeader, work), background: true);
+
     public void CopyToClipboard(string text)
     {
         try { Clipboard.SetText(text); }

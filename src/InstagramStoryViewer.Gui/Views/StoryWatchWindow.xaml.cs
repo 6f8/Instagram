@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Windows;
+using InstagramStoryViewer.Api;
 using InstagramStoryViewer.Diagnostics;
+using InstagramStoryViewer.Social;
 using InstagramStoryViewer.Gui.Services;
 using Microsoft.Web.WebView2.Core;
 
@@ -127,6 +129,20 @@ public partial class StoryWatchWindow : Window
           if (cleared && body.includes(snippet)) return 'posted';
           return cleared ? 'cleared' : 'pending';
         })(__CFG__, __SNIPPET__)
+        """;
+
+    // A same-origin request from inside instagram.com, with the headers the site's own code sends.
+    private const string PageFetchScript = """
+        (async (path) => {
+          const csrf = (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || '';
+          const claim = sessionStorage.getItem('www-claim-v2') || '0';
+          const r = await fetch(path, {
+            credentials: 'include',
+            headers: { 'X-IG-App-ID': '936619743392459', 'X-Requested-With': 'XMLHttpRequest',
+                       'X-CSRFToken': csrf, 'X-IG-WWW-Claim': claim, 'X-ASBD-ID': '129477' }
+          });
+          return JSON.stringify({ status: r.status, body: await r.text() });
+        })(__PATH__)
         """;
 
     private readonly PageSelectors _selectors;
@@ -326,6 +342,70 @@ public partial class StoryWatchWindow : Window
             catch (InvalidOperationException) { }
         }
         return results;
+    }
+
+    /// <summary>
+    /// Opens instagram.com in this window and hands <paramref name="work"/> a function that fetches API paths
+    /// from inside the page — the same requests, cookies and headers as the site itself (Instagram refuses
+    /// some of them, such as follow lists, from outside the browser). The Stop button cancels the work.
+    /// </summary>
+    public async Task<T> UseInstagramPageAsync<T>(string cookieHeader,
+        Func<Func<string, CancellationToken, Task<PageResult>>, CancellationToken, Task<T>> work)
+    {
+        _batchCts = new CancellationTokenSource();
+        var ct = _batchCts.Token;
+        try
+        {
+            _init ??= InitializeBrowserAsync();
+            await _init;
+            if (_closed) throw new OperationCanceledException();
+
+            var core = Web.CoreWebView2;
+            ApplySessionCookies(core, cookieHeader);
+            StatusText.Text = "جاري فتح إنستجرام...";
+            Progress.IsIndeterminate = true;
+            var opened = await OpenPageAsync(core, "https://www.instagram.com/", ct);
+            if (opened == "login")
+                throw new InstagramApiException(InstagramErrorKind.LoginRequired, "المتصفح المدمج غير مسجّل الدخول.");
+            if (opened != "loaded")
+                throw new InstagramApiException(InstagramErrorKind.Network, "تعذّر فتح إنستجرام في المتصفح المدمج.");
+            StatusText.Text = "جاري القراءة من إنستجرام...";
+
+            async Task<PageResult> FetchAsync(string path, CancellationToken token)
+            {
+                token.ThrowIfCancellationRequested();
+                ct.ThrowIfCancellationRequested();
+                // Runtime.evaluate can wait for the promise; ExecuteScriptAsync cannot.
+                var args = JsonSerializer.Serialize(new
+                {
+                    expression = PageFetchScript.Replace("__PATH__", JsonSerializer.Serialize(path)),
+                    awaitPromise = true,
+                    returnByValue = true
+                });
+                using var reply = JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", args));
+                if (reply.RootElement.TryGetProperty("exceptionDetails", out var error))
+                    throw new InstagramApiException(InstagramErrorKind.Network, $"تعذّر الطلب داخل الصفحة: {error.GetRawText()}");
+                using var page = JsonDocument.Parse(reply.RootElement.GetProperty("result").GetProperty("value").GetString()!);
+                return new PageResult(page.RootElement.GetProperty("status").GetInt32(), page.RootElement.GetProperty("body").GetString() ?? "");
+            }
+
+            return await work(FetchAsync, ct);
+        }
+        catch (WebView2RuntimeNotFoundException)
+        {
+            throw new InstagramApiException(InstagramErrorKind.Unknown,
+                "مكوّن Microsoft Edge WebView2 غير مثبت. ثبّته من موقع مايكروسوفت (Evergreen Runtime).");
+        }
+        finally
+        {
+            if (!_closed)
+            {
+                Progress.IsIndeterminate = false;
+                StatusText.Text = "انتهى";
+                try { Web.CoreWebView2?.Navigate("about:blank"); }
+                catch (InvalidOperationException) { }
+            }
+        }
     }
 
     /// <summary>Waits for the like button, clicks it if needed, and verifies the result.</summary>
