@@ -371,10 +371,18 @@ public partial class StoryWatchWindow : Window
                 throw new InstagramApiException(InstagramErrorKind.Network, "تعذّر فتح إنستجرام في المتصفح المدمج.");
             StatusText.Text = "جاري القراءة من إنستجرام...";
 
-            async Task<PageResult> FetchAsync(string path, CancellationToken token)
+            // Callers may be on any thread: the core library continues on the thread pool after its own awaits
+            // (ConfigureAwait(false)), and CoreWebView2 may only be touched on this window's UI thread.
+            Task<PageResult> FetchAsync(string path, CancellationToken token) =>
+                Dispatcher.CheckAccess()
+                    ? FetchOnUiThreadAsync(path, token)
+                    : Dispatcher.InvokeAsync(() => FetchOnUiThreadAsync(path, token)).Task.Unwrap();
+
+            async Task<PageResult> FetchOnUiThreadAsync(string path, CancellationToken token)
             {
                 token.ThrowIfCancellationRequested();
                 ct.ThrowIfCancellationRequested();
+                if (_closed) throw new OperationCanceledException(); // window closed mid-check
                 // Runtime.evaluate can wait for the promise; ExecuteScriptAsync cannot.
                 var args = JsonSerializer.Serialize(new
                 {
