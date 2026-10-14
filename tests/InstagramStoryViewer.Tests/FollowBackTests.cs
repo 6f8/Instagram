@@ -18,9 +18,9 @@ public class FollowBackTests
 
     [Theory]
     [InlineData(0, 0, 2)]
-    [InlineData(200, 200, 2)]
-    [InlineData(201, 50, 3)]
-    [InlineData(1000, 4500, 28)]
+    [InlineData(50, 50, 2)]
+    [InlineData(51, 10, 3)]
+    [InlineData(400, 389, 16)]
     public void Estimates_requests(int following, int followers, int expected) =>
         Assert.Equal(expected, FollowBack.EstimateRequests(following, followers));
 
@@ -41,6 +41,7 @@ public class FollowBackTests
         Assert.True(users[0].IsVerified);
         Assert.Equal(2, handler.Requests.Count);
         Assert.StartsWith("/api/v1/friendships/123/following/", handler.Requests[0].RequestUri!.AbsolutePath);
+        Assert.Contains($"count={InstagramClient.FollowListPageSize}", handler.Requests[0].RequestUri!.Query);
         Assert.Equal([2, 3], progress);
     }
 

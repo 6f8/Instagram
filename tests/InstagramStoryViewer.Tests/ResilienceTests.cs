@@ -63,6 +63,17 @@ public class ResilienceTests
     }
 
     [Fact]
+    public async Task Too_many_requests_is_not_retried_and_starts_the_cooldown()
+    {
+        var handler = new FakeHandler(_ => FakeHandler.Json("""{"message":"rate limited","status":"fail"}""", HttpStatusCode.TooManyRequests));
+        var client = TestClient.Create(handler);
+        var ex = await Assert.ThrowsAsync<InstagramApiException>(() => client.GetStoriesTrayAsync());
+        Assert.Equal(InstagramErrorKind.RateLimited, ex.Kind);
+        Assert.Single(handler.Requests);
+        Assert.NotNull(client.CoolingDownUntil);
+    }
+
+    [Fact]
     public async Task Own_hourly_cap_does_not_start_a_cooldown()
     {
         var handler = new FakeHandler(_ => FakeHandler.Json(TrayJson));

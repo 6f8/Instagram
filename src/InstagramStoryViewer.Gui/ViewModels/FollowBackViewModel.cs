@@ -102,6 +102,12 @@ public sealed partial class FollowBackViewModel : ObservableObject
     private async Task CheckAsync()
     {
         if (_ctx.Client is not { } client || client.ViewerId is not { } me) return;
+        if (client.CoolingDownUntil is { } pausedUntil)
+        {
+            // Paused after Instagram asked to slow down: say until when, without sending anything.
+            SetStatus(string.Format(CultureInfo.CurrentCulture, Strings.FollowBackPaused, pausedUntil.ToLocalTime()), error: true);
+            return;
+        }
         _cts = new CancellationTokenSource();
         var ct = _cts.Token;
         IsChecking = true;
@@ -144,6 +150,12 @@ public sealed partial class FollowBackViewModel : ObservableObject
                     ? string.Format(CultureInfo.CurrentCulture, Strings.FollowBackIncomplete, followers.Count, followersTotal)
                     : string.Format(CultureInfo.CurrentCulture, Strings.FollowBackDone, result.Count),
                 error: incomplete);
+        }
+        catch (InstagramApiException ex) when (ex.Kind == InstagramErrorKind.RateLimited && client.CoolingDownUntil is { } until)
+        {
+            AppLog.Warn($"Follow-back check paused by Instagram's rate limit: {ex.RequestPath ?? "?"} {ex.Message}");
+            SetStatus(string.Format(CultureInfo.CurrentCulture, Strings.FollowBackPaused, until.ToLocalTime()), error: true);
+            await _ctx.HandleErrorAsync(ex, silent: true);
         }
         catch (InstagramApiException ex)
         {

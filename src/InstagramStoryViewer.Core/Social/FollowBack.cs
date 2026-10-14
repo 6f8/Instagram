@@ -12,7 +12,7 @@ public static class FollowBack
         return following.Where(f => f.Pk is not null && !followerIds.Contains(f.Pk)).ToList();
     }
 
-    /// <summary>Requests needed to read both lists (200 accounts per page, at least one page each).</summary>
-    public static int EstimateRequests(int following, int followers) =>
-        Math.Max(1, (following + 199) / 200) + Math.Max(1, (followers + 199) / 200);
+    /// <summary>Requests needed to read both lists (<paramref name="pageSize"/> accounts per page, at least one page each).</summary>
+    public static int EstimateRequests(int following, int followers, int pageSize = Api.InstagramClient.FollowListPageSize) =>
+        Math.Max(1, (following + pageSize - 1) / pageSize) + Math.Max(1, (followers + pageSize - 1) / pageSize);
 }

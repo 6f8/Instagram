@@ -124,4 +124,5 @@
   <data name="FollowBackReadingOf" xml:space="preserve"><value>جاري قراءة {0}: {1:N0} من {2:N0}</value></data>
   <data name="FollowBackReading" xml:space="preserve"><value>جاري قراءة {0}: {1:N0}</value></data>
   <data name="FollowBackCopied" xml:space="preserve"><value>تم نسخ {0} اسم مستخدم</value></data>
+  <data name="FollowBackPaused" xml:space="preserve"><value>طلب إنستجرام من البرنامج التمهّل، فأوقف البرنامج كل الطلبات مؤقتاً لحماية حسابك (هذا ليس حظراً). اضغط "فحص الآن" بعد الساعة {0:HH:mm}. لا تُعرض نتيجة ناقصة لأنها قد تكون خاطئة.</value></data>
 </root>

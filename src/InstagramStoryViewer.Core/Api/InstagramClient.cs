@@ -94,7 +94,7 @@ public sealed class InstagramClient : IDisposable
     // ------------------------------------------------------------------ retry policies (Polly)
 
     /// <summary>
-    /// API calls: network errors, per-attempt timeouts, 429 and 5xx are retried twice with exponential
+    /// API calls: network errors, per-attempt timeouts and 5xx are retried twice with exponential
     /// backoff and jitter (Retry-After wins when Instagram sends it). Anything else is final.
     /// </summary>
     private ResiliencePipeline<HttpResponseMessage> BuildApiRetry() =>
@@ -109,7 +109,9 @@ public sealed class InstagramClient : IDisposable
                 ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
                     .Handle<HttpRequestException>()
                     .Handle<AttemptTimeoutException>()
-                    .HandleResult(r => r.StatusCode == HttpStatusCode.TooManyRequests || (int)r.StatusCode >= 500),
+                    // 429 is not retried: asking again seconds after "too many requests" only makes it worse.
+                    // It goes straight to the cool-down instead (see SendWithProfileAsync).
+                    .HandleResult(r => (int)r.StatusCode >= 500),
                 DelayGenerator = args => new ValueTask<TimeSpan?>(RetryAfter(args.Outcome.Result)),
                 OnRetry = args =>
                 {
@@ -244,24 +246,33 @@ public sealed class InstagramClient : IDisposable
         return res.Items?.Where(p => p.Code is not null).OrderByDescending(p => p.TakenAt).ToList() ?? new List<FeedPost>();
     }
 
+    /// <summary>Accounts per follow-list request.</summary>
+    public const int FollowListPageSize = 50;
+
+    /// <summary>Extra pause between follow-list pages (on top of the usual spacing), like scrolling the list.</summary>
+    private static TimeSpan FollowListPause() => TimeSpan.FromMilliseconds(2500 + Random.Shared.Next(0, 2500));
+
     /// <summary>Which follow list to read.</summary>
     public enum FollowList { Following, Followers }
 
     /// <summary>
-    /// Every account in one of a user's follow lists, page by page (200 per request). Each page counts
+    /// Every account in one of a user's follow lists, page by page (<see cref="FollowListPageSize"/> per request). Each page counts
     /// against the hourly request cap; <paramref name="progress"/> reports how many were read so far.
     /// </summary>
     public async Task<List<StoryUser>> GetFollowListAsync(string userId, FollowList list, IProgress<int>? progress = null,
         CancellationToken ct = default)
     {
-        const int MaxPages = 250; // 50,000 accounts: far beyond any real list, just a guard against a cursor loop
+        const int MaxPages = 1000; // 50,000 accounts: far beyond any real list, just a guard against a cursor loop
         var kind = list == FollowList.Following ? "following" : "followers";
         var users = new List<StoryUser>();
         var seen = new HashSet<string>();
         string? cursor = null;
         for (var page = 0; page < MaxPages; page++)
         {
-            var path = $"/api/v1/friendships/{Uri.EscapeDataString(userId)}/{kind}/?count=200"
+            // Pages close to what instagram.com itself asks for; large pages are what Instagram answers
+            // with "please wait a few minutes".
+            if (page > 0) await _delay(FollowListPause(), ct).ConfigureAwait(false);
+            var path = $"/api/v1/friendships/{Uri.EscapeDataString(userId)}/{kind}/?count={FollowListPageSize}"
                        + (list == FollowList.Followers ? "&search_surface=follow_list_page" : "")
                        + (cursor is null ? "" : "&max_id=" + Uri.EscapeDataString(cursor));
             var res = await SendAsync<FriendshipListResponse>(HttpMethod.Get, path, null, ct).ConfigureAwait(false);
