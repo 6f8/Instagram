@@ -88,9 +88,8 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
 - **Where the lists are read:** from inside the logged-in instagram.com page in the embedded browser, with the same requests the site makes when you scroll the followers dialog. Instagram answers the same requests sent from outside the browser with "please wait a few minutes".
 - **Request cost:**
   - Every 12 accounts cost one request (the page size the site uses), with a pause of 1.5–3.5 s between requests.
-  - The app tells you the cost first, and asks to confirm if it is more than 10 requests.
-  - It refuses to start if the hourly request cap would cut the check short, because a partial followers list would give wrong results.
-- It warns you if Instagram returned fewer followers than your profile shows.
+  - Only the two lists are requested, nothing else. The account's own `users/{id}/info` is not requested: Instagram answers it with 429 when it comes from the website.
+  - The check stays within what is left of the hourly request cap. If the lists are longer than that, it stops and shows no result, because a partial list would give wrong results. Raise the cap in Settings and check again.
 - **On the list:**
   - Search by name.
   - Hide verified accounts.

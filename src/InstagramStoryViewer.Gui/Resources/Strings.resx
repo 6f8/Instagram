@@ -112,17 +112,14 @@
   <data name="FollowBackNotChecked" xml:space="preserve"><value>لم يُفحص بعد. اضغط "فحص الآن".</value></data>
   <data name="FollowBackSummary" xml:space="preserve"><value>تتابع {0:N0} · يتابعك {1:N0} · لا يتابعونك {2:N0}</value></data>
   <data name="FollowBackCheckedAt" xml:space="preserve"><value>آخر فحص: {0:yyyy/MM/dd HH:mm}</value></data>
-  <data name="FollowBackReadingCounts" xml:space="preserve"><value>جاري قراءة عدد المتابَعين والمتابِعين...</value></data>
-  <data name="FollowBackOverCap" xml:space="preserve"><value>يحتاج الفحص نحو {0} طلباً، والمتبقي من حد الساعة {1} فقط. ارفع "طلبات في الساعة" من الإعدادات أو حاول بعد قليل.</value></data>
-  <data name="FollowBackConfirm" xml:space="preserve"><value>تتابع {0:N0} حساباً ويتابعك {1:N0}. يحتاج الفحص نحو {2} طلباً إلى إنستجرام (المتبقي من حد الساعة: {3}). متابعة؟</value></data>
   <data name="FollowBackListFollowing" xml:space="preserve"><value>من تتابعهم</value></data>
   <data name="FollowBackListFollowers" xml:space="preserve"><value>من يتابعونك</value></data>
-  <data name="FollowBackIncomplete" xml:space="preserve"><value>تم، لكن إنستجرام أعاد {0:N0} متابِعاً من أصل {1:N0}؛ قد تظهر حسابات تتابعك فعلاً. أعد الفحص لاحقاً.</value></data>
   <data name="FollowBackDone" xml:space="preserve"><value>تم الفحص: {0:N0} حساباً لا يتابعونك.</value></data>
   <data name="FollowBackStopped" xml:space="preserve"><value>توقف الفحص: {0}</value></data>
   <data name="FollowBackCancelled" xml:space="preserve"><value>أُوقف الفحص.</value></data>
-  <data name="FollowBackReadingOf" xml:space="preserve"><value>جاري قراءة {0}: {1:N0} من {2:N0}</value></data>
   <data name="FollowBackReading" xml:space="preserve"><value>جاري قراءة {0}: {1:N0}</value></data>
   <data name="FollowBackCopied" xml:space="preserve"><value>تم نسخ {0} اسم مستخدم</value></data>
   <data name="FollowBackPaused" xml:space="preserve"><value>طلب إنستجرام من البرنامج التمهّل، فأوقف البرنامج كل الطلبات مؤقتاً لحماية حسابك (هذا ليس حظراً). اضغط "فحص الآن" بعد الساعة {0:HH:mm}. لا تُعرض نتيجة ناقصة لأنها قد تكون خاطئة.</value></data>
+  <data name="FollowBackOpening" xml:space="preserve"><value>جاري فتح إنستجرام في النافذة الصغيرة...</value></data>
+  <data name="FollowBackOverBudget" xml:space="preserve"><value>القائمتان أطول مما يسمح به المتبقي من حد الساعة ({0} طلباً، كل طلب = 12 حساباً). ارفع "طلبات في الساعة" من الإعدادات ثم أعد الفحص.</value></data>
 </root>

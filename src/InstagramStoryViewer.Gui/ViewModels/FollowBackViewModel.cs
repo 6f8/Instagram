@@ -65,7 +65,6 @@ public sealed partial class FollowBackViewModel : ObservableObject
 
     [ObservableProperty] private string? _status;
     [ObservableProperty] private bool _statusIsError;
-    [ObservableProperty] private double _progress;
     [ObservableProperty] private string _filterText = "";
     [ObservableProperty] private bool _hideVerified;
 
@@ -102,7 +101,7 @@ public sealed partial class FollowBackViewModel : ObservableObject
     private DateTime _pausedUntil = DateTime.MinValue;
     private static readonly TimeSpan PauseAfterLimit = TimeSpan.FromMinutes(15);
 
-    private sealed record Lists(StoryUser Info, List<StoryUser> Following, List<StoryUser> Followers);
+    private sealed record Lists(List<StoryUser> Following, List<StoryUser> Followers);
 
     [RelayCommand(CanExecute = nameof(CanCheck))]
     private async Task CheckAsync()
@@ -116,15 +115,13 @@ public sealed partial class FollowBackViewModel : ObservableObject
         }
         _cts = new CancellationTokenSource();
         IsChecking = true;
-        Progress = 0;
-        SetStatus(Strings.FollowBackReadingCounts, error: false);
+        SetStatus(Strings.FollowBackOpening, error: false);
         try
         {
             // Everything is read from inside the logged-in instagram.com page, like the site's own followers
             // dialog: Instagram answers follow-list requests from outside the browser with "please wait".
             var lists = await _dialogs.WithInstagramPageAsync(client.Cookies.ToHeader(),
                 (fetch, pageToken) => ReadListsAsync(client, me, fetch, pageToken));
-            if (lists is null) return; // declined, or over the hourly budget (status already set)
 
             var result = FollowBack.NotFollowingBack(lists.Following, lists.Followers)
                 .Select(u => new FollowBackEntry(u.Pk!, u.Username ?? "", u.FullName, u.ProfilePicUrl, u.IsVerified == true))
@@ -133,13 +130,12 @@ public sealed partial class FollowBackViewModel : ObservableObject
             SaveSnapshot();
             AppLog.Info($"Follow-back check done: {result.Count} not following back");
 
-            // Instagram sometimes stops a long list early; then some "not following back" may be wrong.
-            var followersTotal = lists.Info.FollowerCount ?? 0;
-            var incomplete = lists.Followers.Count < followersTotal * 0.95 - 5;
-            SetStatus(incomplete
-                    ? string.Format(CultureInfo.CurrentCulture, Strings.FollowBackIncomplete, lists.Followers.Count, followersTotal)
-                    : string.Format(CultureInfo.CurrentCulture, Strings.FollowBackDone, result.Count),
-                error: incomplete);
+            SetStatus(string.Format(CultureInfo.CurrentCulture, Strings.FollowBackDone, result.Count), error: false);
+        }
+        catch (PageBudgetExceededException ex)
+        {
+            AppLog.Warn($"Follow-back check: lists need more than the {ex.Budget} requests left this hour");
+            SetStatus(string.Format(CultureInfo.CurrentCulture, Strings.FollowBackOverBudget, ex.Budget), error: true);
         }
         catch (InstagramApiException ex) when (ex.Kind == InstagramErrorKind.RateLimited)
         {
@@ -161,49 +157,33 @@ public sealed partial class FollowBackViewModel : ObservableObject
         finally
         {
             IsChecking = false;
-            Progress = 0;
         }
     }
 
-    /// <summary>Runs inside the embedded browser: counts, cost check, then both lists.</summary>
-    private async Task<Lists?> ReadListsAsync(InstagramClient client, string me,
+    /// <summary>
+    /// Runs inside the embedded browser: both lists, within the requests left this hour (Settings). Only the two
+    /// follow lists are requested: an earlier version first read the account's counts from users/{id}/info, an
+    /// app endpoint Instagram answers with 429 when it comes from the website, so the check never got further.
+    /// </summary>
+    private async Task<Lists> ReadListsAsync(InstagramClient client, string me,
         Func<string, CancellationToken, Task<PageResult>> fetch, CancellationToken pageToken)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(pageToken, _cts!.Token);
         var ct = linked.Token;
+        var budget = Math.Max(0, client.MaxRequestsPerHour - client.RequestsLastHour);
 
-        var infoPath = FollowListReader.InfoPath(me);
-        var info = FollowListReader.ParseUserInfo(await fetch(infoPath, ct), infoPath);
-        int followingTotal = info.FollowingCount ?? 0, followersTotal = info.FollowerCount ?? 0;
-
-        // The user's hourly request limit (Settings) also bounds this check.
-        var needed = FollowBack.EstimateRequests(followingTotal, followersTotal);
-        var left = client.MaxRequestsPerHour - client.RequestsLastHour;
-        if (needed > left)
-        {
-            SetStatus(string.Format(CultureInfo.CurrentCulture, Strings.FollowBackOverCap, needed, Math.Max(0, left)), error: true);
-            return null;
-        }
-        if (needed > 10 && !_dialogs.Confirm(
-                string.Format(CultureInfo.CurrentCulture, Strings.FollowBackConfirm, followingTotal, followersTotal, needed, left)))
-        {
-            SetStatus(null, error: false);
-            return null;
-        }
-
-        AppLog.Info($"Follow-back check (in browser): following {followingTotal}, followers {followersTotal}, ~{needed} requests");
+        AppLog.Info($"Follow-back check (in browser), budget {budget} requests");
         var following = await FollowListReader.ReadAllAsync(me, followers: false, fetch, Task.Delay,
-            new Progress<int>(n => Report(Strings.FollowBackListFollowing, n, followingTotal, 0)), ct);
+            new Progress<int>(n => Report(Strings.FollowBackListFollowing, n)), ct, budget);
         var followers = await FollowListReader.ReadAllAsync(me, followers: true, fetch, Task.Delay,
-            new Progress<int>(n => Report(Strings.FollowBackListFollowers, n, followersTotal, 0.5)), ct);
-        return new Lists(info, following, followers);
+            new Progress<int>(n => Report(Strings.FollowBackListFollowers, n)), ct, budget - following.Requests);
+        AppLog.Info($"Follow-back lists read: {following.Users.Count} following, {followers.Users.Count} followers, " +
+                    $"{following.Requests + followers.Requests} requests");
+        return new Lists(following.Users, followers.Users);
     }
 
-    private void Report(string what, int read, int total, double offset)
-    {
-        Status = total > 0 ? string.Format(CultureInfo.CurrentCulture, Strings.FollowBackReadingOf, what, read, total) : string.Format(CultureInfo.CurrentCulture, Strings.FollowBackReading, what, read);
-        Progress = offset + 0.5 * (total > 0 ? Math.Min(1, (double)read / total) : 0);
-    }
+    private void Report(string what, int read) =>
+        Status = string.Format(CultureInfo.CurrentCulture, Strings.FollowBackReading, what, read);
 
     [RelayCommand]
     private void Stop() => _cts?.Cancel();

@@ -9,6 +9,16 @@ namespace InstagramStoryViewer.Social;
 /// <summary>An HTTP answer obtained elsewhere (here: fetched inside the logged-in instagram.com page).</summary>
 public sealed record PageResult(int Status, string Body);
 
+/// <summary>A whole follow list and how many requests reading it took.</summary>
+public sealed record FollowListResult(List<StoryUser> Users, int Requests);
+
+/// <summary>The list is longer than the requests the caller allowed; nothing partial is returned.</summary>
+public sealed class PageBudgetExceededException(int budget)
+    : Exception($"The follow list needs more than {budget} requests.")
+{
+    public int Budget { get; } = budget;
+}
+
 /// <summary>
 /// Reads a whole follow list page by page. The pages are fetched by the caller — the app fetches them from
 /// inside the embedded browser, exactly like instagram.com does when the followers dialog is scrolled, because
@@ -21,8 +31,6 @@ public static class FollowListReader
 
     private const int MaxPages = 5000; // 60,000 accounts: just a guard against a cursor that never ends
 
-    public static string InfoPath(string userId) => $"/api/v1/users/{Uri.EscapeDataString(userId)}/info/";
-
     public static string PagePath(string userId, bool followers, string? cursor) =>
         $"/api/v1/friendships/{Uri.EscapeDataString(userId)}/{(followers ? "followers" : "following")}/?count={PageSize}"
         + (followers ? "&search_surface=follow_list_page" : "")
@@ -33,31 +41,29 @@ public static class FollowListReader
 
     /// <param name="fetch">Fetches a path (see <see cref="PagePath"/>) and returns the raw answer.</param>
     /// <param name="progress">Number of accounts read so far.</param>
-    public static async Task<List<StoryUser>> ReadAllAsync(string userId, bool followers,
+    /// <param name="maxRequests">Requests the caller allows; a longer list throws <see cref="PageBudgetExceededException"/>.</param>
+    public static async Task<FollowListResult> ReadAllAsync(string userId, bool followers,
         Func<string, CancellationToken, Task<PageResult>> fetch, Func<TimeSpan, CancellationToken, Task> delay,
-        IProgress<int>? progress, CancellationToken ct)
+        IProgress<int>? progress, CancellationToken ct, int maxRequests = MaxPages)
     {
         var users = new List<StoryUser>();
         var seen = new HashSet<string>();
         string? cursor = null;
-        for (var page = 0; page < MaxPages; page++)
+        var budget = Math.Min(maxRequests, MaxPages);
+        for (var page = 0; ; page++)
         {
+            if (page >= budget) throw new PageBudgetExceededException(maxRequests);
             if (page > 0) await delay(Pause(), ct).ConfigureAwait(false);
             var path = PagePath(userId, followers, cursor);
             var res = Parse<FriendshipListResponse>(await fetch(path, ct).ConfigureAwait(false), path);
             foreach (var u in res.Users ?? [])
                 if (u.Pk is not null && seen.Add(u.Pk)) users.Add(u);
             progress?.Report(users.Count);
-            if (string.IsNullOrEmpty(res.NextMaxId) || res.NextMaxId == cursor || res.Users is not { Count: > 0 }) break;
+            if (string.IsNullOrEmpty(res.NextMaxId) || res.NextMaxId == cursor || res.Users is not { Count: > 0 })
+                return new FollowListResult(users, page + 1);
             cursor = res.NextMaxId;
         }
-        return users;
     }
-
-    /// <summary>The account's own info (follower / following counts).</summary>
-    public static StoryUser ParseUserInfo(PageResult result, string path) =>
-        Parse<UserInfoResponse>(result, path).User
-        ?? throw new InstagramApiException(InstagramErrorKind.InvalidResponse, "لم تُرجع إنستجرام بيانات الحساب.") { RequestPath = path };
 
     /// <summary>Turns an answer into data, or into the same error kinds the API client uses.</summary>
     public static T Parse<T>(PageResult result, string path) where T : ApiResponseBase

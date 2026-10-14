@@ -42,7 +42,7 @@
                                VerticalAlignment="Center" />
                     <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="14" />
                 </DockPanel>
-                <ProgressBar Height="5" Margin="0,10,0,0" Maximum="1" Value="{Binding Progress, Mode=OneWay}"
+                <ProgressBar Height="5" Margin="0,10,0,0" IsIndeterminate="True"
                              Visibility="{Binding IsChecking, Converter={StaticResource Vis}}" />
                 <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,8,0,0"
                            Visibility="{Binding Status, Converter={StaticResource Vis}}">

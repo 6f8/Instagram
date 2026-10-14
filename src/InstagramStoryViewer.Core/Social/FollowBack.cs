@@ -11,8 +11,4 @@ public static class FollowBack
         var followerIds = followers.Select(f => f.Pk).OfType<string>().ToHashSet();
         return following.Where(f => f.Pk is not null && !followerIds.Contains(f.Pk)).ToList();
     }
-
-    /// <summary>Requests needed to read both lists (<paramref name="pageSize"/> accounts per page, at least one page each).</summary>
-    public static int EstimateRequests(int following, int followers, int pageSize = FollowListReader.PageSize) =>
-        Math.Max(1, (following + pageSize - 1) / pageSize) + Math.Max(1, (followers + pageSize - 1) / pageSize);
 }

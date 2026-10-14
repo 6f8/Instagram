@@ -16,14 +16,6 @@ public class FollowBackTests
         Assert.Equal(["1", "3"], result.Select(u => u.Pk));
     }
 
-    [Theory]
-    [InlineData(0, 0, 2)]
-    [InlineData(12, 12, 2)]
-    [InlineData(13, 5, 3)]
-    [InlineData(400, 389, 67)]
-    public void Estimates_requests(int following, int followers, int expected) =>
-        Assert.Equal(expected, FollowBack.EstimateRequests(following, followers));
-
     [Fact]
     public async Task Reads_every_page_of_a_follow_list()
     {
@@ -36,7 +28,9 @@ public class FollowBackTests
                 : """{"users":[{"pk":"1","username":"a","is_verified":true},{"pk":"2","username":"b"}],"next_max_id":"p2","status":"ok"}"""));
         }
         var progress = new List<int>();
-        var users = await FollowListReader.ReadAllAsync("123", followers: false, Fetch, NoDelay, new SyncProgress(progress.Add), default);
+        var result = await FollowListReader.ReadAllAsync("123", followers: false, Fetch, NoDelay, new SyncProgress(progress.Add), default);
+        var users = result.Users;
+        Assert.Equal(2, result.Requests);
 
         Assert.Equal(["1", "2", "3"], users.Select(u => u.Pk)); // duplicate across pages kept once
         Assert.True(users[0].IsVerified);
@@ -56,7 +50,28 @@ public class FollowBackTests
         }, NoDelay, null, default);
         Assert.Equal(2, paths.Count); // first page, then the cursor repeats → stop
         Assert.Contains("search_surface=follow_list_page", paths[0]);
-        Assert.Single(users);
+        Assert.Single(users.Users);
+    }
+
+    [Fact]
+    public async Task A_list_longer_than_the_budget_stops_without_a_partial_result()
+    {
+        var calls = 0;
+        await Assert.ThrowsAsync<PageBudgetExceededException>(() => FollowListReader.ReadAllAsync("1", false, (_, _) =>
+        {
+            calls++;
+            return Task.FromResult(new PageResult(200, $$"""{"users":[{"pk":"{{calls}}"}],"next_max_id":"c{{calls}}","status":"ok"}"""));
+        }, NoDelay, null, default, maxRequests: 3));
+        Assert.Equal(3, calls);
+    }
+
+    [Fact]
+    public async Task Rate_limit_with_an_empty_body_is_recognised()
+    {
+        // What Instagram actually sent: HTTP 429, no content type, no body.
+        var ex = await Assert.ThrowsAsync<InstagramApiException>(() => FollowListReader.ReadAllAsync("1", true,
+            (_, _) => Task.FromResult(new PageResult(429, "")), NoDelay, null, default));
+        Assert.Equal(InstagramErrorKind.RateLimited, ex.Kind);
     }
 
     [Theory]
@@ -72,15 +87,6 @@ public class FollowBackTests
         Assert.Equal(kind, ex.Kind);
         Assert.Equal(body, ex.ResponseBody);
         Assert.Contains("/friendships/1/following/", ex.RequestPath);
-    }
-
-    [Fact]
-    public void User_info_carries_the_counts()
-    {
-        var me = FollowListReader.ParseUserInfo(
-            new PageResult(200, """{"user":{"pk":"12345","username":"me","follower_count":321,"following_count":456},"status":"ok"}"""), "/x");
-        Assert.Equal(321, me.FollowerCount);
-        Assert.Equal(456, me.FollowingCount);
     }
 
     [Fact]
