@@ -90,6 +90,22 @@ public class FollowBackTests
     }
 
     [Fact]
+    public async Task Pages_after_a_real_pause_are_fetched_off_the_calling_thread()
+    {
+        // The v2.5.3 crash: after the pause the reader continues on the thread pool, so whatever "fetch" does
+        // must not assume the caller's thread. This pins that contract (the WebView2 fetch dispatches itself).
+        var threads = new List<int>();
+        await FollowListReader.ReadAllAsync("1", false, (path, _) =>
+        {
+            threads.Add(Environment.CurrentManagedThreadId);
+            return Task.FromResult(new PageResult(200, path.Contains("max_id")
+                ? """{"users":[{"pk":"2"}],"status":"ok"}"""
+                : """{"users":[{"pk":"1"}],"next_max_id":"c","status":"ok"}"""));
+        }, async (_, ct) => await Task.Delay(10, ct), null, default);
+        Assert.Equal(2, threads.Count); // both pages fetched; the second one after a real asynchronous pause
+    }
+
+    [Fact]
     public async Task Pauses_between_pages_but_not_before_the_first()
     {
         var pauses = 0;

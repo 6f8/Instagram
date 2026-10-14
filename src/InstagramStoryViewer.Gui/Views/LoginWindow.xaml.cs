@@ -17,6 +17,7 @@ public partial class LoginWindow : Window
     private readonly DispatcherTimer _poll = new() { Interval = TimeSpan.FromSeconds(1.5) };
     private bool _done;
     private bool _checking;
+    private bool _closed;
 
     public string? CookieHeader { get; private set; }
 
@@ -28,6 +29,7 @@ public partial class LoginWindow : Window
         Loaded += async (_, _) => await InitializeBrowserAsync();
         Closed += (_, _) =>
         {
+            _closed = true;
             _poll.Stop();
             Web.Dispose();
         };
@@ -40,6 +42,10 @@ public partial class LoginWindow : Window
             Directory.CreateDirectory(SettingsStore.WebViewDataFolder);
             var env = await CoreWebView2Environment.CreateAsync(null, SettingsStore.WebViewDataFolder);
             await Web.EnsureCoreWebView2Async(env);
+        }
+        catch (Exception) when (_closed)
+        {
+            return; // the user closed the window while the browser was starting: nothing to report
         }
         catch (WebView2RuntimeNotFoundException)
         {
@@ -56,6 +62,7 @@ public partial class LoginWindow : Window
             Close();
             return;
         }
+        if (_closed) return;
 
         var core = Web.CoreWebView2;
         if (_clearExistingSession)
@@ -81,7 +88,7 @@ public partial class LoginWindow : Window
 
     private async Task CheckCookiesAsync()
     {
-        if (_done || _checking || Web.CoreWebView2 is null) return;
+        if (_done || _checking || _closed || Web.CoreWebView2 is null) return;
         _checking = true;
         try
         {

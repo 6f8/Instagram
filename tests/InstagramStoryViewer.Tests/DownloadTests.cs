@@ -50,6 +50,34 @@ public sealed class DownloadTests : IDisposable
     }
 
     [Fact]
+    public async Task A_caller_joining_a_running_download_still_gets_progress()
+    {
+        var gate = new TaskCompletionSource();
+        var handler = new FakeHandler(_ =>
+        {
+            gate.Task.Wait();
+            return Bytes(10);
+        });
+        var client = TestClient.Create(handler);
+        var path = Path.Combine(_dir, "joined.mp4");
+
+        var first = Task.Run(() => client.DownloadAsync("https://cdn.example/joined.mp4", path)); // no progress
+        await Task.Delay(100);
+        var reports = new List<double>();
+        var second = client.DownloadAsync("https://cdn.example/joined.mp4", path, progress: new SyncProgress(v => { lock (reports) reports.Add(v); }));
+        gate.SetResult();
+        await Task.WhenAll(first, second);
+
+        Assert.Single(handler.Requests);
+        Assert.Equal(1.0, reports[^1]);
+    }
+
+    private sealed class SyncProgress(Action<double> report) : IProgress<double>
+    {
+        public void Report(double value) => report(value);
+    }
+
+    [Fact]
     public async Task Expired_cdn_link_is_reported_as_media_expired()
     {
         var handler = new FakeHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));

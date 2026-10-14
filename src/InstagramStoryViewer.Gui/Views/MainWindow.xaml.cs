@@ -121,7 +121,9 @@ public partial class MainWindow : Window, IDialogService
         if (await PageSelectors.RefreshAsync(_settings.Current, _selectors) is { } fresh)
         {
             _selectors = fresh;
-            if (_watcher is { IsAlive: true }) _watcher.Close(); // the next batch opens with the new selectors
+            // Only an idle window is closed; a busy one is closed by RunInWatcherAsync when its batch ends,
+            // and the next batch opens a new window with the new selectors either way.
+            if (_watcher is { IsAlive: true } w && _watchGate.CurrentCount == 1) w.Close();
         }
         _settings.Save();
     }

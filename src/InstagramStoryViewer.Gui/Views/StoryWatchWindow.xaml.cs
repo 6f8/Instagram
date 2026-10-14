@@ -136,7 +136,10 @@ public partial class StoryWatchWindow : Window
         (async (path) => {
           const csrf = (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || '';
           const claim = sessionStorage.getItem('www-claim-v2') || '0';
+          const abort = new AbortController();
+          setTimeout(() => abort.abort(), 30000); // a stalled request must not block the batch
           const r = await fetch(path, {
+            signal: abort.signal,
             credentials: 'include',
             headers: { 'X-IG-App-ID': '936619743392459', 'X-Requested-With': 'XMLHttpRequest',
                        'X-CSRFToken': csrf, 'X-IG-WWW-Claim': claim, 'X-ASBD-ID': '129477' }
@@ -159,8 +162,25 @@ public partial class StoryWatchWindow : Window
             m => values.TryGetValue(m.Groups[1].Value, out var v) ? v : m.Value);
     }
 
+    /// <summary>
+    /// Runs a page script. Waiting stops when the batch is stopped or the window closes (a closed WebView2 may
+    /// never complete a pending call, which would otherwise hold the batch, and the queue behind it, forever).
+    /// </summary>
     private async Task<T?> RunAsync<T>(CoreWebView2 core, string template, params (string Name, object? Value)[] args) =>
-        JsonSerializer.Deserialize<T>(await core.ExecuteScriptAsync(Script(template, args)));
+        JsonSerializer.Deserialize<T>(await core.ExecuteScriptAsync(Script(template, args)).WaitAsync(_batchCts.Token));
+
+    /// <summary>A DevTools call that, like <see cref="RunAsync{T}"/>, stops waiting when the batch is stopped.</summary>
+    private Task<string> DevToolsAsync(CoreWebView2 core, string method, string json, CancellationToken ct) =>
+        core.CallDevToolsProtocolMethodAsync(method, json).WaitAsync(ct);
+
+    /// <summary>Unsubscribes, tolerating a WebView2 that was closed in the meantime.</summary>
+    private static void Unsubscribe(CoreWebView2 core, EventHandler<CoreWebView2NavigationCompletedEventArgs> handler)
+    {
+        try { core.NavigationCompleted -= handler; }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException) { }
+    }
+
+    private static string Shorten(string s) => s.Length > 2000 ? s[..2000] : s;
 
     private CancellationTokenSource _batchCts = new();
     private Task? _init;
@@ -264,10 +284,13 @@ public partial class StoryWatchWindow : Window
         }
         catch (Exception ex) when (ex is WebView2RuntimeNotFoundException or UnauthorizedAccessException or IOException)
         {
-            ConfirmDialog.Info(this, ex is WebView2RuntimeNotFoundException
-                ? "مكوّن Microsoft Edge WebView2 غير مثبت. ثبّته من موقع مايكروسوفت (Evergreen Runtime)."
-                : $"تعذّر تشغيل المتصفح المدمج: {ex.Message}");
-            Close();
+            if (!_closed) // no dialog owned by a window that is already gone
+            {
+                ConfirmDialog.Info(this, ex is WebView2RuntimeNotFoundException
+                    ? "مكوّن Microsoft Edge WebView2 غير مثبت. ثبّته من موقع مايكروسوفت (Evergreen Runtime)."
+                    : $"تعذّر تشغيل المتصفح المدمج: {ex.Message}");
+                Close();
+            }
         }
 
         if (!_closed)
@@ -328,10 +351,13 @@ public partial class StoryWatchWindow : Window
         }
         catch (Exception ex) when (ex is WebView2RuntimeNotFoundException or UnauthorizedAccessException or IOException)
         {
-            ConfirmDialog.Info(this, ex is WebView2RuntimeNotFoundException
-                ? "مكوّن Microsoft Edge WebView2 غير مثبت. ثبّته من موقع مايكروسوفت (Evergreen Runtime)."
-                : $"تعذّر تشغيل المتصفح المدمج: {ex.Message}");
-            Close();
+            if (!_closed) // no dialog owned by a window that is already gone
+            {
+                ConfirmDialog.Info(this, ex is WebView2RuntimeNotFoundException
+                    ? "مكوّن Microsoft Edge WebView2 غير مثبت. ثبّته من موقع مايكروسوفت (Evergreen Runtime)."
+                    : $"تعذّر تشغيل المتصفح المدمج: {ex.Message}");
+                Close();
+            }
         }
 
         if (!_closed)
@@ -390,11 +416,22 @@ public partial class StoryWatchWindow : Window
                     awaitPromise = true,
                     returnByValue = true
                 });
-                using var reply = JsonDocument.Parse(await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", args));
-                if (reply.RootElement.TryGetProperty("exceptionDetails", out var error))
-                    throw new InstagramApiException(InstagramErrorKind.Network, $"تعذّر الطلب داخل الصفحة: {error.GetRawText()}");
-                using var page = JsonDocument.Parse(reply.RootElement.GetProperty("result").GetProperty("value").GetString()!);
-                return new PageResult(page.RootElement.GetProperty("status").GetInt32(), page.RootElement.GetProperty("body").GetString() ?? "");
+                using var both = CancellationTokenSource.CreateLinkedTokenSource(token, ct);
+                var json = await DevToolsAsync(core, "Runtime.evaluate", args, both.Token);
+                try
+                {
+                    using var reply = JsonDocument.Parse(json);
+                    if (reply.RootElement.TryGetProperty("exceptionDetails", out var error))
+                        throw new InstagramApiException(InstagramErrorKind.Network, $"تعذّر الطلب داخل الصفحة: {Shorten(error.GetRawText())}") { RequestPath = path };
+                    using var page = JsonDocument.Parse(reply.RootElement.GetProperty("result").GetProperty("value").GetString()!);
+                    return new PageResult(page.RootElement.GetProperty("status").GetInt32(), page.RootElement.GetProperty("body").GetString() ?? "");
+                }
+                catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or NullReferenceException)
+                {
+                    // e.g. the page navigated away (a challenge) while the request was running
+                    throw new InstagramApiException(InstagramErrorKind.InvalidResponse, "ردّ غير متوقع من الصفحة أثناء القراءة.", inner: ex)
+                    { ResponseBody = Shorten(json), RequestPath = path };
+                }
             }
 
             return await work(FetchAsync, ct);
@@ -403,6 +440,13 @@ public partial class StoryWatchWindow : Window
         {
             throw new InstagramApiException(InstagramErrorKind.Unknown,
                 "مكوّن Microsoft Edge WebView2 غير مثبت. ثبّته من موقع مايكروسوفت (Evergreen Runtime).");
+        }
+        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException or System.Runtime.InteropServices.COMException)
+        {
+            // The window was closed (or the batch stopped) mid-call: a cancellation, not an error.
+            if (_closed || ct.IsCancellationRequested) throw new OperationCanceledException("watch window closed", ex, ct);
+            // Anything else the browser threw is reported like a network problem instead of crashing the app.
+            throw new InstagramApiException(InstagramErrorKind.Network, $"تعذّر استخدام المتصفح المدمج: {ex.Message}", inner: ex);
         }
         finally
         {
@@ -473,10 +517,13 @@ public partial class StoryWatchWindow : Window
         }
         catch (Exception ex) when (ex is WebView2RuntimeNotFoundException or UnauthorizedAccessException or IOException)
         {
-            ConfirmDialog.Info(this, ex is WebView2RuntimeNotFoundException
-                ? "مكوّن Microsoft Edge WebView2 غير مثبت. ثبّته من موقع مايكروسوفت (Evergreen Runtime)."
-                : $"تعذّر تشغيل المتصفح المدمج: {ex.Message}");
-            Close();
+            if (!_closed) // no dialog owned by a window that is already gone
+            {
+                ConfirmDialog.Info(this, ex is WebView2RuntimeNotFoundException
+                    ? "مكوّن Microsoft Edge WebView2 غير مثبت. ثبّته من موقع مايكروسوفت (Evergreen Runtime)."
+                    : $"تعذّر تشغيل المتصفح المدمج: {ex.Message}");
+                Close();
+            }
         }
 
         if (!_closed)
@@ -513,7 +560,7 @@ public partial class StoryWatchWindow : Window
 
         // Type it like a keyboard would; fall back to setting the value if the page did not take it.
         await Task.Delay(400 + Random.Shared.Next(0, 500), ct);
-        await core.CallDevToolsProtocolMethodAsync("Input.insertText", JsonSerializer.Serialize(new { text }));
+        await DevToolsAsync(core, "Input.insertText", JsonSerializer.Serialize(new { text }), ct);
         await Task.Delay(500, ct);
         if (await RunAsync<string>(core, CommentBoxValueScript) != text && !await RunAsync<bool>(core, SetCommentValueScript, ("TEXT", text)))
         {
@@ -530,10 +577,10 @@ public partial class StoryWatchWindow : Window
             // Enter also posts a comment on Instagram's web page (Shift+Enter is a new line).
             AppLog.Info($"Comment: post button {submit}, pressing Enter instead");
             foreach (var type in new[] { "keyDown", "keyUp" })
-                await core.CallDevToolsProtocolMethodAsync("Input.dispatchKeyEvent", JsonSerializer.Serialize(new
+                await DevToolsAsync(core, "Input.dispatchKeyEvent", JsonSerializer.Serialize(new
                 {
                     type, key = "Enter", code = "Enter", windowsVirtualKeyCode = 13, nativeVirtualKeyCode = 13, text = type == "keyDown" ? "\r" : null
-                }));
+                }), ct);
         }
 
         // The comment counts once the box is empty and the text shows on the page.
@@ -568,7 +615,7 @@ public partial class StoryWatchWindow : Window
         }
         finally
         {
-            core.NavigationCompleted -= OnCompleted;
+            Unsubscribe(core, OnCompleted);
         }
         return core.Source.Contains("/accounts/login", StringComparison.OrdinalIgnoreCase) ? "login" : "loaded";
     }
@@ -599,7 +646,7 @@ public partial class StoryWatchWindow : Window
         }
         finally
         {
-            core.NavigationCompleted -= OnCompleted;
+            Unsubscribe(core, OnCompleted);
         }
 
         var state = "waiting";

@@ -457,6 +457,12 @@ public sealed partial class MainViewModel : ObservableObject, IMainContext, IDis
 
     public void ShowToast(string message, bool isError = false)
     {
+        // The API client reports retries and pauses from the thread pool; the toast and its timer live on the UI thread.
+        if (!_dispatcher.CheckAccess())
+        {
+            _dispatcher.BeginInvoke(() => ShowToast(message, isError));
+            return;
+        }
         ToastIsError = isError;
         Toast = message;
         _toastTimer.Stop();

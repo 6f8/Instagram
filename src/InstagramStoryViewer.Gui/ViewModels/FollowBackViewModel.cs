@@ -154,6 +154,13 @@ public sealed partial class FollowBackViewModel : ObservableObject
         {
             SetStatus(Strings.FollowBackCancelled, error: false);
         }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException
+                                       or System.Text.Json.JsonException or KeyNotFoundException)
+        {
+            // Last resort for embedded-browser failures: report them on the page instead of the crash dialog.
+            AppLog.Error("Follow-back check failed in the embedded browser", ex);
+            SetStatus(string.Format(CultureInfo.CurrentCulture, Strings.FollowBackStopped, ex.Message), error: true);
+        }
         finally
         {
             IsChecking = false;

@@ -39,6 +39,11 @@ public static class FollowListReader
     /// <summary>A random pause between pages, like a person scrolling the list.</summary>
     public static TimeSpan Pause() => TimeSpan.FromMilliseconds(1500 + Random.Shared.Next(0, 2000));
 
+    /// <remarks>
+    /// This method continues on the thread pool after its awaits, so <paramref name="fetch"/>, <paramref name="delay"/>
+    /// and <paramref name="progress"/> may be called on any thread. A fetch that needs a UI thread (WebView2) must
+    /// dispatch to it itself; a <see cref="Progress{T}"/> created on the UI thread already posts back to it.
+    /// </remarks>
     /// <param name="fetch">Fetches a path (see <see cref="PagePath"/>) and returns the raw answer.</param>
     /// <param name="progress">Number of accounts read so far.</param>
     /// <param name="maxRequests">Requests the caller allows; a longer list throws <see cref="PageBudgetExceededException"/>.</param>

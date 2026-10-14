@@ -56,8 +56,8 @@ public sealed class InstagramClient : IDisposable
     private string _wwwClaim = "0";
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
     // Lazy: ConcurrentDictionary.GetOrAdd may run its factory twice under contention; Lazy guarantees a
-    // single download even then (only the stored Lazy's value is ever started).
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<Task>> _inflightDownloads =
+    // single download even then (only the stored entry's task is ever started).
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, SharedDownload> _inflightDownloads =
         new(StringComparer.OrdinalIgnoreCase);
 
     private readonly Action<string>? _log;
@@ -290,13 +290,23 @@ public sealed class InstagramClient : IDisposable
         var key = Path.GetFullPath(filePath);
         // The shared download is not tied to the first caller's token: a cancelled preview must not abort a
         // download another caller is waiting for. Each caller can still stop waiting via its own token.
-        var lazy = _inflightDownloads.GetOrAdd(key,
-            _ => new Lazy<Task>(() => DownloadCoreAsync(url, key, progress, CancellationToken.None)));
-        var task = lazy.Value;
+        var shared = _inflightDownloads.GetOrAdd(key, _ => new SharedDownload(p => DownloadCoreAsync(url, key, p, CancellationToken.None)));
+        // Every caller gets progress, including one that joins a download someone else started.
+        shared.Progress.Add(progress);
+        var task = shared.Task.Value;
         // Remove the entry once finished (successfully or not) so a later retry starts fresh.
-        task.ContinueWith(_ => _inflightDownloads.TryRemove(new KeyValuePair<string, Lazy<Task>>(key, lazy)),
+        task.ContinueWith(_ => _inflightDownloads.TryRemove(new KeyValuePair<string, SharedDownload>(key, shared)),
             CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         return task.WaitAsync(ct);
+    }
+
+    /// <summary>One download shared by every caller asking for the same file.</summary>
+    private sealed class SharedDownload
+    {
+        public SharedDownload(Func<IProgress<double>, Task> start) => Task = new Lazy<Task>(() => start(Progress));
+
+        public ProgressFanout Progress { get; } = new();
+        public Lazy<Task> Task { get; }
     }
 
     private async Task DownloadCoreAsync(string url, string filePath, IProgress<double>? progress, CancellationToken ct)
