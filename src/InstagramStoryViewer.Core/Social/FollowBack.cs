@@ -28,34 +28,66 @@ public static class FollowBack
     /// <param name="progress">Number of candidates checked so far.</param>
     public static async Task<FollowBackCheck> ConfirmAsync(string userId, IReadOnlyList<StoryUser> candidates,
         Func<string, CancellationToken, Task<PageResult>> fetch, Func<TimeSpan, CancellationToken, Task> delay,
-        IProgress<int>? progress, CancellationToken ct, int maxRequests)
+        IProgress<int>? progress, CancellationToken ct, int maxRequests, IReadOnlyList<StoryUser>? knownFollowers = null)
     {
         var confirmed = new List<StoryUser>();
         var unverified = new List<StoryUser>();
+        var pending = new List<StoryUser>(); // not found, waiting for the next control search to pass
         var found = 0;
         var requests = 0;
+        var controls = (knownFollowers ?? []).Where(f => !string.IsNullOrEmpty(f.Username) && f.Pk is not null).ToList();
+        var nextControl = 0;
+
+        async Task<bool> SearchFindsAsync(StoryUser u)
+        {
+            await delay(FollowListReader.Pause(), ct).ConfigureAwait(false);
+            var path = FollowListReader.SearchFollowersPath(userId, u.Username!);
+            var res = FollowListReader.Parse<FriendshipListResponse>(await fetch(path, ct).ConfigureAwait(false), path);
+            requests++;
+            if (res.Users is null)
+                throw new Api.InstagramApiException(Api.InstagramErrorKind.InvalidResponse, "ردّ بحث بلا قائمة حسابات.") { RequestPath = path };
+            return res.Users.Any(x => x.Pk == u.Pk);
+        }
+
+        // A control search for someone known to follow must find them; otherwise the search is not working
+        // (soft limit, changed endpoint) and "not found" proves nothing.
+        async Task<bool> ControlPassesAsync()
+        {
+            if (controls.Count == 0) return true;
+            return await SearchFindsAsync(controls[nextControl++ % controls.Count]).ConfigureAwait(false);
+        }
+
         for (var i = 0; i < candidates.Count; i++)
         {
             var c = candidates[i];
-            if (requests >= maxRequests)
+            if (requests >= maxRequests - (controls.Count > 0 ? 1 : 0) || string.IsNullOrEmpty(c.Username))
             {
+                if (string.IsNullOrEmpty(c.Username)) { unverified.Add(c); continue; }
+                unverified.AddRange(pending); pending.Clear();
                 unverified.AddRange(candidates.Skip(i));
-                break;
+                return new FollowBackCheck(confirmed, unverified, found, requests);
             }
-            if (string.IsNullOrEmpty(c.Username))
-            {
-                unverified.Add(c); // nothing to search by
-                continue;
-            }
-
-            await delay(FollowListReader.Pause(), ct).ConfigureAwait(false);
-            var path = FollowListReader.SearchFollowersPath(userId, c.Username);
-            var res = FollowListReader.Parse<FriendshipListResponse>(await fetch(path, ct).ConfigureAwait(false), path);
-            requests++;
-            if (res.Users?.Any(u => u.Pk == c.Pk) == true) found++;
-            else confirmed.Add(c);
+            if (await SearchFindsAsync(c).ConfigureAwait(false)) found++;
+            else if (controls.Count == 0) confirmed.Add(c);
+            else pending.Add(c);
             progress?.Report(i + 1);
+
+            if (pending.Count >= ControlEvery || i == candidates.Count - 1)
+            {
+                if (!await ControlPassesAsync().ConfigureAwait(false))
+                {
+                    unverified.AddRange(pending);
+                    unverified.AddRange(candidates.Skip(i + 1));
+                    return new FollowBackCheck(confirmed, unverified, found, requests);
+                }
+                confirmed.AddRange(pending);
+                pending.Clear();
+            }
         }
+        confirmed.AddRange(pending);
         return new FollowBackCheck(confirmed, unverified, found, requests);
     }
+
+    /// <summary>Not-found candidates are only confirmed after a control search passes, at least this often.</summary>
+    public const int ControlEvery = 5;
 }

@@ -187,6 +187,10 @@ public sealed partial class MainViewModel
         {
             await HandleErrorAsync(ex, silent);
         }
+        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
+        {
+            // signed out (or exiting) while the refresh was running
+        }
         finally
         {
             IsLoadingTray = false;

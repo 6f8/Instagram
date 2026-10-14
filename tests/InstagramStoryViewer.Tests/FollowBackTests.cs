@@ -175,3 +175,39 @@ public class FollowBackConfirmTests
         Assert.Equal(InstagramStoryViewer.Api.InstagramErrorKind.RateLimited, ex.Kind);
     }
 }
+
+public class FollowBackControlTests
+{
+    private static StoryUser U(string pk) => new() { Pk = pk, Username = "user" + pk };
+
+    [Fact]
+    public async Task A_failing_control_search_leaves_candidates_unverified_instead_of_confirmed()
+    {
+        // The search is throttled: it finds nobody, not even a known follower.
+        var check = await FollowBack.ConfirmAsync("me", [U("1"), U("2")],
+            (_, _) => Task.FromResult(new PageResult(200, """{"users":[],"status":"ok"}""")),
+            (_, _) => Task.CompletedTask, null, default, 50, knownFollowers: [U("9")]);
+        Assert.Empty(check.NotFollowingBack);
+        Assert.Equal(["1", "2"], check.Unverified.Select(u => u.Pk));
+    }
+
+    [Fact]
+    public async Task A_passing_control_search_confirms()
+    {
+        var check = await FollowBack.ConfirmAsync("me", [U("1"), U("2")], (path, _) => Task.FromResult(new PageResult(200,
+                path.Contains("query=user9") ? """{"users":[{"pk":"9"}],"status":"ok"}""" : """{"users":[],"status":"ok"}""")),
+            (_, _) => Task.CompletedTask, null, default, 50, knownFollowers: [U("9")]);
+        Assert.Equal(["1", "2"], check.NotFollowingBack.Select(u => u.Pk));
+    }
+
+    [Fact]
+    public async Task An_empty_page_with_a_next_cursor_does_not_end_the_list()
+    {
+        var users = await FollowListReader.ReadAllAsync("1", true, (path, _) => Task.FromResult(new PageResult(200,
+                path.Contains("max_id=b") ? """{"users":[{"pk":"2"}],"status":"ok"}"""
+                : path.Contains("max_id=a") ? """{"users":[],"next_max_id":"b","status":"ok"}"""
+                : """{"users":[{"pk":"1"}],"next_max_id":"a","status":"ok"}""")),
+            (_, _) => Task.CompletedTask, null, default);
+        Assert.Equal(["1", "2"], users.Users.Select(u => u.Pk));
+    }
+}

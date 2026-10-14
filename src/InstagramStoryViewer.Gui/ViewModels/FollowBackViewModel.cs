@@ -210,7 +210,7 @@ public sealed partial class FollowBackViewModel : ObservableObject
         var candidates = FollowBack.NotFollowingBack(following.Users, followers.Users);
         var check = await FollowBack.ConfirmAsync(me, candidates, fetch, Task.Delay,
             new Progress<int>(n => Status = string.Format(CultureInfo.CurrentCulture, Strings.FollowBackVerifying, n, candidates.Count)),
-            ct, budget - following.Requests - followers.Requests);
+            ct, budget - following.Requests - followers.Requests, followers.Users);
         return new CheckResult(following.Users.Count, followers.Users.Count + check.FoundFollowing, check);
     }
 

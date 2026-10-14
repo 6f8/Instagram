@@ -58,6 +58,7 @@ public static class FollowListReader
         var users = new List<StoryUser>();
         var seen = new HashSet<string>();
         string? cursor = null;
+        var emptyInRow = 0;
         var budget = Math.Min(maxRequests, MaxPages);
         for (var page = 0; ; page++)
         {
@@ -68,7 +69,14 @@ public static class FollowListReader
             foreach (var u in res.Users ?? [])
                 if (u.Pk is not null && seen.Add(u.Pk)) users.Add(u);
             progress?.Report(users.Count);
-            if (string.IsNullOrEmpty(res.NextMaxId) || res.NextMaxId == cursor || res.Users is not { Count: > 0 })
+            if (res.Users is null)
+                throw new InstagramApiException(InstagramErrorKind.InvalidResponse, "ردّ بلا قائمة حسابات.") { RequestPath = path };
+            // An empty page that still points to a next page is a hiccup, not the end: keep following the
+            // cursor (stopping here silently cut the followers list short). A few in a row is a soft limit.
+            emptyInRow = res.Users.Count == 0 ? emptyInRow + 1 : 0;
+            if (emptyInRow >= 3)
+                throw new InstagramApiException(InstagramErrorKind.RateLimited, "أعاد إنستجرام صفحات فارغة متتالية؛ القائمة غير مكتملة.") { RequestPath = path };
+            if (string.IsNullOrEmpty(res.NextMaxId) || res.NextMaxId == cursor)
                 return new FollowListResult(users, page + 1);
             cursor = res.NextMaxId;
         }
