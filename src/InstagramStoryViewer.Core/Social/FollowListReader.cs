@@ -36,6 +36,10 @@ public static class FollowListReader
         + (followers ? "&search_surface=follow_list_page" : "")
         + (cursor is null ? "" : "&max_id=" + Uri.EscapeDataString(cursor));
 
+    /// <summary>The followers list filtered by a search text, as typed into the followers dialog's search box.</summary>
+    public static string SearchFollowersPath(string userId, string query) =>
+        $"/api/v1/friendships/{Uri.EscapeDataString(userId)}/followers/?count={PageSize}&query={Uri.EscapeDataString(query)}&search_surface=follow_list_page";
+
     /// <summary>A random pause between pages, like a person scrolling the list.</summary>
     public static TimeSpan Pause() => TimeSpan.FromMilliseconds(1500 + Random.Shared.Next(0, 2000));
 

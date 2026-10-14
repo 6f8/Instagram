@@ -25,18 +25,26 @@ public sealed class FollowBackRowViewModel(FollowBackEntry e)
     public string Initial => Username.Length > 0 ? Username[..1].ToUpperInvariant() : "?";
     public bool HasUnseen => false; // the shared avatar template draws a story ring for this
     public string ProfileUrl => $"https://www.instagram.com/{Uri.EscapeDataString(Username)}/";
+
+    /// <summary>Not searched for in the followers list (budget ran out, or a result saved by an older version).</summary>
+    public bool IsUnconfirmed => !Entry.Confirmed;
 }
 
 /// <summary>Saved result of the last check (shown again on the next start without new requests).</summary>
-public sealed record FollowBackEntry(string Pk, string Username, string? FullName, string? ProfilePicUrl, bool IsVerified);
+/// <param name="Confirmed">
+/// Searched for in the followers list and not found. Results saved before this check existed load as false,
+/// which is right: they were never confirmed.
+/// </param>
+public sealed record FollowBackEntry(string Pk, string Username, string? FullName, string? ProfilePicUrl, bool IsVerified,
+    bool Confirmed = false);
 
 public sealed record FollowBackSnapshot(DateTime CheckedAt, int Following, int Followers, List<FollowBackEntry> Accounts);
 
 /// <summary>
-/// "Not following back": reads both follow lists of the logged-in account and lists the accounts it follows
-/// that do not follow it. Runs only when the user presses Check (each 200 accounts cost one request), refuses
-/// to start when the hourly request cap would cut it short (a partial followers list would give wrong
-/// answers), and keeps the last result on disk.
+/// "Not following back": reads both follow lists of the logged-in account inside the embedded browser, then
+/// confirms every account missing from the followers list by searching for it there (Instagram does not always
+/// return the whole followers list, and people who do follow back must never be listed). Runs only when the
+/// user presses Check, within the hourly request cap, and keeps the last result on disk.
 /// </summary>
 public sealed partial class FollowBackViewModel : ObservableObject
 {
@@ -76,7 +84,10 @@ public sealed partial class FollowBackViewModel : ObservableObject
 
     public string Summary => Snapshot is not { } s
         ? Strings.FollowBackNotChecked
-        : string.Format(CultureInfo.CurrentCulture, Strings.FollowBackSummary, s.Following, s.Followers, s.Accounts.Count);
+        : s.Accounts.Count(a => !a.Confirmed) is var unconfirmed and > 0
+            ? string.Format(CultureInfo.CurrentCulture, Strings.FollowBackSummaryUnconfirmed, s.Following, s.Followers,
+                s.Accounts.Count - unconfirmed, unconfirmed)
+            : string.Format(CultureInfo.CurrentCulture, Strings.FollowBackSummary, s.Following, s.Followers, s.Accounts.Count);
 
     public string CheckedText => Snapshot is { } s ? string.Format(CultureInfo.CurrentCulture, Strings.FollowBackCheckedAt, s.CheckedAt) : "";
 
@@ -101,7 +112,7 @@ public sealed partial class FollowBackViewModel : ObservableObject
     private DateTime _pausedUntil = DateTime.MinValue;
     private static readonly TimeSpan PauseAfterLimit = TimeSpan.FromMinutes(15);
 
-    private sealed record Lists(List<StoryUser> Following, List<StoryUser> Followers);
+    private sealed record CheckResult(int Following, int Followers, FollowBackCheck Check);
 
     [RelayCommand(CanExecute = nameof(CanCheck))]
     private async Task CheckAsync()
@@ -120,17 +131,24 @@ public sealed partial class FollowBackViewModel : ObservableObject
         {
             // Everything is read from inside the logged-in instagram.com page, like the site's own followers
             // dialog: Instagram answers follow-list requests from outside the browser with "please wait".
-            var lists = await _dialogs.WithInstagramPageAsync(client.Cookies.ToHeader(),
-                (fetch, pageToken) => ReadListsAsync(client, me, fetch, pageToken));
+            var r = await _dialogs.WithInstagramPageAsync(client.Cookies.ToHeader(),
+                (fetch, pageToken) => RunCheckAsync(client, me, fetch, pageToken));
 
-            var result = FollowBack.NotFollowingBack(lists.Following, lists.Followers)
-                .Select(u => new FollowBackEntry(u.Pk!, u.Username ?? "", u.FullName, u.ProfilePicUrl, u.IsVerified == true))
+            static FollowBackEntry Entry(StoryUser u, bool confirmed) =>
+                new(u.Pk!, u.Username ?? "", u.FullName, u.ProfilePicUrl, u.IsVerified == true, confirmed);
+            var entries = r.Check.NotFollowingBack.Select(u => Entry(u, true))
+                .Concat(r.Check.Unverified.Select(u => Entry(u, false)))
                 .ToList();
-            Apply(new FollowBackSnapshot(DateTime.Now, lists.Following.Count, lists.Followers.Count, result));
+            Apply(new FollowBackSnapshot(DateTime.Now, r.Following, r.Followers, entries));
             SaveSnapshot();
-            AppLog.Info($"Follow-back check done: {result.Count} not following back");
+            AppLog.Info($"Follow-back check done: {r.Check.NotFollowingBack.Count} confirmed, {r.Check.Unverified.Count} unverified, " +
+                        $"{r.Check.FoundFollowing} found among followers by search");
 
-            SetStatus(string.Format(CultureInfo.CurrentCulture, Strings.FollowBackDone, result.Count), error: false);
+            SetStatus(r.Check.Unverified.Count > 0
+                    ? string.Format(CultureInfo.CurrentCulture, Strings.FollowBackDoneUnconfirmed,
+                        r.Check.NotFollowingBack.Count, r.Check.FoundFollowing, r.Check.Unverified.Count)
+                    : string.Format(CultureInfo.CurrentCulture, Strings.FollowBackDone, r.Check.NotFollowingBack.Count, r.Check.FoundFollowing),
+                error: r.Check.Unverified.Count > 0);
         }
         catch (PageBudgetExceededException ex)
         {
@@ -168,11 +186,13 @@ public sealed partial class FollowBackViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Runs inside the embedded browser: both lists, within the requests left this hour (Settings). Only the two
-    /// follow lists are requested: an earlier version first read the account's counts from users/{id}/info, an
-    /// app endpoint Instagram answers with 429 when it comes from the website, so the check never got further.
+    /// Runs inside the embedded browser, within the requests left this hour (Settings): both follow lists, then a
+    /// followers search for every account missing from the followers list. The search is what makes the result
+    /// trustworthy: Instagram does not always hand out the complete followers list, and anyone it leaves out
+    /// would otherwise be shown as "not following back". (An earlier version also read users/{id}/info, an app
+    /// endpoint Instagram answers with 429 when it comes from the website; it is not used.)
     /// </summary>
-    private async Task<Lists> ReadListsAsync(InstagramClient client, string me,
+    private async Task<CheckResult> RunCheckAsync(InstagramClient client, string me,
         Func<string, CancellationToken, Task<PageResult>> fetch, CancellationToken pageToken)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(pageToken, _cts!.Token);
@@ -186,7 +206,12 @@ public sealed partial class FollowBackViewModel : ObservableObject
             new Progress<int>(n => Report(Strings.FollowBackListFollowers, n)), ct, budget - following.Requests);
         AppLog.Info($"Follow-back lists read: {following.Users.Count} following, {followers.Users.Count} followers, " +
                     $"{following.Requests + followers.Requests} requests");
-        return new Lists(following.Users, followers.Users);
+
+        var candidates = FollowBack.NotFollowingBack(following.Users, followers.Users);
+        var check = await FollowBack.ConfirmAsync(me, candidates, fetch, Task.Delay,
+            new Progress<int>(n => Status = string.Format(CultureInfo.CurrentCulture, Strings.FollowBackVerifying, n, candidates.Count)),
+            ct, budget - following.Requests - followers.Requests);
+        return new CheckResult(following.Users.Count, followers.Users.Count + check.FoundFollowing, check);
     }
 
     private void Report(string what, int read) =>

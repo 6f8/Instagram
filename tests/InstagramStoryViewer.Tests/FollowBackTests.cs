@@ -121,3 +121,57 @@ public class FollowBackTests
         public void Report(int value) => report(value);
     }
 }
+
+public class FollowBackConfirmTests
+{
+    private static StoryUser U(string pk) => new() { Pk = pk, Username = "user" + pk };
+    private static readonly Func<TimeSpan, CancellationToken, Task> NoDelay = (_, _) => Task.CompletedTask;
+
+    // Search answer: the followers whose pk is in "followers" and whose username matches the query.
+    private static Func<string, CancellationToken, Task<PageResult>> Search(List<string> paths, params string[] followers) => (path, _) =>
+    {
+        lock (paths) paths.Add(path);
+        var q = Uri.UnescapeDataString(path.Split("query=")[1].Split('&')[0]);
+        var hits = followers.Where(pk => q == "user" + pk).Select(pk => $$"""{"pk":"{{pk}}","username":"user{{pk}}"}""");
+        return Task.FromResult(new PageResult(200, $$"""{"users":[{{string.Join(",", hits)}}],"status":"ok"}"""));
+    };
+
+    [Fact]
+    public async Task Candidates_found_by_the_followers_search_are_dropped()
+    {
+        var paths = new List<string>();
+        var check = await FollowBack.ConfirmAsync("me", [U("1"), U("2"), U("3")], Search(paths, "2"), NoDelay, null, default, maxRequests: 10);
+
+        Assert.Equal(["1", "3"], check.NotFollowingBack.Select(u => u.Pk)); // 2 follows back: the list read earlier missed it
+        Assert.Equal(1, check.FoundFollowing);
+        Assert.Empty(check.Unverified);
+        Assert.Equal(3, check.Requests);
+        Assert.Contains("/friendships/me/followers/?count=12&query=user1&search_surface=follow_list_page", paths[0]);
+    }
+
+    [Fact]
+    public async Task A_search_hit_with_another_id_does_not_count()
+    {
+        // Searching "user1" can return other accounts with similar names; only the same account id counts.
+        var check = await FollowBack.ConfirmAsync("me", [U("1")], (path, _) => Task.FromResult(new PageResult(200,
+            """{"users":[{"pk":"999","username":"user1_fan"}],"status":"ok"}""")), NoDelay, null, default, 10);
+        Assert.Single(check.NotFollowingBack);
+    }
+
+    [Fact]
+    public async Task When_the_budget_runs_out_the_rest_are_unverified_not_confirmed()
+    {
+        var check = await FollowBack.ConfirmAsync("me", [U("1"), U("2"), U("3"), U("4")], Search([]), NoDelay, null, default, maxRequests: 2);
+        Assert.Equal(["1", "2"], check.NotFollowingBack.Select(u => u.Pk));
+        Assert.Equal(["3", "4"], check.Unverified.Select(u => u.Pk));
+        Assert.Equal(2, check.Requests);
+    }
+
+    [Fact]
+    public async Task A_rate_limit_during_the_search_is_reported()
+    {
+        var ex = await Assert.ThrowsAsync<InstagramStoryViewer.Api.InstagramApiException>(() => FollowBack.ConfirmAsync("me", [U("1")],
+            (_, _) => Task.FromResult(new PageResult(429, "")), NoDelay, null, default, 10));
+        Assert.Equal(InstagramStoryViewer.Api.InstagramErrorKind.RateLimited, ex.Kind);
+    }
+}

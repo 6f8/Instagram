@@ -30,7 +30,7 @@
             <StackPanel>
                 <TextBlock Text="لا يتابعونك" Style="{StaticResource H1}" />
                 <TextBlock Style="{StaticResource Muted}" Margin="0,4,0,0" TextWrapping="Wrap"
-                           Text="الحسابات التي تتابعها ولا تتابعك. يقرأ البرنامج قائمتي من تتابعهم ومن يتابعونك ويقارن بينهما؛ تتم القراءة من داخل صفحة إنستجرام في المتصفح المدمج، 12 حساباً في كل طلب كما يفعل الموقع نفسه." />
+                           Text="الحسابات التي تتابعها ولا تتابعك. يقرأ البرنامج قائمتي من تتابعهم ومن يتابعونك من داخل صفحة إنستجرام، ثم يتحقق من كل حساب بالبحث عنه في قائمة متابعيك قبل أن يعرضه، فلا يظهر هنا من يتابعك فعلاً." />
             </StackPanel>
         </DockPanel>
 
@@ -96,6 +96,11 @@
                                         <TextBlock Style="{StaticResource Icon}" Text="&#xEF76;" FontSize="13" Margin="6,0,0,0"
                                                    Foreground="#4CA3FF" ToolTip="حساب موثّق"
                                                    Visibility="{Binding IsVerified, Converter={StaticResource Vis}}" />
+                                        <Border Margin="8,0,0,0" CornerRadius="6" Padding="6,0" Background="#33FFB547" VerticalAlignment="Center"
+                                                ToolTip="لم يتحقق البرنامج من هذا الحساب بالبحث في قائمة متابعيك؛ قد يكون يتابعك. أعد الفحص للتأكد."
+                                                Visibility="{Binding IsUnconfirmed, Converter={StaticResource Vis}}">
+                                            <TextBlock Text="غير مؤكَّد" FontSize="11" Foreground="{StaticResource OrangeBrush}" />
+                                        </Border>
                                     </StackPanel>
                                     <TextBlock Text="{Binding FullName}" Style="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis"
                                                Visibility="{Binding FullName, Converter={StaticResource Vis}}" />

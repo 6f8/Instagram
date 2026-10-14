@@ -114,7 +114,6 @@
   <data name="FollowBackCheckedAt" xml:space="preserve"><value>آخر فحص: {0:yyyy/MM/dd HH:mm}</value></data>
   <data name="FollowBackListFollowing" xml:space="preserve"><value>من تتابعهم</value></data>
   <data name="FollowBackListFollowers" xml:space="preserve"><value>من يتابعونك</value></data>
-  <data name="FollowBackDone" xml:space="preserve"><value>تم الفحص: {0:N0} حساباً لا يتابعونك.</value></data>
   <data name="FollowBackStopped" xml:space="preserve"><value>توقف الفحص: {0}</value></data>
   <data name="FollowBackCancelled" xml:space="preserve"><value>أُوقف الفحص.</value></data>
   <data name="FollowBackReading" xml:space="preserve"><value>جاري قراءة {0}: {1:N0}</value></data>
@@ -122,4 +121,8 @@
   <data name="FollowBackPaused" xml:space="preserve"><value>طلب إنستجرام من البرنامج التمهّل، فأوقف البرنامج كل الطلبات مؤقتاً لحماية حسابك (هذا ليس حظراً). اضغط "فحص الآن" بعد الساعة {0:HH:mm}. لا تُعرض نتيجة ناقصة لأنها قد تكون خاطئة.</value></data>
   <data name="FollowBackOpening" xml:space="preserve"><value>جاري فتح إنستجرام في النافذة الصغيرة...</value></data>
   <data name="FollowBackOverBudget" xml:space="preserve"><value>القائمتان أطول مما يسمح به المتبقي من حد الساعة ({0} طلباً، كل طلب = 12 حساباً). ارفع "طلبات في الساعة" من الإعدادات ثم أعد الفحص.</value></data>
+  <data name="FollowBackDone" xml:space="preserve"><value>تم الفحص: {0:N0} حساباً لا يتابعونك، وتم التحقق من كل واحد منها بالبحث في قائمة متابعيك. (استُبعد {1:N0} حساباً لم تُرجعها إنستجرام في القائمة لكنها تتابعك فعلاً.)</value></data>
+  <data name="FollowBackDoneUnconfirmed" xml:space="preserve"><value>تم: {0:N0} حساباً مؤكَّداً لا يتابعونك (واستُبعد {1:N0} تبيّن أنها تتابعك). بقي {2:N0} حساباً "غير مؤكَّد" لنفاد حد الطلبات في هذه الساعة؛ ارفع "طلبات في الساعة" من الإعدادات وأعد الفحص لاحقاً.</value></data>
+  <data name="FollowBackSummaryUnconfirmed" xml:space="preserve"><value>تتابع {0:N0} · يتابعك {1:N0} · لا يتابعونك {2:N0} · غير مؤكَّد {3:N0}</value></data>
+  <data name="FollowBackVerifying" xml:space="preserve"><value>جاري التحقق من كل حساب في قائمة متابعيك: {0:N0} من {1:N0}</value></data>
 </root>
