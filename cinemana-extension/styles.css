@@ -1,0 +1,370 @@
+/* CSS Styles for Cinemana Download Button */
+
+#cinemana-download-container {
+  display: inline-flex;
+  position: relative;
+  vertical-align: middle;
+  margin-left: 8px;
+  margin-right: 8px;
+  background-color: transparent;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  font-family: inherit;
+  z-index: 9999;
+  overflow: visible;
+  gap: 4px;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+#cinemana-download-container.cinemana-dl-floating {
+  position: fixed;
+  top: 72px;
+  right: 28px;
+  margin: 0;
+  z-index: 2147483647;
+}
+
+cinemana-video-stat #cinemana-download-container {
+  position: relative;
+  right: auto;
+  top: auto;
+  transform: none;
+  display: inline-flex;
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-right: 0;
+  vertical-align: middle;
+}
+
+.cinemana-dl-inline-host {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 4px !important;
+  flex-wrap: nowrap !important;
+  width: 100% !important;
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+}
+
+.cinemana-dl-stat-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  width: 100% !important;
+}
+
+cinemana-video-detail div:has(> cinemana-video-stat.cinemana-dl-stat-target) {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  width: 100% !important;
+}
+
+cinemana-video-stat:has(#cinemana-download-container) {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 4px !important;
+  flex-wrap: nowrap !important;
+  width: 100% !important;
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+}
+
+cinemana-video-stat.cinemana-dl-stat-target {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 4px !important;
+  flex-wrap: nowrap !important;
+  width: 100% !important;
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+}
+
+.cinemana-dl-btn {
+  background: transparent;
+  border: none;
+  color: #c8d0d7;
+  min-height: 30px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: row;
+  gap: 5px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
+  outline: none;
+}
+
+.cinemana-dl-group {
+  display: inline-flex;
+  flex-direction: row;
+  position: relative;
+  background-color: #111c26;
+  border: 1px solid #172735;
+  border-radius: 7px;
+  overflow: visible;
+}
+
+.cinemana-dl-btn span,
+.menu-item span,
+.menu-section-title,
+.menu-loading {
+  direction: auto;
+  unicode-bidi: isolate;
+}
+
+.cinemana-dl-btn:hover {
+  background-color: #172433;
+  color: #ffffff;
+}
+
+.cinemana-dl-btn-main {
+  border-top-left-radius: 7px;
+  border-bottom-left-radius: 7px;
+  border-right: 1px solid #1f3141;
+}
+
+.cinemana-dl-btn-toggle {
+  border-top-right-radius: 7px;
+  border-bottom-right-radius: 7px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.dl-icon,
+.subtitle-icon,
+.arrow-icon {
+  width: 15px;
+  height: 15px;
+  color: #aeb8c2;
+  flex: 0 0 auto;
+}
+
+.arrow-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.cinemana-dl-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  min-width: 220px;
+  background-color: #111c26;
+  border: 1px solid #1f3141;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.cinemana-dl-group:last-child .cinemana-dl-menu {
+  right: 0;
+}
+
+.cinemana-dl-menu.show {
+  display: block;
+}
+
+.menu-loading {
+  padding: 16px;
+  color: #a0aec0;
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.menu-section {
+  padding: 6px 0;
+  border-bottom: 1px solid #2d323d;
+}
+
+.menu-section:last-child {
+  border-bottom: none;
+}
+
+.menu-section-title {
+  padding: 6px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #e53e3e; /* Accent red to match Cinemana theme */
+  letter-spacing: 0.5px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  color: #e2e8f0;
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
+}
+
+.menu-item:hover {
+  background-color: #2d323d;
+  color: #ffffff;
+}
+
+.menu-item svg {
+  color: #a0aec0;
+  flex-shrink: 0;
+}
+
+.menu-item:hover svg {
+  color: #ffffff;
+}
+
+.active-badge {
+  background-color: #e53e3e;
+  color: #ffffff;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: auto;
+  font-weight: 600;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---------- Season batch download ---------- */
+.cinemana-dl-btn-solo {
+  border-radius: 6px !important;
+}
+
+#cinemana-season-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  font-family: inherit;
+}
+
+.cinemana-season-panel {
+  background: #1c1c22;
+  color: #eee;
+  border-radius: 10px;
+  width: min(560px, 100%);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  font-size: 14px;
+}
+
+.cinemana-season-panel .cs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #333;
+}
+
+.cinemana-season-panel .cs-close {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.cinemana-season-panel .cs-body {
+  padding: 12px 16px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cinemana-season-panel .cs-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cinemana-season-panel .cs-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 140px;
+}
+
+.cinemana-season-panel select {
+  background: #2a2a33;
+  color: #eee;
+  border: 1px solid #444;
+  border-radius: 6px;
+  padding: 6px;
+}
+
+.cinemana-season-panel .cs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 40vh;
+  overflow: auto;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.cinemana-season-panel .cs-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.cinemana-season-panel .cs-item-status {
+  margin-inline-start: auto;
+  font-size: 12px;
+  color: #9c9;
+}
+
+.cinemana-season-panel .cs-start {
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  background: #e50914;
+  color: #fff;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.cinemana-season-panel .cs-log,
+.cinemana-season-panel .cs-status {
+  color: #bbb;
+}

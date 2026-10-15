@@ -1,0 +1,58 @@
+{
+  "action": {
+    "default_icon": {
+      "128": "logo.png",
+      "16": "logo.png",
+      "48": "logo.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "all_frames": true,
+      "css": [
+        "styles.css"
+      ],
+      "js": [
+        "content.js",
+        "season.js"
+      ],
+      "matches": [
+        "*://cinemana.shabakaty.com/*",
+        "*://cinemana.shabakaty.cc/*"
+      ],
+      "run_at": "document_start",
+      "world": "ISOLATED"
+    }
+  ],
+  "description": "Download videos and subtitles directly from Cinemana Shabakaty",
+  "host_permissions": [
+    "*://*.shabakaty.com/*",
+    "*://cinemana.shabakaty.com/*",
+    "*://cinemana.shabakaty.cc/*"
+  ],
+  "icons": {
+    "128": "logo.png",
+    "16": "logo.png",
+    "48": "logo.png"
+  },
+  "manifest_version": 3,
+  "name": "Cinemana Download Button (Season)",
+  "permissions": [
+    "downloads"
+  ],
+  "version": "1.4",
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "*://cinemana.shabakaty.com/*",
+        "*://cinemana.shabakaty.cc/*"
+      ],
+      "resources": [
+        "main-world.js"
+      ]
+    }
+  ]
+}
