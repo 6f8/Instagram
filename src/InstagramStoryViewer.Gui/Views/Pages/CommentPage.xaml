@@ -69,7 +69,79 @@
             </StackPanel>
         </Border>
 
-        <Border Grid.Row="2" Style="{StaticResource Card}" Padding="14,14,14,8">
+        <Grid Grid.Row="2">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="3*" />
+            <ColumnDefinition Width="14" />
+            <ColumnDefinition Width="2*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- find a post: hashtag search or new posts of the accounts you follow -->
+        <Border Grid.Column="0" Style="{StaticResource Card}" Padding="14,14,14,8">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Top" Text="ابحث عن منشور" Style="{StaticResource H3}" Margin="6,0,0,8" />
+                <DockPanel DockPanel.Dock="Top" Margin="0,0,0,6">
+                    <Button DockPanel.Dock="Right" Command="{Binding LoadNewPostsCommand}" Margin="8,0,0,0"
+                            ToolTip="أحدث منشورات المفضّلة (أو من لديهم ستوريات) خلال آخر 3 أيام">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE5D5;" FontSize="13" Margin="0,0,6,0" />
+                            <TextBlock Text="منشورات جديدة" />
+                        </StackPanel>
+                    </Button>
+                    <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryButton}" Command="{Binding SearchHashtagCommand}" Margin="8,0,0,0" Padding="14,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource Icon}" Text="&#xE8B6;" FontSize="14" Margin="0,0,6,0" />
+                            <TextBlock Text="بحث" />
+                        </StackPanel>
+                    </Button>
+                    <TextBox Style="{StaticResource SearchBox}" Tag="#هاشتاق" AutomationProperties.Name="هاشتاق للبحث"
+                             Text="{Binding Hashtag, UpdateSourceTrigger=PropertyChanged}">
+                        <TextBox.InputBindings>
+                            <KeyBinding Key="Enter" Command="{Binding SearchHashtagCommand}" />
+                        </TextBox.InputBindings>
+                    </TextBox>
+                </DockPanel>
+                <StackPanel DockPanel.Dock="Top" Margin="4,0,4,6">
+                    <ProgressBar IsIndeterminate="True" Height="3" Visibility="{Binding IsSearching, Converter={StaticResource Vis}}" />
+                    <TextBlock Text="{Binding SearchStatus}" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap"
+                               Visibility="{Binding SearchStatus, Converter={StaticResource Vis}}" />
+                </StackPanel>
+                <ListBox Style="{StaticResource PlainList}" ItemContainerStyle="{StaticResource RowItem}" ItemsSource="{Binding Results}">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:PostResultViewModel}">
+                            <DockPanel MinHeight="64">
+                                <StackPanel DockPanel.Dock="Right" VerticalAlignment="Center">
+                                    <Button Style="{StaticResource PrimaryButton}" Content="تعليق" Padding="12,2" Height="30"
+                                            ToolTip="اختر هذا المنشور للتعليق عليه"
+                                            Command="{Binding DataContext.UsePostCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                            CommandParameter="{Binding}" />
+                                    <Button Style="{StaticResource LinkButton}" Content="فتح" Margin="0,4,0,0" HorizontalAlignment="Center"
+                                            Command="{Binding DataContext.OpenResultCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                            CommandParameter="{Binding}" />
+                                </StackPanel>
+                                <Border Width="56" Height="56" CornerRadius="8" ClipToBounds="True" Background="#1A1E2E" DockPanel.Dock="Left">
+                                    <Image Source="{Binding ThumbnailUrl, Converter={StaticResource Img}, ConverterParameter=112}" Stretch="UniformToFill" />
+                                </Border>
+                                <StackPanel Margin="12,0,8,0" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding Username}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding AgoText}" Style="{StaticResource Muted}" FontSize="11.5" Margin="8,0,0,0" />
+                                        <TextBlock Text=" · فيديو" Style="{StaticResource Muted}" FontSize="11.5"
+                                                   Visibility="{Binding IsVideo, Converter={StaticResource Vis}}" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Caption}" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" MaxHeight="34"
+                                               TextTrimming="CharacterEllipsis" Visibility="{Binding Caption, Converter={StaticResource Vis}}" />
+                                    <TextBlock Text="{Binding Stats}" Style="{StaticResource Muted}" FontSize="11" FlowDirection="LeftToRight"
+                                               HorizontalAlignment="Right" />
+                                </StackPanel>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+        </Border>
+
+        <Border Grid.Column="2" Style="{StaticResource Card}" Padding="14,14,14,8">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -125,5 +197,6 @@
                            Visibility="{Binding Recent.IsEmpty, Converter={StaticResource Vis}}" />
             </Grid>
         </Border>
+        </Grid>
     </Grid>
 </UserControl>

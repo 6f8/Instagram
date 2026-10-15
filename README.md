@@ -97,6 +97,24 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
   - Open any profile.
 - The last result is kept (`%AppData%\InstagramStoryViewer\not-following-back.json`) and shown again without new requests. It is deleted when you log out.
 
+#### More on the Not following back page (v2.6)
+- **Profile count:** your follower count from your profile is shown next to the number read, so an incomplete list is easy to spot.
+- **Checking:**
+  - Recheck a single account with one button.
+  - **Continue verifying** checks only the "unconfirmed" ones.
+- **Tabs:**
+  - **Unfollowed you:** confirmed by search before being listed.
+  - **New followers.**
+  - **Check history:** follower counts with the change between checks.
+- **Exclusions:** accounts you follow on purpose stay hidden.
+- **Filters:** unconfirmed / private / public, sorting by name, CSV export.
+
+### Finding a post to comment on
+- The **Comment** page has a search box:
+  - Search a **hashtag** (read inside the instagram.com page).
+  - Or **New posts** from your favorites over the last 3 days.
+- Press **Comment** next to a post to put its link in the box.
+
 ### Keyboard
 - `Ctrl+1` … `Ctrl+7`: switch pages.
 - `F5`: refresh.

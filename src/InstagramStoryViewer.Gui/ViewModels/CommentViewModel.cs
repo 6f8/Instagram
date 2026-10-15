@@ -61,7 +61,12 @@ public sealed partial class CommentViewModel : ObservableObject
     public bool HasTextHint => TextHint is not null;
 
     /// <summary>Re-evaluates the Post button (called when the login state changes).</summary>
-    public void Refresh() => PostCommand.NotifyCanExecuteChanged();
+    public void Refresh()
+    {
+        PostCommand.NotifyCanExecuteChanged();
+        SearchHashtagCommand.NotifyCanExecuteChanged();
+        LoadNewPostsCommand.NotifyCanExecuteChanged();
+    }
 
     private bool CanPost() => !IsPosting && _ctx.IsLoggedIn && PostLink.TryParse(PostUrl) is not null && CommentRules.Validate(Text) is null;
 
