@@ -35,6 +35,25 @@ public sealed class ProfileUser
     [JsonPropertyName("full_name")] public string? FullName { get; set; }
     [JsonPropertyName("is_private")] public bool IsPrivate { get; set; }
     [JsonPropertyName("followed_by_viewer")] public bool FollowedByViewer { get; set; }
+    [JsonPropertyName("edge_followed_by")] public EdgeCount? EdgeFollowedBy { get; set; }
+    [JsonPropertyName("edge_follow")] public EdgeCount? EdgeFollow { get; set; }
+}
+
+public sealed class EdgeCount
+{
+    [JsonPropertyName("count")] public int Count { get; set; }
+}
+
+// ---------- /api/v1/accounts/edit/web_form_data/ (the website's own settings form) ----------
+
+public sealed class AccountFormResponse : ApiResponseBase
+{
+    [JsonPropertyName("form_data")] public AccountFormData? FormData { get; set; }
+}
+
+public sealed class AccountFormData
+{
+    [JsonPropertyName("username")] public string? Username { get; set; }
 }
 
 // ---------- /api/v1/users/{id}/info/ ----------

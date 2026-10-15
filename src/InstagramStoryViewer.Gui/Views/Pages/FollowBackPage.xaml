@@ -2,9 +2,33 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:InstagramStoryViewer.Gui.ViewModels">
+    <UserControl.Resources>
+        <!-- an account row shared by the unfollowers / new followers tabs -->
+        <DataTemplate x:Key="EventRow" DataType="{x:Type vm:FollowerEventRowViewModel}">
+            <DockPanel Height="46">
+                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" ToolTip="فتح الحساب في المتصفح"
+                        Command="{Binding DataContext.OpenProfileCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                        CommandParameter="{Binding}">
+                    <TextBlock Style="{StaticResource Icon}" Text="&#xE89E;" FontSize="14" />
+                </Button>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding WhenText}" Style="{StaticResource Muted}" FontSize="12"
+                           VerticalAlignment="Center" Margin="0,0,14,0" FlowDirection="LeftToRight" ToolTip="{Binding AgoText}" />
+                <Viewbox Width="38" Height="38" DockPanel.Dock="Left">
+                    <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource Avatar}" />
+                </Viewbox>
+                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Username}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding FullName}" Style="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis"
+                               Visibility="{Binding FullName, Converter={StaticResource Vis}}" />
+                </StackPanel>
+            </DockPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
     <!-- DataContext: MainViewModel; the page works on its FollowBack view model. -->
     <Grid Margin="18,14,18,16" DataContext="{Binding FollowBack}">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -20,6 +44,14 @@
                         <TextBlock Text="إيقاف" />
                     </StackPanel>
                 </Button>
+                <Button Command="{Binding ContinueCommand}" Margin="0,0,8,0" Height="40"
+                        ToolTip="يتحقق فقط من الحسابات غير المؤكَّدة، دون قراءة القائمتين من جديد"
+                        Visibility="{Binding HasUnconfirmed, Converter={StaticResource Vis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE5CA;" FontSize="14" Margin="0,0,8,0" />
+                        <TextBlock Text="أكمل التحقق" />
+                    </StackPanel>
+                </Button>
                 <Button Style="{StaticResource PrimaryButton}" Command="{Binding CheckCommand}" Padding="18,0" Height="40">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Style="{StaticResource Icon}" Text="&#xF106;" FontSize="15" Margin="0,0,8,0" />
@@ -30,7 +62,7 @@
             <StackPanel>
                 <TextBlock Text="لا يتابعونك" Style="{StaticResource H1}" />
                 <TextBlock Style="{StaticResource Muted}" Margin="0,4,0,0" TextWrapping="Wrap"
-                           Text="الحسابات التي تتابعها ولا تتابعك. يقرأ البرنامج قائمتي من تتابعهم ومن يتابعونك من داخل صفحة إنستجرام، ثم يتحقق من كل حساب بالبحث عنه في قائمة متابعيك قبل أن يعرضه، فلا يظهر هنا من يتابعك فعلاً." />
+                           Text="يقرأ البرنامج قائمتي من تتابعهم ومن يتابعونك من داخل صفحة إنستجرام، ويتحقق من كل حساب بالبحث عنه في قائمة متابعيك قبل أن يعرضه. ويقارن كل فحص بالسابق ليعرف من ألغى متابعتك ومن تابعك جديداً." />
             </StackPanel>
         </DockPanel>
 
@@ -42,6 +74,12 @@
                                VerticalAlignment="Center" />
                     <TextBlock Text="{Binding Summary}" FontWeight="SemiBold" FontSize="14" />
                 </DockPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,6,0,0" Visibility="{Binding ProfileText, Converter={StaticResource Vis}}">
+                    <TextBlock Text="{Binding ProfileText}" Style="{StaticResource Muted}" FontSize="12.5" />
+                    <TextBlock Text="  ⚠ القائمة التي أعادها إنستجرام أقل من العدد في ملفك؛ لذلك يتحقق البرنامج من كل حساب بالبحث."
+                               Foreground="{StaticResource OrangeBrush}" FontSize="12.5"
+                               Visibility="{Binding ProfileIncomplete, Converter={StaticResource Vis}}" />
+                </StackPanel>
                 <ProgressBar Height="5" Margin="0,10,0,0" IsIndeterminate="True"
                              Visibility="{Binding IsChecking, Converter={StaticResource Vis}}" />
                 <TextBlock Text="{Binding Status}" TextWrapping="Wrap" Margin="0,8,0,0"
@@ -60,61 +98,216 @@
             </StackPanel>
         </Border>
 
-        <!-- search + options -->
-        <DockPanel Grid.Row="2" Margin="0,14,0,0">
+        <!-- tabs -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,14,0,0">
+            <RadioButton Style="{StaticResource Chip}" GroupName="fbTab"
+                         IsChecked="{Binding Tab, Converter={StaticResource ValueBool}, ConverterParameter=NotFollowing}">
+                <TextBlock><Run Text="لا يتابعونك " /><Run Text="{Binding Accounts.Count, Mode=OneWay}" /></TextBlock>
+            </RadioButton>
+            <RadioButton Style="{StaticResource Chip}" GroupName="fbTab"
+                         IsChecked="{Binding Tab, Converter={StaticResource ValueBool}, ConverterParameter=Unfollowers}">
+                <TextBlock><Run Text="ألغوا متابعتك " /><Run Text="{Binding UnfollowersCount, Mode=OneWay}" /></TextBlock>
+            </RadioButton>
+            <RadioButton Style="{StaticResource Chip}" GroupName="fbTab"
+                         IsChecked="{Binding Tab, Converter={StaticResource ValueBool}, ConverterParameter=NewFollowers}">
+                <TextBlock><Run Text="متابعون جدد " /><Run Text="{Binding NewFollowersCount, Mode=OneWay}" /></TextBlock>
+            </RadioButton>
+            <RadioButton Style="{StaticResource Chip}" GroupName="fbTab" Content="سجل الفحوصات"
+                         IsChecked="{Binding Tab, Converter={StaticResource ValueBool}, ConverterParameter=History}" />
+        </StackPanel>
+
+        <!-- ============================================ tab: not following back -->
+        <DockPanel Grid.Row="3" Margin="0,12,0,0"
+                   Visibility="{Binding Tab, Converter={StaticResource PageVis}, ConverterParameter=NotFollowing}">
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                <CheckBox IsChecked="{Binding HideVerified}" Content="إخفاء الحسابات الموثّقة" VerticalAlignment="Center" Margin="0,0,14,0"
-                          ToolTip="المشاهير والصفحات الرسمية نادراً ما يتابعون أحداً" />
+                <Button Command="{Binding ExportCsvCommand}" ToolTip="حفظ القائمة الظاهرة كملف CSV يفتح في Excel" Margin="0,0,8,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xF090;" FontSize="13" Margin="0,0,6,0" />
+                        <TextBlock Text="تصدير" />
+                    </StackPanel>
+                </Button>
                 <Button Command="{Binding CopyUsernamesCommand}" ToolTip="نسخ أسماء المستخدمين الظاهرة، اسم في كل سطر">
                     <StackPanel Orientation="Horizontal">
-                        <TextBlock Style="{StaticResource Icon}" Text="&#xE14D;" FontSize="13" Margin="0,0,8,0" />
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xE14D;" FontSize="13" Margin="0,0,6,0" />
                         <TextBlock Text="نسخ الأسماء" />
                     </StackPanel>
                 </Button>
             </StackPanel>
-            <TextBox Style="{StaticResource SearchBox}" Tag="ابحث بالاسم..." Width="300" HorizontalAlignment="Left"
-                     AutomationProperties.Name="ابحث في القائمة" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
+            <WrapPanel VerticalAlignment="Center">
+                <TextBox Style="{StaticResource SearchBox}" Tag="ابحث بالاسم..." Width="220" Margin="0,0,10,6"
+                         AutomationProperties.Name="ابحث في القائمة" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
+                <RadioButton Style="{StaticResource Chip}" Content="الكل" GroupName="fbFilter" Margin="0,0,6,6"
+                             IsChecked="{Binding FilterMode, Converter={StaticResource ValueBool}, ConverterParameter=All}" />
+                <RadioButton Style="{StaticResource Chip}" Content="غير مؤكَّد" GroupName="fbFilter" Margin="0,0,6,6"
+                             IsChecked="{Binding FilterMode, Converter={StaticResource ValueBool}, ConverterParameter=Unconfirmed}" />
+                <RadioButton Style="{StaticResource Chip}" Content="خاص" GroupName="fbFilter" Margin="0,0,6,6"
+                             IsChecked="{Binding FilterMode, Converter={StaticResource ValueBool}, ConverterParameter=Private}" />
+                <RadioButton Style="{StaticResource Chip}" Content="عام" GroupName="fbFilter" Margin="0,0,14,6"
+                             IsChecked="{Binding FilterMode, Converter={StaticResource ValueBool}, ConverterParameter=Public}" />
+                <RadioButton Style="{StaticResource Chip}" Content="ترتيب إنستجرام" GroupName="fbSort" Margin="0,0,6,6"
+                             IsChecked="{Binding SortMode, Converter={StaticResource ValueBool}, ConverterParameter=Default}" />
+                <RadioButton Style="{StaticResource Chip}" Content="أبجدي" GroupName="fbSort" Margin="0,0,14,6"
+                             IsChecked="{Binding SortMode, Converter={StaticResource ValueBool}, ConverterParameter=Name}" />
+                <CheckBox IsChecked="{Binding HideVerified}" Content="إخفاء الموثّقة" VerticalAlignment="Center" Margin="0,0,12,6"
+                          ToolTip="المشاهير والصفحات الرسمية نادراً ما يتابعون أحداً" />
+                <CheckBox IsChecked="{Binding ShowIgnored}" VerticalAlignment="Center" Margin="0,0,0,6"
+                          ToolTip="الحسابات التي استثنيتها (تتابعها عمداً) مخفية؛ فعّل هذا لإظهارها">
+                    <TextBlock><Run Text="إظهار المستثناة (" /><Run Text="{Binding IgnoredCount, Mode=OneWay}" /><Run Text=")" /></TextBlock>
+                </CheckBox>
+            </WrapPanel>
         </DockPanel>
 
-        <Border Grid.Row="3" Style="{StaticResource Card}" Margin="0,12,0,0" Padding="12,10,12,8">
+        <Border Grid.Row="4" Style="{StaticResource Card}" Margin="0,8,0,0" Padding="12,10,12,8">
             <Grid>
-                <ListBox Style="{StaticResource PlainList}" ItemContainerStyle="{StaticResource RowItem}" ItemsSource="{Binding View}">
-                    <ListBox.ItemTemplate>
-                        <DataTemplate DataType="{x:Type vm:FollowBackRowViewModel}">
-                            <DockPanel Height="46">
-                                <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" ToolTip="فتح الحساب في المتصفح"
-                                        Command="{Binding DataContext.OpenProfileCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
-                                        CommandParameter="{Binding}">
-                                    <TextBlock Style="{StaticResource Icon}" Text="&#xE89E;" FontSize="14" />
-                                </Button>
-                                <Viewbox Width="38" Height="38" DockPanel.Dock="Left">
-                                    <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource Avatar}" />
-                                </Viewbox>
-                                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
-                                    <StackPanel Orientation="Horizontal">
-                                        <TextBlock Text="{Binding Username}" FontWeight="SemiBold" />
-                                        <TextBlock Style="{StaticResource Icon}" Text="&#xEF76;" FontSize="13" Margin="6,0,0,0"
-                                                   Foreground="#4CA3FF" ToolTip="حساب موثّق"
-                                                   Visibility="{Binding IsVerified, Converter={StaticResource Vis}}" />
-                                        <Border Margin="8,0,0,0" CornerRadius="6" Padding="6,0" Background="#33FFB547" VerticalAlignment="Center"
-                                                ToolTip="لم يتحقق البرنامج من هذا الحساب بالبحث في قائمة متابعيك؛ قد يكون يتابعك. أعد الفحص للتأكد."
-                                                Visibility="{Binding IsUnconfirmed, Converter={StaticResource Vis}}">
-                                            <TextBlock Text="غير مؤكَّد" FontSize="11" Foreground="{StaticResource OrangeBrush}" />
-                                        </Border>
+                <!-- not following back -->
+                <Grid Visibility="{Binding Tab, Converter={StaticResource PageVis}, ConverterParameter=NotFollowing}">
+                    <ListBox Style="{StaticResource PlainList}" ItemContainerStyle="{StaticResource RowItem}" ItemsSource="{Binding View}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:FollowBackRowViewModel}">
+                                <DockPanel Height="46">
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" ToolTip="فتح الحساب في المتصفح"
+                                            Command="{Binding DataContext.OpenProfileCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                            CommandParameter="{Binding}">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE89E;" FontSize="14" />
+                                    </Button>
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Margin="0,0,6,0"
+                                            ToolTip="استثناء: تتابعه عمداً، أخفِه من النتائج (اضغط مرة أخرى للإلغاء)"
+                                            Command="{Binding DataContext.ToggleIgnoredCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                            CommandParameter="{Binding}">
+                                        <TextBlock FontSize="14">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource Icon}">
+                                                    <Setter Property="Text" Value="&#xE8F5;" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsIgnored}" Value="True">
+                                                            <Setter Property="Text" Value="&#xE8F4;" />
+                                                            <Setter Property="Foreground" Value="{StaticResource OrangeBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Button>
+                                    <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="32" Height="32" Margin="0,0,6,0"
+                                            ToolTip="تحقق من جديد من هذا الحساب وحده (طلبان)"
+                                            Command="{Binding DataContext.RecheckCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"
+                                            CommandParameter="{Binding}">
+                                        <TextBlock Style="{StaticResource Icon}" Text="&#xE5D5;" FontSize="14" />
+                                    </Button>
+                                    <Viewbox Width="38" Height="38" DockPanel.Dock="Left">
+                                        <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource Avatar}" />
+                                    </Viewbox>
+                                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Username}" FontWeight="SemiBold" />
+                                            <TextBlock Style="{StaticResource Icon}" Text="&#xEF76;" FontSize="13" Margin="6,0,0,0"
+                                                       Foreground="#4CA3FF" ToolTip="حساب موثّق"
+                                                       Visibility="{Binding IsVerified, Converter={StaticResource Vis}}" />
+                                            <TextBlock Style="{StaticResource Icon}" Text="&#xE897;" FontSize="12" Margin="6,0,0,0"
+                                                       Foreground="{StaticResource MutedBrush}" ToolTip="حساب خاص"
+                                                       Visibility="{Binding IsPrivate, Converter={StaticResource Vis}}" />
+                                            <Border Margin="8,0,0,0" CornerRadius="6" Padding="6,0" Background="#33FFB547" VerticalAlignment="Center"
+                                                    ToolTip="لم يتحقق البرنامج من هذا الحساب بالبحث في قائمة متابعيك؛ قد يكون يتابعك. اضغط زر التحقق بجانبه."
+                                                    Visibility="{Binding IsUnconfirmed, Converter={StaticResource Vis}}">
+                                                <TextBlock Text="غير مؤكَّد" FontSize="11" Foreground="{StaticResource OrangeBrush}" />
+                                            </Border>
+                                            <Border Margin="8,0,0,0" CornerRadius="6" Padding="6,0" Background="#22FFFFFF" VerticalAlignment="Center"
+                                                    Visibility="{Binding IsIgnored, Converter={StaticResource Vis}}">
+                                                <TextBlock Text="مستثنى" FontSize="11" Foreground="{StaticResource MutedBrush}" />
+                                            </Border>
+                                            <ProgressBar Width="40" Height="3" Margin="8,0,0,0" IsIndeterminate="True"
+                                                         Visibility="{Binding IsRechecking, Converter={StaticResource Vis}}" />
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding FullName}" Style="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis"
+                                                   Visibility="{Binding FullName, Converter={StaticResource Vis}}" />
                                     </StackPanel>
-                                    <TextBlock Text="{Binding FullName}" Style="{StaticResource Muted}" FontSize="12" TextTrimming="CharacterEllipsis"
-                                               Visibility="{Binding FullName, Converter={StaticResource Vis}}" />
-                                </StackPanel>
-                            </DockPanel>
-                        </DataTemplate>
-                    </ListBox.ItemTemplate>
-                </ListBox>
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
-                            Visibility="{Binding View.IsEmpty, Converter={StaticResource Vis}}">
-                    <TextBlock Style="{StaticResource Icon}" Text="&#xEF66;" FontSize="44" Foreground="#2A2F45" HorizontalAlignment="Center" />
-                    <TextBlock Style="{StaticResource Muted}" FontSize="14" Margin="0,14,0,0" HorizontalAlignment="Center"
-                               Text="{Binding Summary}" />
-                </StackPanel>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Visibility="{Binding View.IsEmpty, Converter={StaticResource Vis}}">
+                        <TextBlock Style="{StaticResource Icon}" Text="&#xEF66;" FontSize="44" Foreground="#2A2F45" HorizontalAlignment="Center" />
+                        <TextBlock Style="{StaticResource Muted}" FontSize="14" Margin="0,14,0,0" HorizontalAlignment="Center"
+                                   Text="{Binding Summary}" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- unfollowers -->
+                <Grid Visibility="{Binding Tab, Converter={StaticResource PageVis}, ConverterParameter=Unfollowers}">
+                    <ListBox Style="{StaticResource PlainList}" ItemContainerStyle="{StaticResource RowItem}"
+                             ItemsSource="{Binding UnfollowersView}" ItemTemplate="{StaticResource EventRow}" />
+                    <TextBlock Style="{StaticResource Muted}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
+                               Visibility="{Binding UnfollowersView.IsEmpty, Converter={StaticResource Vis}}"
+                               Text="لا أحد ألغى متابعتك بين الفحوصات حتى الآن.&#10;يقارن البرنامج كل فحص بالسابق، ويتأكد بالبحث قبل أن يضيف أحداً هنا." />
+                </Grid>
+
+                <!-- new followers -->
+                <Grid Visibility="{Binding Tab, Converter={StaticResource PageVis}, ConverterParameter=NewFollowers}">
+                    <ListBox Style="{StaticResource PlainList}" ItemContainerStyle="{StaticResource RowItem}"
+                             ItemsSource="{Binding NewFollowersView}" ItemTemplate="{StaticResource EventRow}" />
+                    <TextBlock Style="{StaticResource Muted}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"
+                               Visibility="{Binding NewFollowersView.IsEmpty, Converter={StaticResource Vis}}"
+                               Text="لا متابعين جدد بين الفحوصات حتى الآن." />
+                </Grid>
+
+                <!-- history -->
+                <DockPanel Visibility="{Binding Tab, Converter={StaticResource PageVis}, ConverterParameter=History}">
+                    <DockPanel DockPanel.Dock="Top" Margin="8,0,8,6">
+                        <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="مسح سجل التغييرات"
+                                Command="{Binding ClearChangesCommand}" Foreground="{StaticResource RedBrush}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="170" /><ColumnDefinition Width="150" /><ColumnDefinition Width="110" /><ColumnDefinition Width="150" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="الوقت" Style="{StaticResource ColHeader}" />
+                            <TextBlock Grid.Column="1" Text="يتابعك" Style="{StaticResource ColHeader}" />
+                            <TextBlock Grid.Column="2" Text="تتابع" Style="{StaticResource ColHeader}" />
+                            <TextBlock Grid.Column="3" Text="لا يتابعونك" Style="{StaticResource ColHeader}" />
+                        </Grid>
+                    </DockPanel>
+                    <Grid>
+                        <ListBox Style="{StaticResource PlainList}" ItemContainerStyle="{StaticResource RowItem}" ItemsSource="{Binding History}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type vm:CheckPointRowViewModel}">
+                                    <Grid Height="34">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="170" /><ColumnDefinition Width="150" /><ColumnDefinition Width="110" /><ColumnDefinition Width="150" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding WhenText}" VerticalAlignment="Center" Foreground="{StaticResource MutedBrush}"
+                                                   FlowDirection="LeftToRight" HorizontalAlignment="Left" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Followers, StringFormat=N0}" FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding FollowersDelta}" Margin="8,0,0,0" FontSize="12" FlowDirection="LeftToRight">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{StaticResource MutedBrush}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding FollowersUp}" Value="True">
+                                                                <Setter Property="Foreground" Value="{StaticResource GreenBrush}" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding FollowersDown}" Value="True">
+                                                                <Setter Property="Foreground" Value="{StaticResource RedBrush}" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="2" Text="{Binding Following, StringFormat=N0}" VerticalAlignment="Center" />
+                                        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding NotFollowingBack, StringFormat=N0}" />
+                                            <TextBlock Text="{Binding NotFollowingDelta}" Margin="8,0,0,0" FontSize="12" Foreground="{StaticResource MutedBrush}"
+                                                       FlowDirection="LeftToRight" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <TextBlock Style="{StaticResource Muted}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Visibility="{Binding History.Count, Converter={StaticResource NotVis}}" Text="لا فحوصات بعد." />
+                    </Grid>
+                </DockPanel>
             </Grid>
         </Border>
     </Grid>

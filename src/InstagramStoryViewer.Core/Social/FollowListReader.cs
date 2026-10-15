@@ -40,6 +40,12 @@ public static class FollowListReader
     public static string SearchFollowersPath(string userId, string query) =>
         $"/api/v1/friendships/{Uri.EscapeDataString(userId)}/followers/?count={PageSize}&query={Uri.EscapeDataString(query)}&search_surface=follow_list_page";
 
+    /// <summary>The website's settings form (gives the logged-in username).</summary>
+    public const string AccountFormPath = "/api/v1/accounts/edit/web_form_data/";
+
+    /// <summary>A profile as the website loads it (follower and following counts).</summary>
+    public static string ProfilePath(string username) => $"/api/v1/users/web_profile_info/?username={Uri.EscapeDataString(username)}";
+
     /// <summary>A random pause between pages, like a person scrolling the list.</summary>
     public static TimeSpan Pause() => TimeSpan.FromMilliseconds(1500 + Random.Shared.Next(0, 2000));
 

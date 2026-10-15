@@ -125,4 +125,16 @@
   <data name="FollowBackDoneUnconfirmed" xml:space="preserve"><value>تم: {0:N0} حساباً مؤكَّداً لا يتابعونك (واستُبعد {1:N0} تبيّن أنها تتابعك). بقي {2:N0} حساباً "غير مؤكَّد" لنفاد حد الطلبات في هذه الساعة؛ ارفع "طلبات في الساعة" من الإعدادات وأعد الفحص لاحقاً.</value></data>
   <data name="FollowBackSummaryUnconfirmed" xml:space="preserve"><value>تتابع {0:N0} · يتابعك {1:N0} · لا يتابعونك {2:N0} · غير مؤكَّد {3:N0}</value></data>
   <data name="FollowBackVerifying" xml:space="preserve"><value>جاري التحقق من كل حساب في قائمة متابعيك: {0:N0} من {1:N0}</value></data>
+  <data name="FollowBackProfileCounts" xml:space="preserve"><value>في ملفك الشخصي: {0:N0} متابِع · قرأ البرنامج منهم {1:N0}</value></data>
+  <data name="FollowBackReadingOfTotal" xml:space="preserve"><value>جاري قراءة {0}: {1:N0} من {2:N0}</value></data>
+  <data name="FollowBackVerifyingLost" xml:space="preserve"><value>جاري التحقق ممن اختفوا من قائمة متابعيك: {0:N0} من {1:N0}</value></data>
+  <data name="FollowBackFirstCheck" xml:space="preserve"><value>هذا أول فحص؛ من الفحص القادم سيظهر من ألغى متابعتك ومن تابعك جديداً.</value></data>
+  <data name="FollowBackChanges" xml:space="preserve"><value>منذ الفحص السابق: ألغى {0:N0} متابعتك، وتابعك {1:N0} جديداً.</value></data>
+  <data name="FollowBackContinued" xml:space="preserve"><value>تم التحقق: {0:N0} مؤكَّد، واستُبعد {1:N0} يتابعك. بقي {2:N0} غير مؤكَّد.</value></data>
+  <data name="FollowBackRecheckFollows" xml:space="preserve"><value>{0} يتابعك؛ أُزيل من القائمة.</value></data>
+  <data name="FollowBackRecheckConfirmed" xml:space="preserve"><value>تأكّد: {0} لا يتابعك.</value></data>
+  <data name="FollowBackRecheckUnknown" xml:space="preserve"><value>تعذّر التحقق من {0} الآن (البحث لا يعمل حالياً أو نفد حد الطلبات).</value></data>
+  <data name="FollowBackExported" xml:space="preserve"><value>تم حفظ {0} حساباً في الملف</value></data>
+  <data name="FollowBackExportFailed" xml:space="preserve"><value>تعذّر حفظ الملف: {0}</value></data>
+  <data name="FollowBackClearChangesConfirm" xml:space="preserve"><value>حذف سجل من ألغى متابعتك ومن تابعك جديداً؟</value></data>
 </root>

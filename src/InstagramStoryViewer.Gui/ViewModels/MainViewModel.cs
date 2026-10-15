@@ -47,6 +47,9 @@ public interface IDialogService
 
     void CopyToClipboard(string text);
 
+    /// <summary>Asks where to save a file; null when cancelled.</summary>
+    string? PickSaveFile(string suggestedName, string filter);
+
     /// <summary>
     /// Runs <paramref name="work"/> with a function that fetches Instagram API paths from inside the logged-in
     /// instagram.com page in the embedded browser (for requests Instagram refuses from outside the browser).
@@ -104,7 +107,7 @@ public sealed partial class MainViewModel : ObservableObject, IMainContext, IDis
         AutoLike = new AutoLikeViewModel(this, dialogs, settings, history, jobs);
         Updates = new UpdatesViewModel(this, dialogs, settings);
         Comments = new CommentViewModel(this, dialogs, History);
-        FollowBack = new FollowBackViewModel(this, dialogs);
+        FollowBack = new FollowBackViewModel(this, dialogs, settings);
 
         _trayTimer = new DispatcherTimer();
         _trayTimer.Tick += async (_, _) => await SafeAsync(async () =>

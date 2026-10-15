@@ -407,6 +407,12 @@ public partial class MainWindow : Window, IDialogService
         Func<Func<string, CancellationToken, Task<InstagramStoryViewer.Social.PageResult>>, CancellationToken, Task<T>> work) =>
         RunInWatcherAsync(w => w.UseInstagramPageAsync(cookieHeader, work), background: true);
 
+    public string? PickSaveFile(string suggestedName, string filter)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog { FileName = suggestedName, Filter = filter };
+        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+    }
+
     public void CopyToClipboard(string text)
     {
         try { Clipboard.SetText(text); }
