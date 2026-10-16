@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>TelegramContacts</RootNamespace>
+    <AssemblyName>TelegramContacts</AssemblyName>
+    <Version>1.0.0</Version>
+    <Product>TG Contacts Manager</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WTelegramClient" Version="4.3.7" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,24 @@
+name: telegram-contacts
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["telegram/**", ".github/workflows/telegram.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Publish single exe
+        run: >
+          dotnet publish telegram/src/TelegramContacts -c Release -r win-x64 --self-contained
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TelegramContacts-win-x64
+          path: out/TelegramContacts.exe

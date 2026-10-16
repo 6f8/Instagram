@@ -1,0 +1,7 @@
+<Project>
+  <!-- Stand-alone app: does not import the Instagram app's Directory.Build.props. -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>
