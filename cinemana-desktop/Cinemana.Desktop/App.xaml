@@ -5,10 +5,17 @@
     <local:EqualsConverter x:Key="Equals" />
     <local:IndexEqualsConverter x:Key="IndexEquals" />
     <local:PosterHeightConverter x:Key="PosterHeight" />
-    <SolidColorBrush x:Key="Accent" Color="#E50932" />
+    <local:RankConverter x:Key="Rank" />
+    <SolidColorBrush x:Key="Accent" Color="#FFB020" />
+    <SolidColorBrush x:Key="Ink" Color="#F5F1E6" />
+    <SolidColorBrush x:Key="Muted" Color="#A9AEC4" />
+    <SolidColorBrush x:Key="Line" Color="#252B45" />
+    <SolidColorBrush x:Key="Numeral" Color="#3A4060" />
+    <SolidColorBrush x:Key="Ground" Color="#0E1222" />
+    <FontFamily x:Key="Display">Segoe UI Black, Segoe UI</FontFamily>
     <Style TargetType="Button">
-      <Setter Property="Background" Value="#202126" />
-      <Setter Property="Foreground" Value="#F2F4FA" />
+      <Setter Property="Background" Value="#1A2038" />
+      <Setter Property="Foreground" Value="#F5F1E6" />
       <Setter Property="Padding" Value="16,11" />
       <Setter Property="Margin" Value="3" />
       <Setter Property="BorderThickness" Value="0" />
@@ -17,7 +24,7 @@
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="9" Padding="{TemplateBinding Padding}">
+            <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="0" Padding="{TemplateBinding Padding}">
               <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" />
             </Border>
             <ControlTemplate.Triggers>
@@ -25,7 +32,7 @@
                 <Setter TargetName="Surface" Property="Opacity" Value="0.78" />
               </Trigger>
               <Trigger Property="IsKeyboardFocused" Value="True">
-                <Setter TargetName="Surface" Property="BorderBrush" Value="#E50932" />
+                <Setter TargetName="Surface" Property="BorderBrush" Value="#FFB020" />
                 <Setter TargetName="Surface" Property="BorderThickness" Value="2" />
               </Trigger>
               <Trigger Property="IsEnabled" Value="False">
@@ -37,11 +44,11 @@
       </Setter>
     </Style>
     <Style TargetType="TextBox">
-      <Setter Property="Background" Value="#15161B" />
+      <Setter Property="Background" Value="#141A30" />
       <Setter Property="Foreground" Value="White" />
       <Setter Property="CaretBrush" Value="White" />
       <Setter Property="Padding" Value="13,10" />
-      <Setter Property="BorderBrush" Value="#303138" />
+      <Setter Property="BorderBrush" Value="#3A4060" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
     </Style>
     <Style TargetType="ComboBox">
@@ -49,13 +56,13 @@
       <Setter Property="Margin" Value="4" />
       <Setter Property="Padding" Value="9,7" />
       <Setter Property="Foreground" Value="#E9EEF8" />
-      <Setter Property="Background" Value="#202126" />
+      <Setter Property="Background" Value="#1A2038" />
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="ComboBox">
             <Grid>
-              <ToggleButton x:Name="Toggle" IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" Background="#202126" BorderThickness="0" Foreground="#E9EEF8">
-                <Border Background="#202126" Padding="10,8" CornerRadius="7">
+              <ToggleButton x:Name="Toggle" IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" Background="#1A2038" BorderThickness="0" Foreground="#E9EEF8">
+                <Border Background="#1A2038" Padding="10,8" CornerRadius="7">
                   <DockPanel>
                     <TextBlock Text="⌄" DockPanel.Dock="Left" Margin="8,0" />
                     <ContentPresenter Content="{TemplateBinding SelectionBoxItem}" />
@@ -63,7 +70,7 @@
                 </Border>
               </ToggleButton>
               <Popup x:Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom" AllowsTransparency="True" Focusable="False">
-                <Border Background="#202126" BorderBrush="#3D3E46" BorderThickness="1" Padding="5" MinWidth="{Binding ActualWidth,RelativeSource={RelativeSource TemplatedParent}}">
+                <Border Background="#1A2038" BorderBrush="#3A4060" BorderThickness="1" Padding="5" MinWidth="{Binding ActualWidth,RelativeSource={RelativeSource TemplatedParent}}">
                   <ScrollViewer MaxHeight="300">
                     <ItemsPresenter />
                   </ScrollViewer>
@@ -85,10 +92,10 @@
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsHighlighted" Value="True">
-                <Setter TargetName="Row" Property="Background" Value="#34353D" />
+                <Setter TargetName="Row" Property="Background" Value="#252B45" />
               </Trigger>
               <Trigger Property="IsSelected" Value="True">
-                <Setter TargetName="Row" Property="Background" Value="#50101D" />
+                <Setter TargetName="Row" Property="Background" Value="#4A3A12" />
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -101,7 +108,7 @@
     </Style>
     <Style TargetType="ScrollBar">
       <Setter Property="Width" Value="10" />
-      <Setter Property="Background" Value="#121317" />
+      <Setter Property="Background" Value="#0E1222" />
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="ScrollBar">
@@ -111,7 +118,7 @@
                   <RepeatButton Command="ScrollBar.PageUpCommand" Opacity="0" Focusable="False" />
                 </Track.DecreaseRepeatButton>
                 <Track.Thumb>
-                  <Thumb Background="#494B55">
+                  <Thumb Background="#3A4060">
                     <Thumb.Template>
                       <ControlTemplate TargetType="Thumb">
                         <Border Background="{TemplateBinding Background}" CornerRadius="5" Margin="2" />
@@ -130,22 +137,51 @@
     </Style>
     <DrawingImage x:Key="CinemaMark"><DrawingImage.Drawing><GeometryDrawing Brush="{StaticResource Accent}" Geometry="M 0,80 C 20,80 22,40 48,40 L 62,40 C 40,48 44,80 17,80 Z M 34,80 C 60,80 58,18 91,18 L 108,18 C 79,30 89,80 58,80 Z M 76,80 C 108,80 99,0 136,0 L 153,0 L 153,20 C 128,20 143,80 108,80 Z M 164,3 Q 164,0 168,2 L 205,24 Q 209,27 205,30 L 168,52 Q 164,54 164,50 Z"/></DrawingImage.Drawing></DrawingImage>
     <!-- Sidebar item; the active section gets the red pill from the design. Tag = section name. -->
-    <Style x:Key="NavButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-      <Setter Property="Background" Value="Transparent"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="18,14"/><Setter Property="Margin" Value="0,3"/><Setter Property="Foreground" Value="#D5D7DE"/><Setter Property="FontSize" Value="17"/>
-      <Style.Triggers>
-        <DataTrigger Value="True"><DataTrigger.Binding><MultiBinding Converter="{StaticResource Equals}"><Binding Path="Section"/><Binding Path="Tag" RelativeSource="{RelativeSource Self}"/></MultiBinding></DataTrigger.Binding>
-          <Setter Property="Background"><Setter.Value><LinearGradientBrush StartPoint="0,0" EndPoint="1,0"><GradientStop Color="#C8102E" Offset="0"/><GradientStop Color="#6E0A1C" Offset="1"/></LinearGradientBrush></Setter.Value></Setter>
-          <Setter Property="Foreground" Value="White"/>
-        </DataTrigger>
-      </Style.Triggers>
-    </Style>
-    <!-- Outlined secondary button ("تحميل" in the banner). -->
-    <Style x:Key="GhostButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-      <Setter Property="Background" Value="#661A1B20"/>
+    <!-- Header link from design 5: muted text; the active section is bold ink with an amber underline. Tag = section name. -->
+    <Style x:Key="NavButton" TargetType="Button">
+      <Setter Property="Foreground" Value="#A9AEC4"/><Setter Property="FontSize" Value="16"/><Setter Property="Margin" Value="15,0"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Background" Value="Transparent"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
-            <Border x:Name="Surface" Background="{TemplateBinding Background}" BorderBrush="#8A8C94" BorderThickness="1" CornerRadius="9" Padding="{TemplateBinding Padding}">
+            <Border x:Name="Line" Background="Transparent" BorderBrush="Transparent" BorderThickness="0,0,0,3" Padding="0,6">
+              <ContentPresenter VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="#F5F1E6"/></Trigger>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Line" Property="BorderBrush" Value="#3A4060"/></Trigger>
+              <DataTrigger Value="True"><DataTrigger.Binding><MultiBinding Converter="{StaticResource Equals}"><Binding Path="Section"/><Binding Path="Tag" RelativeSource="{RelativeSource Self}"/></MultiBinding></DataTrigger.Binding>
+                <Setter Property="Foreground" Value="#F5F1E6"/><Setter Property="FontWeight" Value="Bold"/><Setter TargetName="Line" Property="BorderBrush" Value="#FFB020"/>
+              </DataTrigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <!-- Solid amber primary button with dark text. -->
+    <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Background" Value="#FFB020"/><Setter Property="Foreground" Value="#0E1222"/><Setter Property="FontWeight" Value="Bold"/>
+    </Style>
+    <!-- Text action in lists ("مشاهدة", "تحميل"). -->
+    <Style x:Key="LinkButton" TargetType="Button">
+      <Setter Property="Foreground" Value="#FFC94D"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Margin" Value="10,0"/><Setter Property="FontSize" Value="15"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border Background="Transparent" Padding="4,6"><ContentPresenter VerticalAlignment="Center"/></Border>
+        <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="#FFE3A1"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.4"/></Trigger></ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <!-- Big season tabs on the title page (ListBox items). -->
+    <Style x:Key="SeasonTab" TargetType="ListBoxItem">
+      <Setter Property="Foreground" Value="#4A5170"/><Setter Property="FontFamily" Value="{StaticResource Display}"/><Setter Property="FontSize" Value="24"/><Setter Property="Margin" Value="0,0,30,0"/><Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border x:Name="Line" BorderBrush="Transparent" BorderThickness="0,0,0,4" Padding="0,0,0,4" Background="Transparent"><ContentPresenter/></Border>
+        <ControlTemplate.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Foreground" Value="#F5F1E6"/><Setter TargetName="Line" Property="BorderBrush" Value="#FFB020"/></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter Property="Foreground" Value="#C9CCDA"/></Trigger></ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <!-- Outlined secondary button ("تحميل" in the banner). -->
+    <Style x:Key="GhostButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Surface" Background="{TemplateBinding Background}" BorderBrush="#F5F1E6" BorderThickness="2" CornerRadius="0" Padding="{TemplateBinding Padding}">
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="BorderBrush" Value="White"/></Trigger></ControlTemplate.Triggers>
@@ -155,7 +191,7 @@
     </Style>
     <!-- Round icon button (carousel arrows, card download, dock pause/cancel). -->
     <Style x:Key="RoundButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-      <Setter Property="Width" Value="38"/><Setter Property="Height" Value="38"/><Setter Property="Padding" Value="0"/><Setter Property="Background" Value="#991A1B20"/><Setter Property="FontSize" Value="15"/>
+      <Setter Property="Width" Value="38"/><Setter Property="Height" Value="38"/><Setter Property="Padding" Value="0"/><Setter Property="Background" Value="#141A30"/><Setter Property="FontSize" Value="15"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="Button">
@@ -163,7 +199,7 @@
               <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <ControlTemplate.Triggers>
-              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Background" Value="#C8102E"/></Trigger>
+              <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Background" Value="#FFB020"/></Trigger>
               <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Surface" Property="Opacity" Value="0.35"/></Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -172,7 +208,7 @@
     </Style>
     <!-- Small outlined label: "1080p", "HD", rating. -->
     <Style x:Key="Chip" TargetType="Border">
-      <Setter Property="BorderBrush" Value="#9A9CA5"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="5"/><Setter Property="Padding" Value="7,2"/><Setter Property="Margin" Value="4,0"/><Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="BorderBrush" Value="#3A4060"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="0"/><Setter Property="Padding" Value="7,2"/><Setter Property="Margin" Value="4,0"/><Setter Property="VerticalAlignment" Value="Center"/>
     </Style>
   </Application.Resources>
 </Application>

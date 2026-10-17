@@ -1,4 +1,4 @@
-<UserControl x:Class="Cinemana.Desktop.Views.PlayerView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Background="#08090B" Foreground="#EDF1FA" FlowDirection="RightToLeft" Focusable="True" FontFamily="Segoe UI">
+<UserControl x:Class="Cinemana.Desktop.Views.PlayerView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Background="#0E1222" Foreground="#EDF1FA" FlowDirection="RightToLeft" Focusable="True" FontFamily="Segoe UI">
   <Grid>
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <DockPanel Margin="20,12">
@@ -15,11 +15,11 @@
         <TextBlock x:Name="SubtitleLabel" FontSize="27" FontWeight="SemiBold" Foreground="White" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="1050"/>
       </Border>
       <StackPanel x:Name="LoadingPanel" VerticalAlignment="Center" HorizontalAlignment="Center" Width="280" Background="#DA121317" IsHitTestVisible="False">
-        <ProgressBar Height="3" IsIndeterminate="True" Foreground="#E50932"/>
+        <ProgressBar Height="3" IsIndeterminate="True" Foreground="#FFB020"/>
         <TextBlock x:Name="LoadingLabel" Text="جارٍ تجهيز الفيديو…" TextAlignment="Center" TextWrapping="Wrap" Margin="16" Foreground="#DBE3F2"/>
       </StackPanel>
     </Grid>
-    <StackPanel Grid.Row="2" Background="#121317">
+    <StackPanel Grid.Row="2" Background="#0E1222">
       <TextBlock x:Name="Notice" Foreground="#D9C094" TextWrapping="Wrap" Margin="22,8,22,0"/>
       <Grid Margin="22,10,22,4" FlowDirection="LeftToRight"><Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition/><ColumnDefinition Width="110"/></Grid.ColumnDefinitions>
         <TextBlock x:Name="CurrentTime" Text="00:00:00" VerticalAlignment="Center" Foreground="#CAD5E8"/>
@@ -27,7 +27,7 @@
         <TextBlock x:Name="TotalTime" Grid.Column="2" Text="00:00:00" VerticalAlignment="Center" HorizontalAlignment="Right" Foreground="#CAD5E8"/>
       </Grid>
       <WrapPanel Margin="16,4,16,12" VerticalAlignment="Center">
-        <Button x:Name="PlayButton" Content="إيقاف مؤقت" Click="PlayClick" IsEnabled="False" Background="#E50932"/>
+        <Button x:Name="PlayButton" Content="إيقاف مؤقت" Click="PlayClick" IsEnabled="False" Style="{StaticResource PrimaryButton}"/>
         <Button Content="−10 ث" Click="RewindClick"/><Button Content="+10 ث" Click="ForwardClick"/>
         <Button x:Name="ResumeButton" Content="الموضع المحفوظ" Click="ResumeClick" IsEnabled="False"/>
         <Button Content="إعادة المحاولة" Click="RetryClick"/>

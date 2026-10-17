@@ -114,6 +114,10 @@ public sealed class DownloadManager : Observable, IDisposable
             return unknown > 0 ? text + $" • {unknown} ملف لم يُعرف حجمه بعد" : text;
         }
     }
+    private List<DownloadItem> Open => Items.Where(i => i.State is DownloadState.Running or DownloadState.Queued or DownloadState.Paused).ToList();
+    public string RemainingLabel => DownloadPaths.Size(Open.Sum(i => i.Remaining));
+    public string EtaLabel { get { double speed = Open.Sum(i => i.Speed); return speed > 0 ? Duration(Open.Sum(i => i.Remaining) / speed) : "—"; } }
+    public string RunningLabel => $"{Items.Count(i => i.State == DownloadState.Running)} / {Open.Count}"; 
     public IEnumerable<DownloadItem> Library => Items.Where(i => i.IsPlayable);
     public RelayCommand PauseCommand { get; }
     public RelayCommand ResumeCommand { get; }
@@ -163,7 +167,7 @@ public sealed class DownloadManager : Observable, IDisposable
         item.State = DownloadState.Running; item.Message = ""; Save();
         try
         {
-            var progress = new Progress<DownloadProgress>(p => { if (item.State != DownloadState.Running) return; item.Progress(p); Notify(nameof(TotalsLabel)); if (DateTimeOffset.UtcNow - lastSaved > TimeSpan.FromSeconds(5)) Save(); });
+            var progress = new Progress<DownloadProgress>(p => { if (item.State != DownloadState.Running) return; item.Progress(p); Notify(nameof(TotalsLabel)); Notify(nameof(EtaLabel)); Notify(nameof(RemainingLabel)); if (DateTimeOffset.UtcNow - lastSaved > TimeSpan.FromSeconds(5)) Save(); });
             var result = await downloader.Download(item.Spec, progress, token);
             item.Progress(new(result.Bytes, result.Bytes, 0)); item.State = DownloadState.Completed;
             item.Message = (result.AlreadyComplete ? "الملف مكتمل مسبقًا؛ لم يُنزّل مجددًا." : "تم حفظ الملف.")
@@ -201,7 +205,7 @@ public sealed class DownloadManager : Observable, IDisposable
     {
         try { store.Save("downloads", Items.Select(i => i.Snapshot()).ToList()); lastSaved = DateTimeOffset.UtcNow; }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Status = "تعذّر حفظ قائمة التنزيل. الملفات الجزئية باقية في مجلدها."; }
-        foreach (var name in new[] { nameof(Summary), nameof(DockItem), nameof(HasDockItem), nameof(PendingCount), nameof(HasPending), nameof(TotalsLabel), nameof(Library) }) Notify(name);
+        foreach (var name in new[] { nameof(Summary), nameof(DockItem), nameof(HasDockItem), nameof(PendingCount), nameof(HasPending), nameof(TotalsLabel), nameof(Library), nameof(RemainingLabel), nameof(EtaLabel), nameof(RunningLabel) }) Notify(name);
     }
     private void OpenFolder(string path)
     {

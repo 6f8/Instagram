@@ -77,6 +77,10 @@ public sealed class MainViewModel : Observable, IDisposable
     public Movie? Hero => IsHome && HeroItems.Count > 0 && Selected is null ? HeroItems[Math.Clamp(heroIndex, 0, HeroItems.Count - 1)] : Selected ?? Movies.FirstOrDefault();
     public bool HasHero => Hero is not null;
     public int HeroIndex => heroIndex;
+    public string HeroPositionLabel => HeroItems.Count > 0 && Selected is null ? $"{heroIndex + 1} / {HeroItems.Count}" : "";
+    public string NextHeroLabel => HeroItems.Count > 1 && Selected is null ? "التالي: " + HeroItems[(heroIndex + 1) % HeroItems.Count].DisplayTitle + " ←" : "";
+    /// <summary>The numbered "01–04" picks under the banner.</summary>
+    public IEnumerable<Movie> Picks => FeaturedMovies.Skip(HeroItems.Count > 0 ? 1 : 0).Take(4).ToList();
     public string Status { get => status; private set => Set(ref status, value); }
     public string DetailsStatus { get => detailsStatus; private set => Set(ref detailsStatus, value); }
     public bool IsBusy { get => busy; private set { Set(ref busy, value); RefreshCommands(); } }
@@ -119,7 +123,7 @@ public sealed class MainViewModel : Observable, IDisposable
     }
     private static bool StorageError(Exception e) => e is IOException or UnauthorizedAccessException;
     private void RefreshCommands() { NextCommand?.Refresh(); PreviousCommand?.Refresh(); Notify(nameof(IsEmpty)); Notify(nameof(PageLabel)); }
-    private void NotifyHero() { Notify(nameof(Hero)); Notify(nameof(HasHero)); Notify(nameof(HeroIndex)); }
+    private void NotifyHero() { Notify(nameof(Hero)); Notify(nameof(HasHero)); Notify(nameof(HeroIndex)); Notify(nameof(HeroPositionLabel)); Notify(nameof(NextHeroLabel)); Notify(nameof(Picks)); }
     public void MoveHero(int step)
     {
         if (HeroItems.Count == 0 || Selected is not null) return;
@@ -188,7 +192,7 @@ public sealed class MainViewModel : Observable, IDisposable
     {
         HeroItems.Clear(); foreach (var m in current.Take(5)) HeroItems.Add(m);
         heroIndex = 0; NotifyHero();
-        FeaturedMovies.Clear(); foreach (var m in current.Take(12)) FeaturedMovies.Add(m);
+        FeaturedMovies.Clear(); foreach (var m in current.Take(12)) FeaturedMovies.Add(m); Notify(nameof(Picks));
         LatestSeries.Clear();
         try
         {
