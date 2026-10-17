@@ -18,6 +18,20 @@ public sealed class CinemanaService : IDisposable
         this.client = client ?? new HttpClient { BaseAddress = new Uri("https://cinemana.shabakaty.com/api/android/"), Timeout = TimeSpan.FromSeconds(18) };
         cacheDir = Path.Combine(root, "Cache"); Directory.CreateDirectory(cacheDir);
     }
+    public bool PreferCache { get; set; }
+    /// <summary>Keeps the poster cache under <paramref name="maxBytes"/> by deleting the least recently used images.</summary>
+    public static long TrimCache(string root, long maxBytes)
+    {
+        try
+        {
+            var files = new DirectoryInfo(Path.Combine(root, "Cache")).GetFiles("*.img").OrderBy(f => f.LastAccessTimeUtc > f.LastWriteTimeUtc ? f.LastAccessTimeUtc : f.LastWriteTimeUtc).ToList();
+            long total = files.Sum(f => f.Length), freed = 0;
+            foreach (var f in files) { if (total - freed <= maxBytes) break; long size = f.Length; try { f.Delete(); freed += size; } catch (IOException) { } }
+            if (freed > 0) Log.Info($"cache trimmed by {freed / (1 << 20)} MB");
+            return freed;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return 0; }
+    }
     public static string SearchKey(string query) => Convert.ToBase64String(Encoding.UTF8.GetBytes(query)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
     private static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
     private static bool StorageError(Exception e) => e is IOException or UnauthorizedAccessException;
@@ -30,7 +44,8 @@ public sealed class CinemanaService : IDisposable
             if (File.Exists(file)) { using var doc = JsonDocument.Parse(await File.ReadAllTextAsync(file, ct)); cached = doc.RootElement.Clone(); time = File.GetLastWriteTimeUtc(file); }
         }
         catch (Exception e) when (StorageError(e) || e is JsonException) { }
-        if (!refresh && cached.HasValue && DateTimeOffset.UtcNow - time < TimeSpan.FromMinutes(15)) return new(cached.Value, false, time);
+        // At start-up any saved copy is shown at once (PreferCache); the caller refreshes it in the background.
+        if (!refresh && cached.HasValue && (PreferCache || DateTimeOffset.UtcNow - time < TimeSpan.FromMinutes(15))) return new(cached.Value, false, time);
         try
         {
             for (int attempt = 0; ; attempt++)

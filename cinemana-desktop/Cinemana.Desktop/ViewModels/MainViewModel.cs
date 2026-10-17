@@ -99,7 +99,7 @@ public sealed class MainViewModel : Observable, IDisposable
     {
         ServiceNotice = await service.Health(CancellationToken.None) ?? "";
         if (await UpdateCheck.Find(CancellationToken.None) is { } update)
-        { UpdateNotice = $"يتوفر إصدار جديد {update.Version.ToString(3)}"; UpdateUrl = update.Url; Log.Info($"update available {update.Version}"); }
+        { PendingUpdate = update; Notify(nameof(CanInstallUpdate)); UpdateNotice = $"يتوفر إصدار جديد {update.Version.ToString(3)}"; UpdateUrl = update.Url; Log.Info($"update available {update.Version}"); }
     }
     // --- Instant search suggestions and recent searches ---
     public ObservableCollection<Movie> Suggestions { get; } = [];
@@ -222,6 +222,11 @@ public sealed class MainViewModel : Observable, IDisposable
     private bool needsRestart;
     public bool NeedsRestart { get => needsRestart; private set => Set(ref needsRestart, value); }
     private void RestartNeeded() { NeedsRestart = true; Status = "تُطبَّق تغييرات المظهر بعد إعادة التشغيل."; }
+    public string SyncFolder { get => settings.SyncFolder; set { Change(settings with { SyncFolder = value ?? "" }); Notify(nameof(SyncLabel)); } }
+    public string SyncLabel => settings.SyncFolder.Length > 0 ? "مزامنة مع: " + settings.SyncFolder : "المزامنة معطّلة";
+    public string AboutText => $"سينمانا Desktop {Log.Version} · .NET {Environment.Version} · مجلد البيانات: {Store.Root}";
+    public UpdateCheck.Update? PendingUpdate { get; private set; }
+    public bool CanInstallUpdate => PendingUpdate?.ExeUrl is not null;
     public bool OnboardingDone { get => settings.OnboardingDone; set => Change(settings with { OnboardingDone = value }); }
     public double TextSize { get => settings.TextSize; set => Change(settings with { TextSize = value }); }
     public bool CacheImages { get => settings.CacheImages; set => Change(settings with { CacheImages = value }); }
@@ -370,7 +375,32 @@ public sealed class MainViewModel : Observable, IDisposable
         ContinueWatching.Clear(); foreach (var e in history.Where(e => e.Percent is > 2 and < 95).Take(12)) ContinueWatching.Add(e);
         Notify(nameof(HasContinueWatching));
     }
+    private bool firstLoad = true;
     public async Task Load(bool refresh = false)
+    {
+        // First page of the session: show the saved copy instantly, then refresh it quietly.
+        bool quick = firstLoad && !refresh; firstLoad = false;
+        service.PreferCache = quick;
+        try { await LoadCore(refresh); } finally { service.PreferCache = false; }
+        if (quick && section is "home" or "movies" or "series") _ = RefreshQuietly();
+        // Warm the cache with the next page so "التالي" opens at once.
+        if (CanNext && section is "movies" or "series" or "search") _ = WarmNextPage();
+    }
+    private async Task RefreshQuietly()
+    {
+        try
+        {
+            var fresh = await service.Catalog(IsHome ? "movies" : section, page, query, true, false, CancellationToken.None);
+            if (!fresh.Value.Select(m => m.Id).SequenceEqual(current.Select(m => m.Id)) && !IsBusy && Selected is null) await LoadCore(false);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidDataException) { }
+    }
+    private async Task WarmNextPage()
+    {
+        try { await service.Catalog(section, page + 1, query, false, false, CancellationToken.None); }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidDataException) { }
+    }
+    private async Task LoadCore(bool refresh)
     {
         loading?.Cancel(); loading?.Dispose(); loading = new(); var token = loading.Token;
         IsBusy = true; Status = "جارٍ تحميل العناوين…"; CanNext = false;

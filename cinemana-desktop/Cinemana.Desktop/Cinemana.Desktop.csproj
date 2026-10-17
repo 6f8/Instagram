@@ -10,7 +10,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets/app.ico</ApplicationIcon>
     <AssemblyName>Cinemana</AssemblyName>
-    <Version>0.7.0</Version>
+    <Version>0.8.0</Version>
     <AssemblyTitle>Cinemana Desktop</AssemblyTitle>
     <Description>Arabic WPF desktop client for Cinemana</Description>
 

@@ -11,6 +11,8 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      SIGNING_ENABLED: ${{ secrets.AZURE_CLIENT_ID != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -24,6 +26,24 @@ jobs:
 
       - name: Publish single small exe
         run: dotnet publish cinemana-desktop/Cinemana.Desktop/Cinemana.Desktop.csproj -c Release -o out
+
+      # Optional signing (removes the "Windows protected your PC" warning) once Azure Trusted Signing
+      # secrets are added to the repository; without them the exe is published unsigned.
+      - name: Sign exe
+        if: env.SIGNING_ENABLED == 'true'
+        uses: azure/trusted-signing-action@v0.5.1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_CERT_PROFILE }}
+          files-folder: out
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
 
       - name: Unit tests
         run: dotnet run --project cinemana-desktop/Cinemana.Desktop.Tests -c Release

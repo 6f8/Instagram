@@ -90,7 +90,7 @@ public partial class MainWindow : Window
         SizeChanged += (_, _) => AdaptLayout();
         // Ctrl + mouse wheel zooms the whole interface.
         PreviewMouseWheel += (_, e) => { if (Keyboard.Modifiers == ModifierKeys.Control && PlayerHost.Visibility != Visibility.Visible) { model.UiScale += e.Delta > 0 ? 0.05 : -0.05; e.Handled = true; } };
-        StateChanged += (_, _) => { if (WindowState == WindowState.Minimized && model.StartMinimized) MinimizeToTray(); };
+        StateChanged += (_, _) => { if (WindowState == WindowState.Minimized) { if (model.StartMinimized) MinimizeToTray(); TrimMemory(); } };
         Width = Math.Min(1500, SystemParameters.WorkArea.Width - 32);
         Height = Math.Min(940, SystemParameters.WorkArea.Height - 32);
         model.WatchRequested += async movie => await ShowPlayer(movie);
@@ -107,6 +107,8 @@ public partial class MainWindow : Window
             Log.Info($"startup: first page shown in {started.ElapsedMilliseconds} ms");
             _ = model.CheckServiceAndUpdates();
             _ = CheckFollowed();
+            _ = Task.Run(() => CinemanaService.TrimCache(model.Store.Root, 300L << 20));
+            if (model.SyncFolder.Length > 0) { try { if (Backup.Sync(model.Store.Root, model.SyncFolder).Down > 0) await model.Load(); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Error("sync", ex); } }
             if (model.AutoDeleteDays > 0)
             {
                 int removed = downloads.DeleteWatchedOlderThan(model.AutoDeleteDays, model.Store.History().DistinctBy(h => h.Movie.Id).ToDictionary(h => h.Movie.Id));
@@ -124,7 +126,7 @@ public partial class MainWindow : Window
             catch (Exception ex) when (ex is System.Net.Http.HttpRequestException or OperationCanceledException or InvalidDataException or System.Text.Json.JsonException)
             { if (IsLoaded) MessageBox.Show(this, "تعذّر فتح العنوان المطلوب. يمكنك اختياره من المكتبة.", "سينمانا"); }
         };
-        Closed += (_, _) => { CommitPendingDelete(); playbackGeneration++; carousel.Stop(); followTimer.Stop(); activePlayer?.Dispose(); downloads.Dispose(); model.Dispose(); tray?.Dispose(); Log.Info("closed"); };
+        Closed += (_, _) => { if (model.SyncFolder.Length > 0) { try { Backup.Sync(model.Store.Root, model.SyncFolder); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { } } CommitPendingDelete(); playbackGeneration++; carousel.Stop(); followTimer.Stop(); activePlayer?.Dispose(); downloads.Dispose(); model.Dispose(); tray?.Dispose(); Log.Info("closed"); };
         PreviewKeyDown += async (_, e) =>
         {
             if (PlayerHost.Visibility == Visibility.Visible)
@@ -387,6 +389,57 @@ public partial class MainWindow : Window
     private void TourNextClick(object sender, RoutedEventArgs e) { if (++tourStep >= TourPages.Length) TourSkipClick(sender, e); else ShowTourPage(); }
     private void TourSkipClick(object sender, RoutedEventArgs e) { Tour.Visibility = Visibility.Collapsed; model.OnboardingDone = true; }
     private void TourClick(object sender, RoutedEventArgs e) => ShowTour();
+    // --- Updates, backup, sync, about ---
+    private async void InstallUpdateClick(object sender, RoutedEventArgs e)
+    {
+        if (model.PendingUpdate is not { } update) return;
+        if (downloads.Items.Any(i => i.State == DownloadState.Running) &&
+            MessageBox.Show(this, "التنزيلات الجارية ستتوقف وتُستأنف بعد التحديث. المتابعة؟", "تحديث", MessageBoxButton.YesNo) != MessageBoxResult.Yes) return;
+        var progress = new Progress<int>(p => model.SetStatus($"جارٍ تنزيل التحديث… {p}%"));
+        if (await UpdateCheck.Install(update, progress, CancellationToken.None)) Application.Current.Shutdown();
+        else { model.SetStatus("تعذّر التحديث التلقائي. افتح صفحة الإصدار وحمّل Cinemana.exe يدويًا."); OpenUpdateClick(sender, e); }
+    }
+    private void BackupClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog { Title = "حفظ نسخة احتياطية", Filter = "نسخة سينمانا (*.zip)|*.zip", FileName = $"cinemana-backup-{DateTime.Now:yyyy-MM-dd}.zip" };
+        if (dialog.ShowDialog(this) != true) return;
+        try { Backup.Create(model.Store.Root, dialog.FileName); ToolStatus.Text = "حُفظت النسخة الاحتياطية."; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Error("backup", ex); ToolStatus.Text = "تعذّر حفظ النسخة الاحتياطية."; }
+    }
+    private void RestoreClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "استعادة نسخة احتياطية", Filter = "نسخة سينمانا (*.zip)|*.zip" };
+        if (dialog.ShowDialog(this) != true) return;
+        if (MessageBox.Show(this, "ستُستبدل المفضلة والسجل والإعدادات الحالية (تُحفظ نسخة منها). ثم يُعاد تشغيل التطبيق. المتابعة؟", "استعادة", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        try { downloads.Dispose(); Backup.Restore(model.Store.Root, dialog.FileName); RestartClick(sender, e); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException) { Log.Error("restore", ex); ToolStatus.Text = "الملف ليس نسخة احتياطية صالحة."; }
+    }
+    private void ChooseSyncClick(object sender, RoutedEventArgs e)
+    {
+        var chooser = new Microsoft.Win32.OpenFolderDialog { Title = "مجلد المزامنة (مثل OneDrive\\Cinemana)" };
+        if (chooser.ShowDialog(this) == true) { model.SyncFolder = chooser.FolderName; SyncNowClick(sender, e); }
+    }
+    private void SyncNowClick(object sender, RoutedEventArgs e)
+    {
+        if (model.SyncFolder.Length == 0) { ToolStatus.Text = "اختر مجلد المزامنة أولًا."; return; }
+        try { var (up, down) = Backup.Sync(model.Store.Root, model.SyncFolder); ToolStatus.Text = $"تمت المزامنة: أُرسل {up} وجُلب {down}."; if (down > 0) _ = model.Load(); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log.Error("sync", ex); ToolStatus.Text = "تعذّر الوصول إلى مجلد المزامنة."; }
+    }
+    private void ChangelogClick(object sender, RoutedEventArgs e) => Open(UpdateCheck.ReleasesPage);
+    private void SaveReportClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog { Title = "حفظ تقرير المشكلة", Filter = "ملف نصي (*.txt)|*.txt", FileName = "cinemana-report.txt" };
+        if (dialog.ShowDialog(this) != true) return;
+        try { File.WriteAllText(dialog.FileName, Log.Report(), new System.Text.UTF8Encoding(true)); ToolStatus.Text = "حُفظ التقرير. أرفقه في رسالتك."; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { ToolStatus.Text = "تعذّر حفظ الملف."; }
+    }
+    [DllImport("psapi.dll")] private static extern bool EmptyWorkingSet(IntPtr process);
+    /// <summary>When minimised, give memory back to Windows (images and caches are rebuilt on demand).</summary>
+    private static void TrimMemory()
+    {
+        GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+        try { EmptyWorkingSet(Process.GetCurrentProcess().Handle); } catch (Exception e) when (e is System.ComponentModel.Win32Exception or EntryPointNotFoundException) { }
+    }
     // --- Discovery ---
     private async void RandomClick(object sender, RoutedEventArgs e) => await model.PickRandom();
     private async void CastClick(object sender, RoutedEventArgs e)

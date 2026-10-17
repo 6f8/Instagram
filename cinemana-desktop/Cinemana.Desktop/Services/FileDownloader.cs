@@ -104,7 +104,8 @@ public sealed class FileDownloader(HttpClient client, Func<Movie, CancellationTo
                     double ahead = (bytes - initial) / (double)limit - clock.Elapsed.TotalSeconds;
                     if (ahead > 0.02) await Task.Delay(TimeSpan.FromSeconds(Math.Min(ahead, 2)), ct).ConfigureAwait(false);
                 }
-                if (clock.Elapsed - lastReport > TimeSpan.FromMilliseconds(250))
+                // Twice a second is enough for the progress bar and keeps the UI thread quiet during long downloads.
+                if (clock.Elapsed - lastReport > TimeSpan.FromMilliseconds(500))
                 { lastReport = clock.Elapsed; progress?.Report(new(bytes, total, (bytes - initial) / Math.Max(0.01, clock.Elapsed.TotalSeconds))); }
             }
             await output.FlushAsync(ct).ConfigureAwait(false);

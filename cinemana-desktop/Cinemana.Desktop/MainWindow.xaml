@@ -95,7 +95,7 @@
   <DockPanel><Button Content="فتح مكتبتي" DockPanel.Dock="Left" Style="{StaticResource LinkButton}" Command="{Binding NavigateCommand}" CommandParameter="library"/><TextBlock Text="{Binding ServiceNotice}" TextWrapping="Wrap" VerticalAlignment="Center"/></DockPanel>
 </Border>
 <Border Margin="0,10,0,0" Padding="16,10" Background="{StaticResource Panel}" BorderBrush="{StaticResource Numeral}" BorderThickness="0,0,3,0" Visibility="{Binding HasUpdate,Converter={StaticResource BoolVisibility}}">
-  <DockPanel><Button Content="صفحة التنزيل" DockPanel.Dock="Left" Style="{StaticResource LinkButton}" Click="OpenUpdateClick"/><TextBlock Text="{Binding UpdateNotice}" VerticalAlignment="Center"/></DockPanel>
+  <DockPanel><Button Content="صفحة الإصدار" DockPanel.Dock="Left" Style="{StaticResource LinkButton}" Foreground="{StaticResource Muted}" Click="OpenUpdateClick"/><Button Content="تحديث الآن" DockPanel.Dock="Left" Style="{StaticResource LinkButton}" Click="InstallUpdateClick" Visibility="{Binding CanInstallUpdate,Converter={StaticResource BoolVisibility}}"/><TextBlock Text="{Binding UpdateNotice}" VerticalAlignment="Center"/></DockPanel>
 </Border>
 <!-- Editorial banner: text on the right, poster panel on the left -->
 <StackPanel Visibility="{Binding DetailsOpen,Converter={StaticResource NotVisibility}}">
@@ -241,6 +241,17 @@
       <Button Content="إظهار العناوين المخفية" Style="{StaticResource LinkButton}" Click="ShowHiddenClick"/>
       <Button Content="التحقق من التحديثات" Style="{StaticResource LinkButton}" Click="CheckUpdatesClick"/>
     </WrapPanel>
+    <TextBlock Text="النسخ الاحتياطي والمزامنة" FontWeight="Bold" Margin="0,16,0,4"/>
+    <WrapPanel Margin="-10,0,0,0">
+      <Button Content="نسخة احتياطية…" Style="{StaticResource LinkButton}" Click="BackupClick" ToolTip="المفضلة والسجل والقوائم والملاحظات والإعدادات في ملف واحد"/>
+      <Button Content="استعادة نسخة…" Style="{StaticResource LinkButton}" Click="RestoreClick"/>
+      <Button Content="مجلد المزامنة…" Style="{StaticResource LinkButton}" Click="ChooseSyncClick" ToolTip="مثل مجلد OneDrive: يتشارك جهازان المفضلة والسجل والقوائم"/>
+      <Button Content="مزامنة الآن" Style="{StaticResource LinkButton}" Click="SyncNowClick"/>
+      <TextBlock Text="{Binding SyncLabel}" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="10,0"/>
+    </WrapPanel>
+    <TextBlock Text="حول" FontWeight="Bold" Margin="0,16,0,4"/>
+    <TextBlock Text="{Binding AboutText}" Foreground="{StaticResource Muted}" TextWrapping="Wrap"/>
+    <WrapPanel Margin="-10,4,0,0"><Button Content="سجل التغييرات" Style="{StaticResource LinkButton}" Click="ChangelogClick"/><Button Content="حفظ تقرير المشكلة في ملف…" Style="{StaticResource LinkButton}" Click="SaveReportClick"/><TextBlock Text="الخطوط: Noto Kufi Arabic وAlmarai (رخصة SIL OFL)." Foreground="{StaticResource Faint}" VerticalAlignment="Center" Margin="10,0"/></WrapPanel>
     <TextBlock x:Name="ToolStatus" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,6,0,0"/>
   </StackPanel>
 </Border>

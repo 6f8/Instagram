@@ -79,6 +79,32 @@ var list = new[] { film with { Rating = "8", Genres = "دراما" }, movie with
 Check("filter.rating", MainViewModel.Filter(list, "الكل", "الكل", 7, 0).Count() == 1);
 Check("filter.genre", MainViewModel.Filter(list, "مغامرة", "الكل", 0, 0).Single().Id == "123");
 
+// --- Arabic search helpers ---
+Check("arabic.normalize", ArabicText.Normalize("أُسْطورة الإسكندرية") == ArabicText.Normalize("اسطوره الاسكندريه"), ArabicText.Normalize("أُسْطورة الإسكندرية"));
+var q = ArabicText.Parse("اكشن 2023 7+");
+Check("arabic.parse", q.Text == "اكشن" && q.Year == "2023" && q.MinRating == 7, q.ToString());
+
+// --- Subtitle encodings: UTF-8 stays, Windows-1256 Arabic is repaired ---
+Check("decode.utf8", SubtitleParser.Decode(System.Text.Encoding.UTF8.GetBytes("مرحبا")) == "مرحبا");
+var cp1256 = System.Text.Encoding.GetEncoding(1256).GetBytes("مرحبا");
+Check("decode.1256", SubtitleParser.Decode(cp1256) == "مرحبا", SubtitleParser.Decode(cp1256));
+
+// --- Integrity check of finished files ---
+string fakeMp4 = Path.Combine(temp, "a.mp4"), junk = Path.Combine(temp, "b.mp4");
+File.WriteAllBytes(fakeMp4, [0, 0, 0, 24, (byte)'f', (byte)'t', (byte)'y', (byte)'p', 0, 0, 0, 0, 0, 0, 0, 0]);
+File.WriteAllText(junk, "<html>error page</html>");
+Check("integrity.mp4", FileDownloader.LooksLikeVideo(fakeMp4));
+Check("integrity.html-rejected", !FileDownloader.LooksLikeVideo(junk));
+
+// --- Backup round trip ---
+string data = Path.Combine(temp, "data"), restoreTo = Path.Combine(temp, "restore");
+Directory.CreateDirectory(data); Directory.CreateDirectory(restoreTo);
+File.WriteAllText(Path.Combine(data, "favorites.json"), "[1]");
+File.WriteAllText(Path.Combine(data, "secret.json"), "x");
+string zipFile = Path.Combine(temp, "b.zip");
+Backup.Create(data, zipFile);
+Check("backup.restore", Backup.Restore(restoreTo, zipFile) == 1 && File.ReadAllText(Path.Combine(restoreTo, "favorites.json")) == "[1]" && !File.Exists(Path.Combine(restoreTo, "secret.json")));
+
 try { Directory.Delete(temp, true); } catch (IOException) { }
 Console.WriteLine($"{passed} passed, {failed} failed");
 return failed == 0 ? 0 : 1;
