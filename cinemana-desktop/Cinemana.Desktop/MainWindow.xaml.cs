@@ -461,6 +461,19 @@ public partial class MainWindow : Window
             foreach (var nested in Descendants(child)) yield return nested;
         }
     }
+    private void GenreMenuClick(object sender, RoutedEventArgs e) { if (sender is FrameworkElement { Tag: string genre }) model.NavigateCommand.Execute("genre:" + genre); }
+    private void GridCardClick(object sender, MouseButtonEventArgs e)
+    {
+        // A click on the poster (not on its buttons) opens the title page.
+        if (e.OriginalSource is DependencyObject d && FindAncestor<Button>(d) is not null) return;
+        if (sender is FrameworkElement { DataContext: Movie m }) model.SelectCommand.Execute(m);
+    }
+    private static T? FindAncestor<T>(DependencyObject d) where T : DependencyObject
+    {
+        for (var node = d; node is not null; node = VisualTreeHelper.GetParent(node)) if (node is T hit) return hit;
+        return null;
+    }
+    private void CardLaterClick(object sender, RoutedEventArgs e) { if (sender is FrameworkElement { Tag: Movie m }) model.AddToList("سأشاهده لاحقًا", m); }
     private void HeroLaterClick(object sender, RoutedEventArgs e) { if (model.Hero is { } m) model.AddToList("سأشاهده لاحقًا", m); }
     // --- Discovery ---
     private async void RandomClick(object sender, RoutedEventArgs e) => await model.PickRandom();

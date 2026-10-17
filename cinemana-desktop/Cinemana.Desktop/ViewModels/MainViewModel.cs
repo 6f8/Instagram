@@ -38,6 +38,7 @@ public sealed class MainViewModel : Observable, IDisposable
         SearchCommand = new(async _ => await SearchNow());
         RefreshCommand = new(async _ => await Load(true));
         NextCommand = new(async _ => { page++; await Load(); }, _ => CanNext && !IsBusy);
+        LoadMoreCommand = new(async _ => await LoadMore(), _ => CanNext && !IsBusy && !loadingMore);
         PreviousCommand = new(async _ => { page--; await Load(); }, _ => page > 0 && !IsBusy);
         SelectCommand = new(async p => { if (p is Movie m) { DetailsOpen = true; await Select(m); SelectionRequested?.Invoke(); } });
         MoviesView = System.Windows.Data.CollectionViewSource.GetDefaultView(Movies);
@@ -165,6 +166,56 @@ public sealed class MainViewModel : Observable, IDisposable
     public RelayCommand PreviousHeroCommand { get; }
     public RelayCommand HeroDotCommand { get; }
     public RelayCommand ShowInBannerCommand { get; }
+    public RelayCommand LoadMoreCommand { get; }
+    // --- Site-style filters: year range, minimum stars (of 5) ---
+    private int yearFrom = 1900, yearTo = DateTime.Now.Year, minStars;
+    public int[] YearChoices { get; } = Enumerable.Range(1900, DateTime.Now.Year - 1899).Reverse().ToArray();
+    public int YearFrom { get => yearFrom; set { if (Set(ref yearFrom, value)) ApplyFilters(); } }
+    public int YearTo { get => yearTo; set { if (Set(ref yearTo, value)) ApplyFilters(); } }
+    public int MinStars { get => minStars; set { if (Set(ref minStars, Math.Clamp(value, 0, 5))) { ApplyFilters(); Notify(nameof(StarMarks)); } } }
+    /// <summary>Five stars for the rating filter: lit up to the chosen value.</summary>
+    public IEnumerable<object> StarMarks => Enumerable.Range(1, 5).Select(i => new { Value = i, Lit = i <= minStars });
+    public RelayCommand? StarCommand => starCommand ??= new(p => { if (p is int v) MinStars = v == MinStars ? 0 : v; });
+    private RelayCommand? starCommand;
+    public bool IsCatalogTabs => section is "films" or "series" or "genres" or "anime" || section.StartsWith("genre:", StringComparison.Ordinal);
+    public bool HasLoadMore => CanNext && !IsHome;
+    private bool loadingMore;
+    /// <summary>"تحميل المزيد": the next page is added under the current one instead of replacing it.</summary>
+    private async Task LoadMore()
+    {
+        loadingMore = true; LoadMoreCommand.Refresh();
+        try
+        {
+            page++;
+            var token = loading?.Token ?? CancellationToken.None;
+            var more = section switch
+            {
+                "movies" => (await NewReleases(false, token)).Value,
+                "films" => (await service.Catalog("movies", page, "", false, false, token)).Value,
+                "search" => (await Search(false, token)).Value,
+                var g when g.StartsWith("genre:", StringComparison.Ordinal) => (await GenrePage(g[6..], false, token)).Value,
+                _ => (await service.Catalog(section, page, query, false, false, token)).Value
+            };
+            var known = current.Select(m => m.Id).ToHashSet();
+            current.AddRange(more.Where(m => known.Add(m.Id)));
+            CanNext = more.Count >= 12;
+            ApplyFilters();
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidDataException) { page--; Status = "تعذّر تحميل المزيد. حاول مرة أخرى."; }
+        finally { loadingMore = false; LoadMoreCommand.Refresh(); Notify(nameof(HasLoadMore)); }
+    }
+    /// <summary>A genre under "الأفلام" in the side menu: films of that genre from the latest pages.</summary>
+    private async Task<CacheResult<List<Movie>>> GenrePage(string genre, bool refresh, CancellationToken token)
+    {
+        var found = new List<Movie>();
+        for (int p = page * 3; p < page * 3 + 3; p++)
+        {
+            try { found.AddRange((await service.Catalog("movies", p, "", refresh, false, token)).Value.Where(m => m.Genres.Contains(genre, StringComparison.Ordinal))); }
+            catch (Exception e) when (!token.IsCancellationRequested && e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidDataException) { }
+        }
+        return new(found);
+    }
+    public string[] FilmGenres { get; } = ["اثارة", "اكشن", "جريمة", "حياة الغرب", "خيال علمي", "خيالي", "دراما", "رسوم متحركة", "رعب", "رومانسي", "رياضي", "غموض", "كوميدي", "مغامرة", "وثائقي"];
     /// <summary>Followed series for the "الاشتراكات" section; supplied by the window.</summary>
     public Func<IEnumerable<Movie>> SubscriptionsProvider { get; set; } = () => [];
     public string SearchText { get => searchText; set { if (Set(ref searchText, value)) DebounceSearch(); } }
@@ -211,7 +262,17 @@ public sealed class MainViewModel : Observable, IDisposable
         set => Change(settings with { CardWidth = value });
     }
     private double availableWidth;
-    public void SetAvailableWidth(double width) { if (Math.Abs(width - availableWidth) > 8) { availableWidth = width; Notify(nameof(CardWidth)); } }
+    /// <summary>Catalogue grid cards: about 150 px columns, filling the width evenly (the site uses 133 px minimum).</summary>
+    public double GridCardWidth
+    {
+        get
+        {
+            if (availableWidth <= 0) return 150;
+            int columns = Math.Max(3, (int)((availableWidth + 20) / (150 + 20)));
+            return Math.Floor((availableWidth + 20) / columns - 20);
+        }
+    }
+    public void SetAvailableWidth(double width) { if (Math.Abs(width - availableWidth) > 8) { availableWidth = width; Notify(nameof(CardWidth)); Notify(nameof(GridCardWidth)); } }
     public int ThemeMode { get => settings.ThemeMode; set { Change(settings with { ThemeMode = value }); RestartNeeded(); } }
     public string AccentColor { get => settings.AccentColor; set { Change(settings with { AccentColor = value }); RestartNeeded(); } }
     public IEnumerable<object> AccentChoices => Theme.Accents.Select(a => new { a.Name, a.Hex });
@@ -447,7 +508,7 @@ public sealed class MainViewModel : Observable, IDisposable
         Movies.Clear(); current = [];
         selecting?.Cancel(); Selected = null; Episodes.Clear(); Seasons.Clear(); Notify(nameof(Section)); Notify(nameof(IsHome)); Notify(nameof(IsLibrary)); Notify(nameof(IsFavorites)); Notify(nameof(IsGenres)); Notify(nameof(CanSaveSearch)); RefreshListNames();
         if (!IsHome) { HeroItems.Clear(); FeaturedMovies.Clear(); LatestSeries.Clear(); Notify(nameof(HasSeriesRow)); }
-        Heading = section switch { "home" => "أحدث الأفلام", "series" => "أحدث المسلسلات", "favorites" => "مفضلتك", "history" => "سجل المشاهدة", "library" => "مكتبتي • الملفات المنزّلة", "genres" => "التصنيفات", "movies" => "الإصدارات الجديدة", "films" => "الأفلام", "popular" => "المشهورة", "anime" => "أنمي", "continue" => "تابع المشاهدة", "later" => "المشاهدة لاحقًا", "subscriptions" => "الاشتراكات", "search" => $"نتائج «{query}»", _ => "أحدث الأفلام" };
+        Heading = section switch { "home" => "أحدث الأفلام", "series" => "أحدث المسلسلات", "favorites" => "مفضلتك", "history" => "سجل المشاهدة", "library" => "مكتبتي • الملفات المنزّلة", "genres" => "التصنيفات", "movies" => "الإصدارات الجديدة", "films" => "الأفلام", "popular" => "المشهورة", "anime" => "أنمي", "continue" => "تابع المشاهدة", "later" => "المشاهدة لاحقًا", "subscriptions" => "الاشتراكات", "search" => $"نتائج «{query}»", var g when g.StartsWith("genre:", StringComparison.Ordinal) => "الأفلام · " + g[6..], _ => "أحدث الأفلام" };
         try
         {
             RefreshHistory();
@@ -459,6 +520,7 @@ public sealed class MainViewModel : Observable, IDisposable
                 "home" => await service.Catalog("movies", page, "", refresh, false, token),
                 "genres" => new(new List<Movie>()),
                 "movies" => await NewReleases(refresh, token),
+                var g when g.StartsWith("genre:", StringComparison.Ordinal) => await GenrePage(g[6..], refresh, token),
                 "films" => await service.Catalog("movies", page, "", refresh, false, token),
                 "popular" => await Popular(refresh, token),
                 "anime" => await Anime(refresh, token),
@@ -469,7 +531,7 @@ public sealed class MainViewModel : Observable, IDisposable
                 _ => await service.Catalog(section, page, query, refresh, false, token)
             };
             token.ThrowIfCancellationRequested();
-            current = result.Value; CanNext = section is "movies" or "films" or "series" or "search" && current.Count >= 24;
+            current = result.Value; CanNext = (section is "movies" or "films" or "series" or "search" && current.Count >= 24) || section.StartsWith("genre:", StringComparison.Ordinal) && current.Count > 0; Notify(nameof(HasLoadMore)); Notify(nameof(IsCatalogTabs));
             if (IsHome) await LoadHomeRows(refresh, token);
             if (IsGenres) await LoadGenres(refresh, token);
             if (section is not ("history" or "library" or "favorites")) { var hidden = Hidden(); current = current.Where(m => !hidden.Contains(m.Id)).ToList(); }
@@ -641,7 +703,10 @@ public sealed class MainViewModel : Observable, IDisposable
                 if (grouped) MoviesView.GroupDescriptions.Add(new System.Windows.Data.PropertyGroupDescription(nameof(Movie.GroupTitle)));
             }
         }
-        Movies.Clear(); foreach (var movie in Filter(current, selectedGenre ?? "الكل", selectedYear ?? "الكل", RatingIndex == 0 ? 0 : RatingIndex + 5, SortIndex)) Movies.Add(movie);
+        int floor = Math.Max(RatingIndex == 0 ? 0 : RatingIndex + 5, minStars * 2);
+        Movies.Clear();
+        foreach (var movie in Filter(current, selectedGenre ?? "الكل", selectedYear ?? "الكل", floor, SortIndex))
+            if (!int.TryParse(movie.Year, out int y) || y >= Math.Min(yearFrom, yearTo) && y <= Math.Max(yearFrom, yearTo)) Movies.Add(movie);
         Notify(nameof(IsEmpty));
         NotifyHero();
     }

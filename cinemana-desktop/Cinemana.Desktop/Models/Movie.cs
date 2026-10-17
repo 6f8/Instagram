@@ -32,6 +32,9 @@ public record Movie(string Id, string Title, string Description, string Poster, 
     public string DisplayTitle => string.IsNullOrWhiteSpace(ArabicTitle) ? Title : ArabicTitle;
     public string Caption => $"{Year}  •  ★ {Rating}";
     [System.Text.Json.Serialization.JsonIgnore] public string[] CastNames => Cast.Split('،', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Take(8).ToArray();
+    [System.Text.Json.Serialization.JsonIgnore] public bool HasRating => NumericRating > 0;
+    /// <summary>"2026, اكشن" under a catalogue card.</summary>
+    [System.Text.Json.Serialization.JsonIgnore] public string YearGenre => string.Join(", ", new[] { Year, FirstGenre }.Where(x => x.Length > 0));
     public string FirstGenre => Genres.Split('،', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
     public string HoursLabel => Duration > 0 ? (Duration >= 3600 ? $"{(int)(Duration / 3600)} س {(int)(Duration % 3600 / 60)} د" : $"{(int)(Duration / 60)} د") : "";
     // Card subtitle as in the design: year • genre • duration (missing parts are skipped).

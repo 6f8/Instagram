@@ -55,7 +55,8 @@ public sealed class IndexEqualsConverter : IMultiValueConverter
 /// <summary>Poster height for a card width (2:3 poster, slightly trimmed like the design).</summary>
 public sealed class PosterHeightConverter : IValueConverter
 {
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is double width ? Math.Round(width * 1.3) : 260d;
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is double width ? Math.Round(width * (double.TryParse(parameter?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var ratio) ? ratio : 1.3)) : 260d;
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
 
