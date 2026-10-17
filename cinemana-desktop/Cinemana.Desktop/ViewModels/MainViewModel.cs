@@ -178,6 +178,7 @@ public sealed class MainViewModel : Observable, IDisposable
     /// <summary>The numbered "01–04" picks under the banner.</summary>
     public IEnumerable<Movie> Picks => FeaturedMovies.Skip(HeroItems.Count > 0 ? 1 : 0).Take(4).ToList();
     public string Status { get => status; private set => Set(ref status, value); }
+    public void SetStatus(string text) => Status = text;
     public string DetailsStatus { get => detailsStatus; private set => Set(ref detailsStatus, value); }
     public bool IsBusy { get => busy; private set { Set(ref busy, value); RefreshCommands(); } }
     public bool DetailsBusy { get => detailsBusy; private set => Set(ref detailsBusy, value); }
@@ -208,12 +209,74 @@ public sealed class MainViewModel : Observable, IDisposable
     public int ParallelIndex { get => ParallelDownloads - 1; set { ParallelDownloads = value + 1; Notify(); } }
     public int SpeedLimitIndex { get => Math.Max(0, Array.IndexOf(SpeedLimits, SpeedLimitKBps)); set { SpeedLimitKBps = SpeedLimits[Math.Clamp(value, 0, SpeedLimits.Length - 1)]; Notify(); } }
     public event Action? DownloadSettingsChanged;
+    // --- My library: order, unwatched filter, totals ---
+    private int librarySort; private bool unwatchedOnly; private string libraryStats = "";
+    public int LibrarySort { get => librarySort; set { if (Set(ref librarySort, value) && section == "library") _ = Load(); } }
+    public bool UnwatchedOnly { get => unwatchedOnly; set { if (Set(ref unwatchedOnly, value) && section == "library") _ = Load(); } }
+    public string LibraryStats { get => libraryStats; private set => Set(ref libraryStats, value); }
+    public bool IsLibrary => section == "library";
+    public bool IsFavorites => section == "favorites";
+    private IEnumerable<Movie> SortLibrary(IEnumerable<Movie> items)
+    {
+        var list = items.Where(m => !UnwatchedOnly || m.WatchedPercent < 95).ToList();
+        long total = list.Sum(m => m.SizeBytes);
+        LibraryStats = list.Count == 0 ? "" : $"{list.Count} ملفًا · {DownloadPaths.Size(total)} · شوهد منها {list.Count(m => m.WatchedPercent >= 95)}";
+        return LibrarySort switch
+        {
+            1 => list.OrderByDescending(m => m.AddedAt),
+            2 => list.OrderByDescending(m => m.SizeBytes),
+            3 => list.OrderByDescending(m => m.WatchedPercent > 0).ThenBy(m => m.GroupTitle),
+            _ => list.OrderBy(m => m.GroupTitle).ThenBy(m => m.Season).ThenBy(m => m.Episode)
+        };
+    }
+    /// <summary>"My library" as CSV (UTF-8 with BOM so Excel shows Arabic correctly).</summary>
+    public string LibraryCsv()
+    {
+        static string Q(string v) => "\"" + v.Replace("\"", "\"\"") + "\"";
+        var lines = new List<string> { "العنوان,الموسم,الحلقة,الحجم (MB),شوهد %,تاريخ الإضافة,المسار" };
+        lines.AddRange(SortLibrary(LibraryProvider()).Select(m => string.Join(",", Q(m.GroupTitle), m.Season, m.Episode, m.SizeBytes / (1 << 20), Math.Round(m.WatchedPercent), m.AddedAt.ToString("yyyy-MM-dd"), Q(m.LocalFile ?? ""))));
+        return string.Join("\r\n", lines);
+    }
+    // --- Custom lists ("سأشاهده لاحقًا"...) shown in the favourites section ---
+    private string activeList = "";
+    public ObservableCollection<string> ListNames { get; } = [];
+    public string ActiveList { get => activeList; set { if (Set(ref activeList, value ?? "") && section == "favorites") _ = Load(); } }
+    public Dictionary<string, List<Movie>> Lists() => Store.Load("lists", new Dictionary<string, List<Movie>>());
+    private void RefreshListNames() { var names = Lists().Keys.Order().ToList(); ListNames.Clear(); ListNames.Add(""); foreach (var n in names) ListNames.Add(n); }
+    public void AddToList(string name, Movie movie)
+    {
+        var lists = Lists();
+        if (!lists.TryGetValue(name, out var list)) lists[name] = list = [];
+        if (list.All(m => m.Id != movie.Id)) list.Insert(0, movie with { LocalFile = null, ProgressText = "" });
+        try { Store.Save("lists", lists); Status = $"أُضيف «{movie.DisplayTitle}» إلى قائمة «{name}»."; } catch (Exception e) when (StorageError(e)) { Status = "تعذّر حفظ القائمة."; }
+        RefreshListNames();
+    }
+    public void RemoveFromActiveList(Movie movie)
+    {
+        if (ActiveList.Length == 0) return;
+        var lists = Lists();
+        if (lists.TryGetValue(ActiveList, out var list)) { list.RemoveAll(m => m.Id == movie.Id); if (list.Count == 0) lists.Remove(ActiveList); }
+        Store.Save("lists", lists); RefreshListNames(); _ = Load();
+    }
+    // --- Personal note and stars for the selected title ---
+    public string NoteText { get => Selected is null ? "" : Notes().GetValueOrDefault(Selected.Id)?.Text ?? ""; set => SaveNote(n => n with { Text = value }); }
+    public int NoteStars { get => Selected is null ? 0 : Notes().GetValueOrDefault(Selected.Id)?.Stars ?? 0; set => SaveNote(n => n with { Stars = value }); }
+    private Dictionary<string, Note> Notes() => Store.Load("notes", new Dictionary<string, Note>());
+    private void SaveNote(Func<Note, Note> change)
+    {
+        if (Selected is null) return;
+        var notes = Notes(); var note = change(notes.GetValueOrDefault(Selected.Id) ?? new());
+        if (note.Text.Length == 0 && note.Stars == 0) notes.Remove(Selected.Id); else notes[Selected.Id] = note;
+        try { Store.Save("notes", notes); } catch (Exception e) when (StorageError(e)) { Status = "تعذّر حفظ الملاحظة."; }
+    }
     public bool ScheduleEnabled { get => settings.ScheduleEnabled; set => Change(settings with { ScheduleEnabled = value }); }
     public int ScheduleStart { get => settings.ScheduleStart; set => Change(settings with { ScheduleStart = Math.Clamp(value, 0, 23) }); }
     public int ScheduleEnd { get => settings.ScheduleEnd; set => Change(settings with { ScheduleEnd = Math.Clamp(value, 0, 23) }); }
     public int[] Hours { get; } = Enumerable.Range(0, 24).ToArray();
     public int NightLimitIndex { get => settings.NightSpeedLimitKBps < 0 ? 0 : Array.IndexOf(SpeedLimits, settings.NightSpeedLimitKBps) + 1; set { Change(settings with { NightSpeedLimitKBps = value <= 0 ? -1 : SpeedLimits[Math.Clamp(value - 1, 0, SpeedLimits.Length - 1)] }, nameof(SpeedLimitKBps)); Notify(); } }
     public bool PauseOnMetered { get => settings.PauseOnMetered; set => Change(settings with { PauseOnMetered = value }, nameof(SpeedLimitKBps)); }
+    public int AutoDeleteDays { get => settings.AutoDeleteWatchedDays; set => Change(settings with { AutoDeleteWatchedDays = Math.Max(0, value) }); }
+    public int[] DeleteDayChoices { get; } = [0, 7, 14, 30, 60];
     public int AfterQueue { get => settings.AfterQueue; set => Change(settings with { AfterQueue = value }); }
     public bool AutoDownloadFollowed { get => settings.AutoDownloadFollowed; set => Change(settings with { AutoDownloadFollowed = value }); }
     private void Change(AppSettings value, [System.Runtime.CompilerServices.CallerMemberName] string? name = null)
@@ -271,7 +334,7 @@ public sealed class MainViewModel : Observable, IDisposable
         IsBusy = true; Status = "جارٍ تحميل العناوين…"; CanNext = false;
         // Clear the previous section immediately; failed navigation must not masquerade as new results.
         Movies.Clear(); current = [];
-        selecting?.Cancel(); Selected = null; Episodes.Clear(); Seasons.Clear(); Notify(nameof(Section)); Notify(nameof(IsHome));
+        selecting?.Cancel(); Selected = null; Episodes.Clear(); Seasons.Clear(); Notify(nameof(Section)); Notify(nameof(IsHome)); Notify(nameof(IsLibrary)); Notify(nameof(IsFavorites)); RefreshListNames();
         if (!IsHome) { HeroItems.Clear(); FeaturedMovies.Clear(); LatestSeries.Clear(); Notify(nameof(HasSeriesRow)); }
         Heading = section switch { "home" => "أحدث الأفلام", "series" => "أحدث المسلسلات", "favorites" => "مفضلتك", "history" => "سجل المشاهدة", "library" => "مكتبتي • الملفات المنزّلة", "search" => $"نتائج «{query}»", _ => "أحدث الأفلام" };
         try
@@ -279,9 +342,9 @@ public sealed class MainViewModel : Observable, IDisposable
             RefreshHistory();
             CacheResult<List<Movie>> result = section switch
             {
-                "favorites" => new([.. favorites]),
+                "favorites" => new(ActiveList.Length > 0 ? (Lists().GetValueOrDefault(ActiveList) ?? new List<Movie>()) : favorites.ToList()),
                 "history" => new(Store.History().Select(e => e.Movie with { ProgressText = e.ProgressLabel }).ToList()),
-                "library" => new(LibraryProvider().OrderBy(m => m.GroupTitle).ThenBy(m => m.Season).ThenBy(m => m.Episode).ToList()),
+                "library" => new(SortLibrary(LibraryProvider()).ToList()),
                 "home" => await service.Catalog("movies", page, "", refresh, false, token),
                 _ => await service.Catalog(section, page, query, refresh, false, token)
             };
@@ -389,7 +452,7 @@ public sealed class MainViewModel : Observable, IDisposable
         finally { if (!token.IsCancellationRequested) DetailsBusy = false; }
     }
     public void ClearSelection() { selecting?.Cancel(); Selected = null; Episodes.Clear(); Seasons.Clear(); allEpisodes = []; DetailsBusy = false; DetailsStatus = ""; NotifyContinue(); }
-    private void NotifyContinue() { Notify(nameof(FollowLabel)); FollowCommand?.Refresh(); Notify(nameof(NextToWatch)); Notify(nameof(ContinueLabel)); ContinueCommand?.Refresh(); DownloadUnwatchedCommand?.Refresh(); }
+    private void NotifyContinue() { Notify(nameof(NoteText)); Notify(nameof(NoteStars)); Notify(nameof(FollowLabel)); FollowCommand?.Refresh(); Notify(nameof(NextToWatch)); Notify(nameof(ContinueLabel)); ContinueCommand?.Refresh(); DownloadUnwatchedCommand?.Refresh(); }
     private void UpdateEpisodes()
     {
         var seen = Store.History().DistinctBy(h => h.Movie.Id).ToDictionary(h => h.Movie.Id, h => h.Percent);

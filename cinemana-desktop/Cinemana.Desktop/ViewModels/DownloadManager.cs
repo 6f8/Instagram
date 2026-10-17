@@ -112,6 +112,68 @@ public sealed class DownloadManager : Observable, IDisposable
         if (found.Count > 0) { Status = $"أُضيف {found.Count} ملفًا موجودًا إلى مكتبتي."; Save(); }
         return found.Count;
     }
+    /// <summary>
+    /// Moves every finished file (with its subtitles and side file) under a new folder, keeping the
+    /// مسلسلات/أفلام structure, and makes it the download folder. Unfinished items stay where they are.
+    /// </summary>
+    public async Task<(int Moved, int Failed)> MoveLibrary(string newRoot, IProgress<int>? progress)
+    {
+        string oldRoot = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        newRoot = Path.GetFullPath(newRoot);
+        int moved = 0, failed = 0;
+        foreach (var item in Items.Where(i => i.IsPlayable).ToList())
+        {
+            string from = Path.GetFullPath(item.Destination);
+            string relative = from.StartsWith(oldRoot, StringComparison.OrdinalIgnoreCase) ? from[oldRoot.Length..] : Path.GetFileName(from);
+            string to = Path.Combine(newRoot, relative);
+            try
+            {
+                await Task.Run(() =>
+                {
+                    System.IO.Directory.CreateDirectory(Path.GetDirectoryName(to)!);
+                    foreach (var srt in FileDownloader.SubtitlesBeside(from).ToList()) File.Move(srt, Path.Combine(Path.GetDirectoryName(to)!, Path.GetFileName(srt)), false);
+                    if (File.Exists(from + ".download.json")) File.Move(from + ".download.json", to + ".download.json", false);
+                    File.Move(from, to, false);
+                });
+                int index = Items.IndexOf(item);
+                Items[index] = new(item.Snapshot() with { Spec = item.Spec with { Destination = to } });
+                moved++; progress?.Report(moved);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Log.Error("move-library", e); failed++; }
+        }
+        Directory = newRoot; Save();
+        return (moved, failed);
+    }
+    /// <summary>Adds video files from anywhere on the computer to "My library" (they stay where they are).</summary>
+    public int ImportFiles(IEnumerable<string> files)
+    {
+        int added = 0;
+        foreach (var file in files.Select(Path.GetFullPath))
+        {
+            if (Items.Any(i => string.Equals(i.Destination, file, StringComparison.OrdinalIgnoreCase)) || !File.Exists(file)) continue;
+            string stem = Path.GetFileNameWithoutExtension(file);
+            var match = System.Text.RegularExpressions.Regex.Match(stem, @"S(?<s>\d{1,3})\s*E(?<e>\d{1,4})", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            string title = match.Success ? stem[..match.Index].Trim(' ', '-', '.', '_') : stem;
+            if (title.Length == 0) title = Path.GetFileName(Path.GetDirectoryName(file)) ?? stem;
+            var movie = new Movie("local:" + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.UTF8.GetBytes(file)))[..12], title, "", "", "", "")
+            { ArabicTitle = title, Kind = match.Success ? "2" : "1", Season = match.Success ? int.Parse(match.Groups["s"].Value) : 0, Episode = match.Success ? int.Parse(match.Groups["e"].Value) : 0 };
+            long size = new FileInfo(file).Length;
+            Items.Add(new(new(new(movie, 0, Path.GetExtension(file).TrimStart('.').ToLowerInvariant(), file), DownloadState.Completed, size, size, "ملف مستورد من جهازك.")));
+            added++;
+        }
+        if (added > 0) Save();
+        return added;
+    }
+    /// <summary>Deletes files watched to the end more than <paramref name="days"/> days ago (opt-in setting).</summary>
+    public int DeleteWatchedOlderThan(int days, IReadOnlyDictionary<string, WatchEntry> history)
+    {
+        if (days <= 0) return 0;
+        int deleted = 0;
+        foreach (var item in Items.Where(i => i.IsPlayable && !i.Spec.Movie.Id.StartsWith("local:", StringComparison.Ordinal)).ToList())
+            if (history.TryGetValue(item.Spec.Movie.Id, out var h) && h.Percent >= 95 && DateTimeOffset.UtcNow - h.OpenedAt > TimeSpan.FromDays(days) && DeleteFile(item)) deleted++;
+        if (deleted > 0) Log.Info($"auto-deleted {deleted} watched files");
+        return deleted;
+    }
     /// <summary>Deletes a finished file and the subtitles saved beside it, then drops it from the list.</summary>
     public bool DeleteFile(DownloadItem item)
     {
@@ -322,7 +384,7 @@ public sealed class DownloadManager : Observable, IDisposable
             item.Progress(new(result.Bytes, result.Bytes, 0)); item.State = DownloadState.Completed;
             item.Message = (result.AlreadyComplete ? "الملف مكتمل مسبقًا؛ لم يُنزّل مجددًا." : "تم حفظ الملف.")
                 + (result.SubtitleNote.Length > 0 ? " " + result.SubtitleNote : item.Spec.SubtitleLanguage.Length > 0 ? " مع ملف الترجمة (.srt)." : "");
-            if (!result.AlreadyComplete) { Completed?.Invoke(item); Record(item, "اكتمل"); }
+            if (!result.AlreadyComplete) { Completed?.Invoke(item); Record(item, "اكتمل"); _ = api.WithImage(item.Spec.Movie, CancellationToken.None); }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { if (item.State == DownloadState.Running) item.State = DownloadState.Paused; }
         catch (InvalidDataException e) when (e.Message.Contains("ليس فيديو")) { item.State = DownloadState.Failed; item.Message = e.Message; Record(item, "فشل التحقق"); TryDelete(item.Destination + ".part"); }

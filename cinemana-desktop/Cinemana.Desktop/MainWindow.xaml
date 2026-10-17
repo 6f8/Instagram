@@ -132,11 +132,15 @@
       <TextBlock Grid.Row="2" Text="اللغة" Foreground="{StaticResource Muted}"/><TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Selected.Language}"/>
       <TextBlock Grid.Row="3" Text="المدة" Foreground="{StaticResource Muted}" Margin="0,6"/><TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Selected.DurationLabel}" Margin="0,6"/>
     </Grid>
+    <DockPanel Margin="0,10,0,0"><TextBlock Text="تقييمك" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Width="90" DockPanel.Dock="Right"/>
+      <ComboBox SelectedIndex="{Binding NoteStars}" MinWidth="120" HorizontalAlignment="Right" AutomationProperties.Name="تقييمك"><ComboBoxItem Content="بلا تقييم"/><ComboBoxItem Content="★"/><ComboBoxItem Content="★★"/><ComboBoxItem Content="★★★"/><ComboBoxItem Content="★★★★"/><ComboBoxItem Content="★★★★★"/></ComboBox></DockPanel>
+    <TextBox Text="{Binding NoteText,UpdateSourceTrigger=LostFocus}" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="54" Margin="0,8,0,0" AutomationProperties.Name="ملاحظتك" ToolTip="ملاحظة خاصة بك عن هذا العنوان"/>
     <ProgressBar Height="3" IsIndeterminate="True" Foreground="{StaticResource Accent}" Visibility="{Binding DetailsBusy,Converter={StaticResource BoolVisibility}}" Margin="0,8"/>
     <TextBlock Text="{Binding DetailsStatus}" Foreground="{StaticResource Accent}" TextWrapping="Wrap" Margin="0,8"/>
     <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
       <Button Content="{Binding ContinueLabel}" Style="{StaticResource PrimaryButton}" Command="{Binding ContinueCommand}" Padding="28,14" Margin="0,0,12,0"/>
       <Button Content="تحميل" Style="{StaticResource GhostButton}" Command="{Binding DownloadCommand}" Padding="24,14" Margin="0,0,12,0"/>
+      <Button Content="+ قائمة" Style="{StaticResource LinkButton}" Click="AddToListClick" ToolTip="أضف إلى «سأشاهده لاحقًا» أو قائمة جديدة"/>
       <Button Content="{Binding FollowLabel}" Style="{StaticResource LinkButton}" Command="{Binding FollowCommand}" ToolTip="تنزيل الحلقات الجديدة تلقائيًا عند صدورها"/>
       <Button Content="حمّل غير المُشاهَد" Style="{StaticResource LinkButton}" Command="{Binding DownloadUnwatchedCommand}" ToolTip="تنزيل حلقات المسلسل التي لم تكملها"/>
       <Button Content="إغلاق" Style="{StaticResource LinkButton}" Foreground="{StaticResource Muted}" Command="{Binding BackCommand}"/>
@@ -188,6 +192,7 @@
       <CheckBox Content="إيقاف التنزيل على الشبكات محدودة الباقة" IsChecked="{Binding PauseOnMetered}" Margin="18,8,4,8"/>
       <TextBlock Text="بعد انتهاء القائمة" VerticalAlignment="Center" Margin="18,0,0,0"/><ComboBox SelectedIndex="{Binding AfterQueue}" MinWidth="130"><ComboBoxItem Content="لا شيء"/><ComboBoxItem Content="إسبات الجهاز"/><ComboBoxItem Content="إطفاء الجهاز"/></ComboBox>
       <CheckBox Content="تنزيل الحلقات الجديدة للمسلسلات المتابَعة" IsChecked="{Binding AutoDownloadFollowed}" Margin="18,8,4,8"/>
+      <TextBlock Text="حذف المُشاهَد بعد (أيام، 0 = أبدًا)" VerticalAlignment="Center" Margin="18,0,0,0"/><ComboBox ItemsSource="{Binding DeleteDayChoices}" SelectedItem="{Binding AutoDeleteDays}" MinWidth="60"/>
     </WrapPanel>
     <TextBlock Text="أدوات" FontWeight="Bold" Margin="0,16,0,4"/>
     <WrapPanel Margin="-10,0,0,0">
@@ -234,6 +239,18 @@
 
 <!-- Section grid -->
 <DockPanel Margin="0,44,0,8"><TextBlock Text="{Binding Heading}" Style="{StaticResource SectionTitle}"/></DockPanel>
+<WrapPanel Margin="0,0,0,10" Visibility="{Binding IsLibrary,Converter={StaticResource BoolVisibility}}">
+  <TextBlock Text="{Binding LibraryStats}" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,16,0"/>
+  <ComboBox SelectedIndex="{Binding LibrarySort}" MinWidth="150" AutomationProperties.Name="ترتيب المكتبة"><ComboBoxItem Content="حسب المسلسل"/><ComboBoxItem Content="الأحدث إضافة"/><ComboBoxItem Content="الأكبر حجمًا"/><ComboBoxItem Content="آخر مشاهدة"/></ComboBox>
+  <CheckBox Content="غير المُشاهَد فقط" IsChecked="{Binding UnwatchedOnly}" Margin="12,8,4,8"/>
+  <Button Content="استيراد ملفات فيديو" Style="{StaticResource LinkButton}" Click="ImportVideosClick"/>
+  <Button Content="تصدير CSV" Style="{StaticResource LinkButton}" Click="ExportCsvClick"/>
+  <Button Content="نقل المكتبة إلى قرص آخر" Style="{StaticResource LinkButton}" Click="MoveLibraryClick"/>
+</WrapPanel>
+<WrapPanel Margin="0,0,0,10" Visibility="{Binding IsFavorites,Converter={StaticResource BoolVisibility}}">
+  <TextBlock Text="القائمة" VerticalAlignment="Center" Foreground="{StaticResource Muted}"/>
+  <ComboBox ItemsSource="{Binding ListNames}" SelectedItem="{Binding ActiveList}" MinWidth="170" AutomationProperties.Name="القائمة"><ComboBox.ItemTemplate><DataTemplate><TextBlock><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Text" Value="{Binding}"/><Style.Triggers><DataTrigger Binding="{Binding}" Value=""><Setter Property="Text" Value="المفضلة"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+</WrapPanel>
 <WrapPanel Margin="0,0,0,22">
   <ComboBox ItemsSource="{Binding Genres}" SelectedItem="{Binding SelectedGenre}" AutomationProperties.Name="التصنيف"/>
   <ComboBox ItemsSource="{Binding Years}" SelectedItem="{Binding SelectedYear}" AutomationProperties.Name="السنة"/>
@@ -244,7 +261,7 @@
 <Grid Margin="0,0,0,20"><ItemsControl ItemsSource="{Binding MoviesView}" x:Name="Catalog" ItemTemplate="{StaticResource PosterCard}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
   <!-- "My library" groups episodes under their series -->
   <ItemsControl.GroupStyle><GroupStyle><GroupStyle.HeaderTemplate><DataTemplate>
-    <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,14,0,12" Margin="0,8,0,0"><TextBlock FontFamily="{StaticResource Display}" FontSize="24"><Run Text="{Binding Name,Mode=OneWay}"/><Run Text="  "/><Run Text="{Binding ItemCount,Mode=OneWay}" Foreground="{StaticResource Numeral}" FontSize="18"/></TextBlock></Border>
+    <Border BorderBrush="{StaticResource Line}" BorderThickness="0,1,0,0" Padding="0,14,0,12" Margin="0,8,0,0"><StackPanel><TextBlock FontFamily="{StaticResource Display}" FontSize="24"><Run Text="{Binding Name,Mode=OneWay}"/><Run Text="  "/><Run Text="{Binding ItemCount,Mode=OneWay}" Foreground="{StaticResource Numeral}" FontSize="18"/></TextBlock><TextBlock Text="{Binding Items,Converter={StaticResource GroupSummary}}" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/></StackPanel></Border>
   </DataTemplate></GroupStyle.HeaderTemplate></GroupStyle></ItemsControl.GroupStyle>
 </ItemsControl>
 <!-- Skeleton cards while a page loads -->

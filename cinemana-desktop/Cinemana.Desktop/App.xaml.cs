@@ -77,3 +77,18 @@ public sealed class PosterConverter : IValueConverter
     }
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }
+
+/// <summary>"My library" group line: size and how many were watched, e.g. "4.2 GB · شوهد 3 من 8".</summary>
+public sealed class GroupSummaryConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is not System.Collections.IEnumerable items) return "";
+        var list = items.OfType<Models.Movie>().ToList();
+        var seasons = list.Where(m => m.Kind == "2").GroupBy(m => m.Season).OrderBy(g => g.Key)
+            .Select(g => $"م{g.Key}: {g.Count(m => m.WatchedPercent >= 95)}/{g.Count()}");
+        string per = string.Join(" · ", seasons);
+        return $"{Models.DownloadPaths.Size(list.Sum(m => m.SizeBytes))} · شوهد {list.Count(m => m.WatchedPercent >= 95)} من {list.Count}" + (per.Length > 0 ? "  —  " + per : "");
+    }
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}

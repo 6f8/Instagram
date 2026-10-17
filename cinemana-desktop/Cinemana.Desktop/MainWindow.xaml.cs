@@ -87,6 +87,11 @@ public partial class MainWindow : Window
             await model.Load();
             _ = model.CheckServiceAndUpdates();
             _ = CheckFollowed();
+            if (model.AutoDeleteDays > 0)
+            {
+                int removed = downloads.DeleteWatchedOlderThan(model.AutoDeleteDays, model.Store.History().DistinctBy(h => h.Movie.Id).ToDictionary(h => h.Movie.Id));
+                if (removed > 0) Balloon("تنظيف المكتبة", $"حُذف {removed} ملفًا شوهد قبل أكثر من {model.AutoDeleteDays} يومًا.");
+            }
             var args = Environment.GetCommandLineArgs();
             int playIndex = Array.IndexOf(args, "--play");
             if (playIndex < 0 || playIndex + 1 >= args.Length || !args[playIndex + 1].All(char.IsAsciiDigit)) return;
@@ -138,7 +143,15 @@ public partial class MainWindow : Window
             {
                 string state = watched.TryGetValue(i.Spec.Movie.Id, out var p) ? p >= 95 ? " · شوهدت" : $" · {p:0}%" : "";
                 string episode = i.Spec.Movie.Kind == "2" ? $"S{i.Spec.Movie.Season:00}E{i.Spec.Movie.Episode:00} · " : "";
-                return i.Spec.Movie with { LocalFile = i.Destination, ProgressText = episode + DownloadPaths.Size(i.FileSize) + state };
+                DateTime added = DateTime.MinValue;
+                try { added = File.GetCreationTime(i.Destination); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+                return i.Spec.Movie with
+                {
+                    LocalFile = i.Destination, ProgressText = episode + DownloadPaths.Size(i.FileSize) + state,
+                    AddedAt = added, SizeBytes = i.FileSize, WatchedPercent = watched.GetValueOrDefault(i.Spec.Movie.Id),
+                    // Posters saved while online keep "My library" illustrated without a connection.
+                    LocalPoster = i.Spec.Movie.LocalPoster ?? CinemanaService.CachedPoster(model.Store.Root, i.Spec.Movie.Poster)
+                };
             });
     }
     private void ShowCompleted(DownloadItem item)
@@ -268,6 +281,60 @@ public partial class MainWindow : Window
         if (item is null) return;
         if (MessageBox.Show(this, $"حذف «{movie.DisplayTitle}» ({DownloadPaths.Size(item.FileSize)}) وملف ترجمته من القرص؟", "حذف من مكتبتي", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         if (downloads.DeleteFile(item)) await model.Load();
+    }
+    // --- My library tools ---
+    private async void ImportVideosClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "اختر ملفات فيديو لإضافتها إلى مكتبتي", Filter = "فيديو (*.mp4;*.mkv;*.ts)|*.mp4;*.mkv;*.ts", Multiselect = true };
+        if (dialog.ShowDialog(this) != true) return;
+        int added = downloads.ImportFiles(dialog.FileNames);
+        model.SetStatus(added > 0 ? $"أُضيف {added} ملفًا إلى مكتبتي." : "هذه الملفات موجودة بالفعل في مكتبتي.");
+        await model.Load();
+    }
+    private void ExportCsvClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog { Title = "تصدير مكتبتي", Filter = "CSV (*.csv)|*.csv", FileName = "مكتبتي.csv" };
+        if (dialog.ShowDialog(this) != true) return;
+        try { File.WriteAllText(dialog.FileName, model.LibraryCsv(), new System.Text.UTF8Encoding(true)); model.SetStatus("صُدّرت المكتبة."); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { model.SetStatus("تعذّر حفظ الملف."); }
+    }
+    private async void MoveLibraryClick(object sender, RoutedEventArgs e)
+    {
+        var chooser = new Microsoft.Win32.OpenFolderDialog { Title = "اختر المجلد الجديد للمكتبة" };
+        if (chooser.ShowDialog(this) != true) return;
+        if (downloads.Items.Any(i => i.State == DownloadState.Running)) { MessageBox.Show(this, "أوقف التنزيلات الجارية أولًا ثم أعد المحاولة.", "نقل المكتبة"); return; }
+        var progress = new Progress<int>(n => model.SetStatus($"جارٍ النقل… {n} ملف"));
+        var (moved, failed) = await downloads.MoveLibrary(chooser.FolderName, progress);
+        model.SetStatus($"نُقل {moved} ملفًا" + (failed > 0 ? $"، وتعذّر نقل {failed}." : ".") + " صار المجلد الجديد مجلد التنزيل.");
+        await model.Load();
+    }
+    private void AddToListClick(object sender, RoutedEventArgs e)
+    {
+        if (model.Selected is not { } movie || sender is not FrameworkElement button) return;
+        var menu = new ContextMenu { FlowDirection = FlowDirection.RightToLeft, PlacementTarget = button };
+        foreach (var name in model.Lists().Keys.Append("سأشاهده لاحقًا").Distinct().Order())
+        {
+            var item = new MenuItem { Header = name }; item.Click += (_, _) => model.AddToList(name, movie); menu.Items.Add(item);
+        }
+        var create = new MenuItem { Header = "قائمة جديدة…" };
+        create.Click += (_, _) => { if (Prompt("اسم القائمة الجديدة") is { Length: > 0 } name) model.AddToList(name, movie); };
+        menu.Items.Add(new Separator()); menu.Items.Add(create);
+        if (model.IsFavorites && model.ActiveList.Length > 0)
+        { var remove = new MenuItem { Header = "إزالة من «" + model.ActiveList + "»" }; remove.Click += (_, _) => model.RemoveFromActiveList(movie); menu.Items.Add(remove); }
+        menu.IsOpen = true;
+    }
+    /// <summary>A one-line text question in the app's style; null when cancelled.</summary>
+    private string? Prompt(string question)
+    {
+        var box = new TextBox { Margin = new Thickness(0, 10, 0, 14), MinWidth = 280 };
+        var ok = new Button { Content = "موافق", IsDefault = true, Style = (Style)FindResource("PrimaryButton"), Padding = new Thickness(20, 8, 20, 8) };
+        var panel = new StackPanel { Margin = new Thickness(20) };
+        panel.Children.Add(new TextBlock { Text = question }); panel.Children.Add(box); panel.Children.Add(ok);
+        var dialog = new Window { Title = "سينمانا", Content = panel, SizeToContent = SizeToContent.WidthAndHeight, Owner = this, WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            FlowDirection = FlowDirection.RightToLeft, Background = (System.Windows.Media.Brush)FindResource("Ground"), Foreground = (System.Windows.Media.Brush)FindResource("Ink"), ResizeMode = ResizeMode.NoResize };
+        ok.Click += (_, _) => dialog.DialogResult = true;
+        dialog.Loaded += (_, _) => box.Focus();
+        return dialog.ShowDialog() == true ? box.Text.Trim() : null;
     }
     // --- Player and downloads ---
     private void ClosePlayer()

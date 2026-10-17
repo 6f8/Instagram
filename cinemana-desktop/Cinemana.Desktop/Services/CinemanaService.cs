@@ -107,6 +107,13 @@ public sealed class CinemanaService : IDisposable
         if (raw.Length > 4_000_000) throw new InvalidDataException("ملف الترجمة أكبر من الحد المدعوم.");
         return SubtitleParser.Parse(SubtitleParser.Decode(raw));
     }
+    /// <summary>The cached poster file for a URL, if it was saved earlier (used to show "My library" offline).</summary>
+    public static string? CachedPoster(string root, string url)
+    {
+        if (url.Length == 0) return null;
+        string file = Path.Combine(root, "Cache", Hash(url) + ".img");
+        return File.Exists(file) ? file : null;
+    }
     public async Task<Movie> WithImage(Movie movie, CancellationToken ct)
     {
         if (!Uri.TryCreate(movie.Poster, UriKind.Absolute, out var uri) || uri.Scheme != "https" || !uri.Host.EndsWith(".shabakaty.com", StringComparison.OrdinalIgnoreCase)) return movie;

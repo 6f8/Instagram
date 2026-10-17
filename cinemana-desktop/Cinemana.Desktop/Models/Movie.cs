@@ -19,6 +19,10 @@ public record Movie(string Id, string Title, string Description, string Poster, 
     public string? LocalPoster { get; init; }
     /// <summary>Set for titles in "My library": the downloaded video to play offline.</summary>
     public string? LocalFile { get; init; }
+    // "My library" only (not saved): when the file was added, its size and how much was watched.
+    [System.Text.Json.Serialization.JsonIgnore] public DateTime AddedAt { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore] public long SizeBytes { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore] public double WatchedPercent { get; init; }
     [System.Text.Json.Serialization.JsonIgnore] public bool IsLocal => LocalFile is not null;
     [System.Text.Json.Serialization.JsonIgnore] public bool IsRemote => LocalFile is null;
     /// <summary>Group name in "My library": the series (or film) title.</summary>
@@ -83,6 +87,8 @@ public record AppSettings(bool CacheImages = true, double CardWidth = 174, doubl
     public bool PauseOnMetered { get; init; } = true;
     public int AfterQueue { get; init; } // 0 nothing, 1 sleep, 2 shut down
     public bool AutoDownloadFollowed { get; init; } = true;
+    // Library
+    public int AutoDeleteWatchedDays { get; init; } // 0 = never
     public double SubtitleSize { get; init; } = 27;
     public double PlaybackSpeed { get; init; } = 1;
     // Player
@@ -94,4 +100,6 @@ public record AppSettings(bool CacheImages = true, double CardWidth = 174, doubl
     public double SubtitleBackground { get; init; } = 0.6;
     public bool SubtitleTop { get; init; }
 }
+/// <summary>Personal note and 0–5 stars for a title.</summary>
+public record Note(string Text = "", int Stars = 0);
 public record CacheResult<T>(T Value, bool IsStale = false, DateTimeOffset? SavedAt = null);
