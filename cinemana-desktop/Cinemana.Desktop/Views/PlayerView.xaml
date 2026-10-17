@@ -1,24 +1,25 @@
-<UserControl x:Class="Cinemana.Desktop.Views.PlayerView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF" Background="#08090B" Foreground="#EDF1FA" FlowDirection="RightToLeft" Focusable="True" FontFamily="Segoe UI">
+<UserControl x:Class="Cinemana.Desktop.Views.PlayerView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" Background="#08090B" Foreground="#EDF1FA" FlowDirection="RightToLeft" Focusable="True" FontFamily="Segoe UI">
   <Grid>
     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
     <DockPanel Margin="20,12">
       <Button Content="العودة إلى المكتبة" Click="BackClick" DockPanel.Dock="Right"/>
-      <Button Content="⬇ تنزيل" Click="DownloadClick" DockPanel.Dock="Right"/>
+      <Button x:Name="DownloadButton" Content="⬇ تنزيل" Click="DownloadClick" DockPanel.Dock="Right"/>
       <Button x:Name="NextEpisodeButton" Content="الحلقة التالية" Click="NextClick" DockPanel.Dock="Left" Visibility="Collapsed"/>
       <Button Content="ملء الشاشة F11" Click="FullscreenClick" DockPanel.Dock="Left"/>
       <TextBlock x:Name="TitleLabel" FontSize="21" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="16,0"/>
     </DockPanel>
-    <Grid Grid.Row="1" Background="Black" x:Name="VideoSurface">
-      <vlc:VideoView x:Name="Video" FlowDirection="LeftToRight"><Grid x:Name="OverlayRoot" Background="Black" Focusable="True" PreviewKeyDown="OverlayKeyDown" MouseLeftButtonDown="VideoClick" FlowDirection="RightToLeft">
+    <Grid Grid.Row="1" Background="Black" x:Name="VideoSurface" Focusable="True" PreviewKeyDown="OverlayKeyDown" MouseLeftButtonDown="VideoClick">
+      <MediaElement x:Name="Video" LoadedBehavior="Manual" UnloadedBehavior="Close" ScrubbingEnabled="True" Stretch="Uniform" FlowDirection="LeftToRight"
+                    MediaOpened="VideoOpened" MediaFailed="VideoFailed" MediaEnded="VideoEnded" BufferingStarted="BufferingStarted" BufferingEnded="BufferingEnded"/>
       <Border x:Name="SubtitleBox" Background="#99000000" CornerRadius="6" Padding="12,6" Margin="30,0,30,20" VerticalAlignment="Bottom" HorizontalAlignment="Center" Visibility="Collapsed" IsHitTestVisible="False">
         <TextBlock x:Name="SubtitleLabel" FontSize="27" FontWeight="SemiBold" Foreground="White" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="1050"/>
       </Border>
-      <StackPanel x:Name="LoadingPanel" VerticalAlignment="Center" HorizontalAlignment="Center" Width="280" Background="#DA121317">
+      <StackPanel x:Name="LoadingPanel" VerticalAlignment="Center" HorizontalAlignment="Center" Width="280" Background="#DA121317" IsHitTestVisible="False">
         <ProgressBar Height="3" IsIndeterminate="True" Foreground="#E50932"/>
         <TextBlock x:Name="LoadingLabel" Text="جارٍ تجهيز الفيديو…" TextAlignment="Center" TextWrapping="Wrap" Margin="16" Foreground="#DBE3F2"/>
       </StackPanel>
-    </Grid></vlc:VideoView></Grid>
-    <StackPanel Grid.Row="2" Background="#121317" Margin="0">
+    </Grid>
+    <StackPanel Grid.Row="2" Background="#121317">
       <TextBlock x:Name="Notice" Foreground="#D9C094" TextWrapping="Wrap" Margin="22,8,22,0"/>
       <Grid Margin="22,10,22,4" FlowDirection="LeftToRight"><Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition/><ColumnDefinition Width="110"/></Grid.ColumnDefinitions>
         <TextBlock x:Name="CurrentTime" Text="00:00:00" VerticalAlignment="Center" Foreground="#CAD5E8"/>
@@ -31,11 +32,16 @@
         <Button x:Name="ResumeButton" Content="الموضع المحفوظ" Click="ResumeClick" IsEnabled="False"/>
         <Button Content="إعادة المحاولة" Click="RetryClick"/>
         <TextBlock Text="الجودة" VerticalAlignment="Center" Margin="12,0,2,0"/><ComboBox x:Name="Quality" MinWidth="85" SelectionChanged="QualityChanged" AutomationProperties.Name="جودة الفيديو"/>
+        <TextBlock Text="السرعة" VerticalAlignment="Center" Margin="12,0,2,0"/><ComboBox x:Name="Speed" MinWidth="75" SelectionChanged="SpeedChanged" AutomationProperties.Name="سرعة التشغيل"/>
         <TextBlock Text="الترجمة" VerticalAlignment="Center" Margin="12,0,2,0"/><ComboBox x:Name="Subtitles" MinWidth="110" SelectionChanged="SubtitleChanged" AutomationProperties.Name="ترجمة الفيديو"/>
-        <Button x:Name="MuteButton" Content="الصوت" Click="MuteClick" Padding="10"/>
+        <Button Content="−0.5ث" Click="SubtitleEarlierClick" Padding="9,8" ToolTip="إظهار الترجمة أبكر (الاختصار [)"/>
+        <TextBlock x:Name="OffsetLabel" Text="توقيت 0.0ث" VerticalAlignment="Center" Margin="4,0" Foreground="#CAD5E8" FlowDirection="LeftToRight"/>
+        <Button Content="+0.5ث" Click="SubtitleLaterClick" Padding="9,8" ToolTip="تأخير الترجمة (الاختصار ])"/>
+        <TextBlock Text="حجم الخط" VerticalAlignment="Center" Margin="12,0,2,0"/>
+        <Slider x:Name="SubtitleSize" Width="80" Minimum="16" Maximum="48" Value="27" ValueChanged="SubtitleSizeChanged" VerticalAlignment="Center" FlowDirection="LeftToRight" AutomationProperties.Name="حجم خط الترجمة"/>
+        <Button x:Name="MuteButton" Content="الصوت" Click="MuteClick" Padding="10" Margin="12,3,3,3"/>
         <Slider x:Name="VolumeBar" Width="85" Minimum="0" Maximum="1" Value="0.8" ValueChanged="VolumeChanged" VerticalAlignment="Center" AutomationProperties.Name="مستوى الصوت" FlowDirection="LeftToRight"/>
       </WrapPanel>
     </StackPanel>
   </Grid>
 </UserControl>
-

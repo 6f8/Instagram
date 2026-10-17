@@ -1,0 +1,34 @@
+name: cinemana-desktop
+
+on:
+  push:
+    paths: ["cinemana-desktop/**", ".github/workflows/cinemana.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish single small exe
+        run: dotnet publish cinemana-desktop/Cinemana.Desktop/Cinemana.Desktop.csproj -c Release -o out
+
+      - name: UI regression test
+        run: dotnet run --project cinemana-desktop/Cinemana.Desktop.UiTests -c Release
+
+      - name: Size
+        shell: pwsh
+        run: |
+          Get-ChildItem out | Format-Table Name, Length
+          $mb = [math]::Round((Get-Item out/Cinemana.exe).Length / 1MB, 2)
+          "### Cinemana.exe: **$mb MB**" >> $env:GITHUB_STEP_SUMMARY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cinemana-win-x64
+          path: out/Cinemana.exe

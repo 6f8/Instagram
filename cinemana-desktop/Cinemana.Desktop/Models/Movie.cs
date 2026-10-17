@@ -15,10 +15,16 @@ public record Movie(string Id, string Title, string Description, string Poster, 
     public int Episode { get; init; }
     public double Duration { get; init; }
     public string? LocalPoster { get; init; }
+    /// <summary>Set for titles in "My library": the downloaded video to play offline.</summary>
+    public string? LocalFile { get; init; }
     public string ProgressText { get; init; } = "";
     public string ImageSource => LocalPoster ?? Poster;
     public string DisplayTitle => string.IsNullOrWhiteSpace(ArabicTitle) ? Title : ArabicTitle;
     public string Caption => $"{Year}  •  ★ {Rating}";
+    public string FirstGenre => Genres.Split('،', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+    public string HoursLabel => Duration > 0 ? (Duration >= 3600 ? $"{(int)(Duration / 3600)} س {(int)(Duration % 3600 / 60)} د" : $"{(int)(Duration / 60)} د") : "";
+    // Card subtitle as in the design: year • genre • duration (missing parts are skipped).
+    public string MetaLine => string.Join(" • ", new[] { Year, FirstGenre, HoursLabel }.Where(x => x.Length > 0));
     public string TypeLabel => Kind == "2" ? "مسلسل" : "فيلم";
     public string DurationLabel => Duration > 0 ? $"{(int)(Duration / 60)} دقيقة" : "";
     public string EpisodeLabel => $"الموسم {Season} • الحلقة {Episode}";
@@ -52,5 +58,14 @@ public record WatchEntry(Movie Movie, DateTimeOffset OpenedAt, double Position =
     public string ProgressLabel => Position > 0 ? $"{TimeSpan.FromSeconds(Position):hh\\:mm\\:ss} / {TimeSpan.FromSeconds(Duration):hh\\:mm\\:ss}" : "تم فتح صفحة المشاهدة";
     public double Percent => Duration > 0 ? Math.Clamp(Position / Duration * 100, 0, 100) : 0;
 }
-public record AppSettings(bool CacheImages = true, double CardWidth = 174, double TextSize = 14);
+public record AppSettings(bool CacheImages = true, double CardWidth = 174, double TextSize = 14)
+{
+    public string UserName { get; init; } = "";
+    public int ParallelDownloads { get; init; } = 2;
+    public int SpeedLimitKBps { get; init; } // 0 = unlimited
+    public bool AutoResumeDownloads { get; init; }
+    public bool NotifyOnComplete { get; init; } = true;
+    public double SubtitleSize { get; init; } = 27;
+    public double PlaybackSpeed { get; init; } = 1;
+}
 public record CacheResult<T>(T Value, bool IsStale = false, DateTimeOffset? SavedAt = null);

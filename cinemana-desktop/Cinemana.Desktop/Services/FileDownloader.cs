@@ -10,6 +10,8 @@ namespace Cinemana.Desktop.Services;
 
 public sealed class FileDownloader(HttpClient client, Func<Movie, CancellationToken, Task<PlaybackInfo>> resolve)
 {
+    // Bytes per second allowed for one transfer right now; 0 or less means unlimited.
+    public Func<long> SpeedLimit { get; init; } = () => 0;
     public async Task<DownloadResult> Download(DownloadSpec spec, IProgress<DownloadProgress>? progress, CancellationToken ct)
     {
         string file = Path.GetFullPath(spec.Destination), partial = file + ".part", metaFile = file + ".download.json";
@@ -95,6 +97,13 @@ public sealed class FileDownloader(HttpClient client, Func<Movie, CancellationTo
                 await output.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
                 bytes += read;
                 if (total.HasValue && bytes > total) throw new InvalidDataException("حجم البيانات يتجاوز الحجم المعلن.");
+                long limit = SpeedLimit();
+                if (limit > 0)
+                {
+                    // Sleep until the average rate since the transfer started is back under the limit.
+                    double ahead = (bytes - initial) / (double)limit - clock.Elapsed.TotalSeconds;
+                    if (ahead > 0.02) await Task.Delay(TimeSpan.FromSeconds(Math.Min(ahead, 2)), ct).ConfigureAwait(false);
+                }
                 if (clock.Elapsed - lastReport > TimeSpan.FromMilliseconds(250))
                 { lastReport = clock.Elapsed; progress?.Report(new(bytes, total, (bytes - initial) / Math.Max(0.01, clock.Elapsed.TotalSeconds))); }
             }

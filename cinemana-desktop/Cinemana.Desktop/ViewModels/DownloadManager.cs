@@ -19,19 +19,35 @@ public sealed class DownloadItem : Observable
     public DownloadItem(DownloadSnapshot value)
     { Spec = value.Spec; state = value.State; bytes = value.Bytes; total = value.Total; message = value.Message; }
     public string Title => Spec.Movie.DisplayTitle + (Spec.Movie.Kind == "2" ? " • " + Spec.Movie.EpisodeLabel : "");
+    public string Poster => Spec.Movie.ImageSource;
     public string QualityLabel => Spec.Quality + "p" + (Spec.SubtitleLanguage.Length > 0 ? " + SRT" : "");
+    public string QualityChip => Spec.Quality + "p";
     public string Destination => Spec.Destination;
     public DownloadState State { get => state; set { Set(ref state, value); Refresh(); } }
     public string Message { get => message; set => Set(ref message, value); }
-    public string StatusLabel => State switch { DownloadState.Queued => "في الانتظار", DownloadState.Running => "جارٍ التنزيل", DownloadState.Paused => "متوقف مؤقتًا", DownloadState.Completed => "مكتمل", DownloadState.Failed => "تعذّر التنزيل", DownloadState.Cancelled => "ملغي", _ => "الجودة غير متاحة" };
+    public string StatusLabel => State switch { DownloadState.Queued => "في الانتظار", DownloadState.Running => "جارٍ التنزيل …", DownloadState.Paused => "متوقف مؤقتًا", DownloadState.Completed => "مكتمل", DownloadState.Failed => "تعذّر التنزيل", DownloadState.Cancelled => "ملغي", _ => "الجودة غير متاحة" };
     public double Percent => total > 0 ? Math.Clamp(bytes * 100d / total.Value, 0, 100) : 0;
     public bool Indeterminate => State == DownloadState.Running && total is null;
-    public string ProgressLabel => DownloadPaths.Size(bytes) + (total.HasValue ? " / " + DownloadPaths.Size(total.Value) : "") + (speed > 0 && State == DownloadState.Running ? " • " + DownloadPaths.Size((long)speed) + "/s" : "");
+    public long Bytes => bytes;
+    public long? Total => total;
+    public double Speed => State == DownloadState.Running ? speed : 0;
+    public long Remaining => total is { } t ? Math.Max(0, t - bytes) : 0;
+    // "4.2 GB / 8.5 GB (49%)" as in the design's download bar.
+    public string SizeLabel => DownloadPaths.Size(bytes) + (total.HasValue ? $" / {DownloadPaths.Size(total.Value)} ({Percent:0}%)" : "");
+    public string SpeedLabel => Speed > 0 ? DownloadPaths.Size((long)Speed) + "/s" : "";
+    public string EtaLabel => Speed > 0 && total.HasValue ? "متبقٍ " + DownloadManager.Duration(Remaining / Speed) : "";
+    public string RateLine => string.Join(" • ", new[] { SpeedLabel, EtaLabel }.Where(x => x.Length > 0));
+    public string ProgressLabel => SizeLabel + (RateLine.Length > 0 ? " • " + RateLine : "");
     public bool CanPause => State is DownloadState.Running or DownloadState.Queued;
     public bool CanResume => State is DownloadState.Paused or DownloadState.Failed or DownloadState.Cancelled or DownloadState.Unavailable;
     public bool CanCancel => State is not (DownloadState.Completed or DownloadState.Cancelled);
+    public bool IsPlayable => State == DownloadState.Completed && File.Exists(Destination);
     public void Progress(DownloadProgress value) { bytes = value.Bytes; total = value.Total; speed = value.BytesPerSecond; Refresh(); }
-    private void Refresh() { Notify(nameof(StatusLabel)); Notify(nameof(Percent)); Notify(nameof(Indeterminate)); Notify(nameof(ProgressLabel)); Notify(nameof(CanPause)); Notify(nameof(CanResume)); Notify(nameof(CanCancel)); }
+    private void Refresh()
+    {
+        foreach (var name in new[] { nameof(StatusLabel), nameof(Percent), nameof(Indeterminate), nameof(ProgressLabel), nameof(SizeLabel), nameof(SpeedLabel), nameof(EtaLabel), nameof(RateLine), nameof(CanPause), nameof(CanResume), nameof(CanCancel), nameof(IsPlayable) })
+            Notify(name);
+    }
     public DownloadSnapshot Snapshot() => new(Spec, State, bytes, total, Message);
 }
 
@@ -41,37 +57,78 @@ public sealed class DownloadManager : Observable, IDisposable
     private readonly CinemanaService api;
     private readonly HttpClient http = new() { Timeout = Timeout.InfiniteTimeSpan };
     private readonly FileDownloader downloader;
-    private CancellationTokenSource? activeCancellation;
-    private DownloadItem? active;
-    private bool pumping, disposed;
+    private readonly Dictionary<DownloadItem, CancellationTokenSource> active = [];
+    private int workers;
+    private bool disposed;
     private DateTimeOffset lastSaved;
     private string directory;
     private string status = "التنزيلات تستمر أثناء استخدام التطبيق.";
     public ObservableCollection<DownloadItem> Items { get; } = [];
+    /// <summary>Raised on the UI thread when a file finishes, for the tray notification.</summary>
+    public event Action<DownloadItem>? Completed;
     public DownloadManager(LibraryStore store)
     {
-        this.store = store; api = new(store.Root); downloader = new(http, (movie, token) => api.Playback(movie.Id, token));
+        this.store = store; api = new(store.Root);
+        downloader = new(http, (movie, token) => api.Playback(movie.Id, token))
+        {
+            // The overall limit is shared evenly between the transfers running at that moment.
+            SpeedLimit = () => Settings.SpeedLimitKBps <= 0 ? 0 : Settings.SpeedLimitKBps * 1024L / Math.Max(1, active.Count)
+        };
         string videos = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
         if (videos.Length == 0) videos = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Videos");
         directory = store.Load("download-directory", Path.Combine(videos, "Cinemana"));
+        bool resume = Settings.AutoResumeDownloads;
         foreach (var saved in store.Load("downloads", new List<DownloadSnapshot>()))
-            Items.Add(new(saved with { State = saved.State is DownloadState.Running or DownloadState.Queued ? DownloadState.Paused : saved.State }));
+        {
+            var state = saved.State is DownloadState.Running or DownloadState.Queued ? (resume ? DownloadState.Queued : DownloadState.Paused) : saved.State;
+            Items.Add(new(saved with { State = state }));
+        }
         PauseCommand = new(p => { if (p is DownloadItem item) Pause(item); });
         ResumeCommand = new(p => { if (p is DownloadItem item && item.CanResume) { item.State = DownloadState.Queued; item.Message = ""; Save(); Start(); } });
         CancelCommand = new(p => { if (p is DownloadItem item) Cancel(item); });
+        RemoveCommand = new(p => { if (p is DownloadItem item && !item.CanPause) { Items.Remove(item); Save(); } });
+        ToggleCommand = new(p => { if (p is DownloadItem item) { if (item.CanPause) Pause(item); else if (item.CanResume) ResumeCommand.Execute(item); } });
         PauseAllCommand = new(_ => PauseAll()); ResumeAllCommand = new(_ => { foreach (var item in Items.Where(i => i.State == DownloadState.Paused)) item.State = DownloadState.Queued; Save(); Start(); });
         FolderCommand = new(p => { if (p is DownloadItem item) OpenFolder(Path.GetDirectoryName(item.Destination)!); else OpenFolder(Directory); });
+        if (resume) Start();
     }
+    private AppSettings Settings => store.Load("settings", new AppSettings());
     public string Directory { get => directory; set { if (Set(ref directory, Path.GetFullPath(value))) { try { store.Save("download-directory", directory); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Status = "تعذّر حفظ مجلد التنزيل."; } } } }
     public string Status { get => status; private set => Set(ref status, value); }
     public DownloadItem? DockItem => Items.FirstOrDefault(i => i.State == DownloadState.Running) ?? Items.FirstOrDefault(i => i.State == DownloadState.Paused) ?? Items.LastOrDefault();
+    public bool HasDockItem => DockItem is not null;
+    public int PendingCount => Items.Count(i => i.State is DownloadState.Running or DownloadState.Queued or DownloadState.Paused);
+    public bool HasPending => PendingCount > 0;
     public string Summary => $"{Items.Count(i => i.State == DownloadState.Completed)} مكتمل • {Items.Count(i => i.State == DownloadState.Running)} جارٍ • {Items.Count(i => i.State == DownloadState.Queued)} في الانتظار";
+    /// <summary>Totals over unfinished files whose size the server has announced; unknown sizes are not guessed.</summary>
+    public string TotalsLabel
+    {
+        get
+        {
+            var open = Items.Where(i => i.State is DownloadState.Running or DownloadState.Queued or DownloadState.Paused).ToList();
+            if (open.Count == 0) return "";
+            long remaining = open.Sum(i => i.Remaining);
+            double speed = open.Sum(i => i.Speed);
+            int unknown = open.Count(i => i.Total is null);
+            string text = $"المتبقي {DownloadPaths.Size(remaining)}" + (speed > 0 ? $" • {DownloadPaths.Size((long)speed)}/s • نحو {Duration(remaining / speed)}" : "");
+            return unknown > 0 ? text + $" • {unknown} ملف لم يُعرف حجمه بعد" : text;
+        }
+    }
+    public IEnumerable<DownloadItem> Library => Items.Where(i => i.IsPlayable);
     public RelayCommand PauseCommand { get; }
     public RelayCommand ResumeCommand { get; }
     public RelayCommand CancelCommand { get; }
+    public RelayCommand RemoveCommand { get; }
+    public RelayCommand ToggleCommand { get; }
     public RelayCommand PauseAllCommand { get; }
     public RelayCommand ResumeAllCommand { get; }
     public RelayCommand FolderCommand { get; }
+    public static string Duration(double seconds)
+    {
+        if (!double.IsFinite(seconds) || seconds < 0) return "";
+        var t = TimeSpan.FromSeconds(seconds);
+        return t.TotalHours >= 1 ? $"{(int)t.TotalHours} س {t.Minutes} د" : t.TotalMinutes >= 1 ? $"{t.Minutes} دقائق" : $"{t.Seconds} ث";
+    }
     public int Add(IEnumerable<DownloadSpec> plan)
     {
         int added = 0;
@@ -83,60 +140,68 @@ public sealed class DownloadManager : Observable, IDisposable
         Status = added > 0 ? $"أُضيف {added} ملفًا إلى قائمة التنزيل." : "هذه الملفات موجودة بالفعل في القائمة.";
         Save(); Start(); return added;
     }
-    private void Start() { if (!pumping && !disposed) _ = Pump(); }
-    private async Task Pump()
+    /// <summary>Fills free worker slots up to the configured number of parallel downloads (1–3).</summary>
+    public void Start()
     {
-        pumping = true;
+        if (disposed) return;
+        int limit = Math.Clamp(Settings.ParallelDownloads, 1, 3);
+        while (workers < limit && Items.Any(i => i.State == DownloadState.Queued)) { workers++; _ = Worker(); }
+    }
+    private async Task Worker()
+    {
         try
         {
             while (!disposed && Items.FirstOrDefault(i => i.State == DownloadState.Queued) is { } item)
-            {
-                active = item; activeCancellation = new(); var token = activeCancellation.Token;
-                item.State = DownloadState.Running; item.Message = ""; Save();
-                try
-                {
-                    var progress = new Progress<DownloadProgress>(p => { if (item.State != DownloadState.Running) return; item.Progress(p); if (DateTimeOffset.UtcNow - lastSaved > TimeSpan.FromSeconds(5)) Save(); });
-                    var result = await downloader.Download(item.Spec, progress, token);
-                    item.Progress(new(result.Bytes, result.Bytes, 0)); item.State = DownloadState.Completed;
-                    item.Message = (result.AlreadyComplete ? "الملف مكتمل مسبقًا؛ لم يُنزّل مجددًا." : "تم حفظ الملف.")
-                        + (result.SubtitleNote.Length > 0 ? " " + result.SubtitleNote : item.Spec.SubtitleLanguage.Length > 0 ? " مع ملف الترجمة (.srt)." : "");
-                }
-                catch (OperationCanceledException) when (token.IsCancellationRequested) { if (item.State == DownloadState.Running) item.State = DownloadState.Paused; }
-                catch (QualityUnavailableException e) { item.State = DownloadState.Unavailable; item.Message = e.Message; }
-                catch (Exception e) when (e is IOException or HttpRequestException or TaskCanceledException or JsonException or UnauthorizedAccessException)
-                {
-                    item.State = DownloadState.Failed;
-                    item.Message = e switch
-                    {
-                        HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden } => "الخدمة لا تسمح بتنزيل هذا الملف على الاتصال الحالي.",
-                        InvalidDataException => e.Message,
-                        UnauthorizedAccessException => "لا توجد صلاحية للكتابة في المجلد.",
-                        HttpRequestException or TaskCanceledException => "انقطع الاتصال أو انتهت مهلة الانتظار. اضغط متابعة لإعادة المحاولة.",
-                        _ => "تعذّر حفظ الملف. تحقق من المساحة والمجلد ثم اضغط متابعة."
-                    };
-                }
-                finally { activeCancellation.Dispose(); activeCancellation = null; active = null; Save(); }
-            }
+                await Run(item);
         }
-        finally { pumping = false; Notify(nameof(Summary)); if (disposed) { api.Dispose(); http.Dispose(); } }
+        finally { workers--; Notify(nameof(Summary)); if (disposed && workers == 0) { api.Dispose(); http.Dispose(); } }
+    }
+    private async Task Run(DownloadItem item)
+    {
+        var cancellation = new CancellationTokenSource(); var token = cancellation.Token;
+        active[item] = cancellation;
+        item.State = DownloadState.Running; item.Message = ""; Save();
+        try
+        {
+            var progress = new Progress<DownloadProgress>(p => { if (item.State != DownloadState.Running) return; item.Progress(p); Notify(nameof(TotalsLabel)); if (DateTimeOffset.UtcNow - lastSaved > TimeSpan.FromSeconds(5)) Save(); });
+            var result = await downloader.Download(item.Spec, progress, token);
+            item.Progress(new(result.Bytes, result.Bytes, 0)); item.State = DownloadState.Completed;
+            item.Message = (result.AlreadyComplete ? "الملف مكتمل مسبقًا؛ لم يُنزّل مجددًا." : "تم حفظ الملف.")
+                + (result.SubtitleNote.Length > 0 ? " " + result.SubtitleNote : item.Spec.SubtitleLanguage.Length > 0 ? " مع ملف الترجمة (.srt)." : "");
+            if (!result.AlreadyComplete) Completed?.Invoke(item);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { if (item.State == DownloadState.Running) item.State = DownloadState.Paused; }
+        catch (QualityUnavailableException e) { item.State = DownloadState.Unavailable; item.Message = e.Message; }
+        catch (Exception e) when (e is IOException or HttpRequestException or TaskCanceledException or JsonException or UnauthorizedAccessException)
+        {
+            item.State = DownloadState.Failed;
+            item.Message = e switch
+            {
+                HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden } => "الخدمة لا تسمح بتنزيل هذا الملف على الاتصال الحالي.",
+                InvalidDataException => e.Message,
+                UnauthorizedAccessException => "لا توجد صلاحية للكتابة في المجلد.",
+                HttpRequestException or TaskCanceledException => "انقطع الاتصال أو انتهت مهلة الانتظار. اضغط متابعة لإعادة المحاولة.",
+                _ => "تعذّر حفظ الملف. تحقق من المساحة والمجلد ثم اضغط متابعة."
+            };
+        }
+        finally { active.Remove(item); cancellation.Dispose(); Save(); }
     }
     private void Pause(DownloadItem item)
     {
         if (!item.CanPause) return;
-        item.State = DownloadState.Paused; if (ReferenceEquals(active, item)) activeCancellation?.Cancel(); Save();
+        item.State = DownloadState.Paused; if (active.TryGetValue(item, out var c)) c.Cancel(); Save();
     }
     private void Cancel(DownloadItem item)
     {
         if (!item.CanCancel) return;
-        item.State = DownloadState.Cancelled; if (ReferenceEquals(active, item)) activeCancellation?.Cancel(); Save();
+        item.State = DownloadState.Cancelled; if (active.TryGetValue(item, out var c)) c.Cancel(); Save();
     }
     private void PauseAll() { foreach (var item in Items.Where(i => i.CanPause).ToList()) Pause(item); }
     private void Save()
     {
         try { store.Save("downloads", Items.Select(i => i.Snapshot()).ToList()); lastSaved = DateTimeOffset.UtcNow; }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Status = "تعذّر حفظ قائمة التنزيل. الملفات الجزئية باقية في مجلدها."; }
-        Notify(nameof(Summary));
-        Notify(nameof(DockItem));
+        foreach (var name in new[] { nameof(Summary), nameof(DockItem), nameof(HasDockItem), nameof(PendingCount), nameof(HasPending), nameof(TotalsLabel), nameof(Library) }) Notify(name);
     }
     private void OpenFolder(string path)
     {
@@ -146,7 +211,7 @@ public sealed class DownloadManager : Observable, IDisposable
     public void Dispose()
     {
         if (disposed) return;
-        disposed = true; PauseAll(); activeCancellation?.Cancel(); Save();
-        if (!pumping) { api.Dispose(); http.Dispose(); }
+        disposed = true; PauseAll(); Save();
+        if (workers == 0) { api.Dispose(); http.Dispose(); }
     }
 }
