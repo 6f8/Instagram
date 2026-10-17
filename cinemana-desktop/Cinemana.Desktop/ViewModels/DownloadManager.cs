@@ -42,6 +42,7 @@ public sealed class DownloadItem : Observable
     public bool CanResume => State is DownloadState.Paused or DownloadState.Failed or DownloadState.Cancelled or DownloadState.Unavailable;
     public bool CanCancel => State is not (DownloadState.Completed or DownloadState.Cancelled);
     public bool IsPlayable => State == DownloadState.Completed && File.Exists(Destination);
+    public long FileSize => total ?? bytes;
     public void Progress(DownloadProgress value) { bytes = value.Bytes; total = value.Total; speed = value.BytesPerSecond; Refresh(); }
     private void Refresh()
     {
@@ -49,6 +50,8 @@ public sealed class DownloadItem : Observable
             Notify(name);
     }
     public DownloadSnapshot Snapshot() => new(Spec, State, bytes, total, Message);
+    /// <summary>Automatic retries after a dropped connection in this session.</summary>
+    public int AutoRetries { get; set; }
 }
 
 public sealed class DownloadManager : Observable, IDisposable
@@ -91,6 +94,71 @@ public sealed class DownloadManager : Observable, IDisposable
         PauseAllCommand = new(_ => PauseAll()); ResumeAllCommand = new(_ => { foreach (var item in Items.Where(i => i.State == DownloadState.Paused)) item.State = DownloadState.Queued; Save(); Start(); });
         FolderCommand = new(p => { if (p is DownloadItem item) OpenFolder(Path.GetDirectoryName(item.Destination)!); else OpenFolder(Directory); });
         if (resume) Start();
+        _ = Rescan();
+    }
+    /// <summary>Adds finished videos found in the download folder that the queue does not list (after a reinstall or a moved folder).</summary>
+    public async Task<int> Rescan()
+    {
+        var known = Items.Select(i => i.Destination).ToList();
+        string root = directory;
+        var found = await Task.Run(() => LibraryScanner.Scan(root, known).ToList());
+        foreach (var snapshot in found) Items.Add(new(snapshot));
+        if (found.Count > 0) { Status = $"أُضيف {found.Count} ملفًا موجودًا إلى مكتبتي."; Save(); }
+        return found.Count;
+    }
+    /// <summary>Deletes a finished file and the subtitles saved beside it, then drops it from the list.</summary>
+    public bool DeleteFile(DownloadItem item)
+    {
+        if (item.CanPause) return false;
+        try
+        {
+            foreach (var srt in FileDownloader.SubtitlesBeside(item.Destination).ToList()) File.Delete(srt);
+            foreach (var path in new[] { item.Destination, item.Destination + ".download.json", item.Destination + ".part" }) if (File.Exists(path)) File.Delete(path);
+            Items.Remove(item); Save(); Log.Info("deleted a downloaded file");
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Log.Error("delete", e); Status = "تعذّر حذف الملف. ربما هو مفتوح في برنامج آخر."; return false; }
+    }
+    /// <summary>Partial downloads (.part) older than three days that no unfinished item still owns.</summary>
+    public List<FileInfo> StalePartials()
+    {
+        var owned = new HashSet<string>(Items.Where(i => i.State != DownloadState.Completed).Select(i => Path.GetFullPath(i.Destination) + ".part"), StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            if (!System.IO.Directory.Exists(directory)) return [];
+            return System.IO.Directory.EnumerateFiles(directory, "*.part", SearchOption.AllDirectories).Select(f => new FileInfo(f))
+                .Where(f => !owned.Contains(f.FullName) && DateTime.UtcNow - f.LastWriteTimeUtc > TimeSpan.FromDays(3)).ToList();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Log.Error("stale-scan", e); return []; }
+    }
+    public long DeleteFiles(IEnumerable<FileInfo> files)
+    {
+        long freed = 0;
+        foreach (var f in files)
+        {
+            try { long size = f.Length; f.Delete(); if (File.Exists(f.FullName[..^5] + ".download.json") && !File.Exists(f.FullName[..^5])) File.Delete(f.FullName[..^5] + ".download.json"); freed += size; }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Log.Error("cleanup", e); }
+        }
+        return freed;
+    }
+    /// <summary>Refuses to start when the drive is clearly too small for the file (size from an earlier attempt, if known).</summary>
+    private static string? CheckDiskSpace(DownloadItem item)
+    {
+        try
+        {
+            var drive = new DriveInfo(Path.GetPathRoot(Path.GetFullPath(item.Destination))!);
+            long need = Math.Max(item.Remaining, 200L << 20);
+            return drive.AvailableFreeSpace < need ? $"المساحة الحرة في القرص {drive.Name} ({DownloadPaths.Size(drive.AvailableFreeSpace)}) لا تكفي. حرّر مساحة أو اختر مجلدًا آخر ثم اضغط متابعة." : null;
+        }
+        catch (Exception e) when (e is IOException or ArgumentException or UnauthorizedAccessException) { return null; }
+    }
+    public string FreeSpaceLabel
+    {
+        get
+        {
+            try { var drive = new DriveInfo(Path.GetPathRoot(directory)!); return $"المساحة الحرة: {DownloadPaths.Size(drive.AvailableFreeSpace)}"; }
+            catch (Exception e) when (e is IOException or ArgumentException or UnauthorizedAccessException) { return ""; }
+        }
     }
     private AppSettings Settings => store.Load("settings", new AppSettings());
     public string Directory { get => directory; set { if (Set(ref directory, Path.GetFullPath(value))) { try { store.Save("download-directory", directory); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Status = "تعذّر حفظ مجلد التنزيل."; } } } }
@@ -165,6 +233,7 @@ public sealed class DownloadManager : Observable, IDisposable
         var cancellation = new CancellationTokenSource(); var token = cancellation.Token;
         active[item] = cancellation;
         item.State = DownloadState.Running; item.Message = ""; Save();
+        if (CheckDiskSpace(item) is { } warning) { item.State = DownloadState.Failed; item.Message = warning; active.Remove(item); cancellation.Dispose(); Save(); return; }
         try
         {
             var progress = new Progress<DownloadProgress>(p => { if (item.State != DownloadState.Running) return; item.Progress(p); Notify(nameof(TotalsLabel)); Notify(nameof(EtaLabel)); Notify(nameof(RemainingLabel)); if (DateTimeOffset.UtcNow - lastSaved > TimeSpan.FromSeconds(5)) Save(); });
@@ -187,8 +256,23 @@ public sealed class DownloadManager : Observable, IDisposable
                 HttpRequestException or TaskCanceledException => "انقطع الاتصال أو انتهت مهلة الانتظار. اضغط متابعة لإعادة المحاولة.",
                 _ => "تعذّر حفظ الملف. تحقق من المساحة والمجلد ثم اضغط متابعة."
             };
+            Log.Error("download", e);
+            // A dropped connection is retried by itself after a short wait (up to three times); other failures wait for the user.
+            bool dropped = e is HttpRequestException { StatusCode: null } or TaskCanceledException || e is IOException io && io.Message.Contains("انقطع", StringComparison.Ordinal);
+            if (dropped && item.AutoRetries < 3)
+            {
+                item.AutoRetries++;
+                item.Message += $" ستُعاد المحاولة تلقائيًا ({item.AutoRetries}/3).";
+                _ = RetryLater(item);
+            }
         }
         finally { active.Remove(item); cancellation.Dispose(); Save(); }
+    }
+    private async Task RetryLater(DownloadItem item)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(20 * item.AutoRetries));
+        if (disposed || item.State != DownloadState.Failed) return;
+        item.State = DownloadState.Queued; Save(); Start();
     }
     private void Pause(DownloadItem item)
     {
@@ -205,7 +289,7 @@ public sealed class DownloadManager : Observable, IDisposable
     {
         try { store.Save("downloads", Items.Select(i => i.Snapshot()).ToList()); lastSaved = DateTimeOffset.UtcNow; }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException) { Status = "تعذّر حفظ قائمة التنزيل. الملفات الجزئية باقية في مجلدها."; }
-        foreach (var name in new[] { nameof(Summary), nameof(DockItem), nameof(HasDockItem), nameof(PendingCount), nameof(HasPending), nameof(TotalsLabel), nameof(Library), nameof(RemainingLabel), nameof(EtaLabel), nameof(RunningLabel) }) Notify(name);
+        foreach (var name in new[] { nameof(Summary), nameof(DockItem), nameof(HasDockItem), nameof(PendingCount), nameof(HasPending), nameof(TotalsLabel), nameof(Library), nameof(RemainingLabel), nameof(EtaLabel), nameof(RunningLabel), nameof(FreeSpaceLabel) }) Notify(name);
     }
     private void OpenFolder(string path)
     {

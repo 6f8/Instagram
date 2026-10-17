@@ -124,11 +124,11 @@ public partial class PlayerView : UserControl, IDisposable
         Reset(target); localFile = file; DownloadButton.Visibility = Visibility.Collapsed;
         var source = new VideoSource("ملف محلي", new Uri(file).AbsoluteUri, 0) { Container = Path.GetExtension(file).TrimStart('.').ToLowerInvariant() };
         var tracks = new List<SubtitleTrack> { new("بدون ترجمة", "", "") };
-        string srt = FileDownloader.SubtitlePath(file);
-        if (File.Exists(srt)) tracks.Add(new("الترجمة المحفوظة", srt, "local"));
+        foreach (var srt in FileDownloader.SubtitlesBeside(file))
+            tracks.Add(new(Path.GetFileName(srt).Contains(".en.", StringComparison.OrdinalIgnoreCase) ? "English (محفوظة)" : "الترجمة المحفوظة", srt, "local"));
         changingControls = true;
         Quality.ItemsSource = new List<VideoSource> { source }; Quality.SelectedIndex = 0;
-        Subtitles.ItemsSource = tracks; Subtitles.SelectedItem = tracks.Last();
+        Subtitles.ItemsSource = tracks; Subtitles.SelectedItem = tracks.Count > 1 ? tracks[1] : tracks[0];
         changingControls = false;
         pendingPosition = savedPosition; playing = true;
         OpenSource(source);

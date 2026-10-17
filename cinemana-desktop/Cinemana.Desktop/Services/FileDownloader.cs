@@ -25,7 +25,7 @@ public sealed class FileDownloader(HttpClient client, Func<Movie, CancellationTo
             if (owned && previous!.Complete && previous.Total == new FileInfo(file).Length)
             {
                 progress?.Report(new(previous.Total.Value, previous.Total, 0));
-                string note = spec.SubtitleLanguage.Length > 0 && !File.Exists(SubtitlePath(file)) ? await SaveSubtitle(spec, await resolve(spec.Movie, ct), file, ct) : "";
+                string note = spec.SubtitleLanguage.Length > 0 && !File.Exists(SubtitlePath(file, spec.SubtitleLanguage)) ? await SaveSubtitle(spec, await resolve(spec.Movie, ct), file, ct) : "";
                 return new(previous.Total.Value, true, note);
             }
             throw new IOException("يوجد ملف بهذا الاسم. لن يُستبدل؛ اختر مجلدًا آخر.");
@@ -117,13 +117,22 @@ public sealed class FileDownloader(HttpClient client, Func<Movie, CancellationTo
         progress?.Report(new(bytes, bytes, 0));
         return new(bytes, false, await SaveSubtitle(spec, playback, file, ct));
     }
-    public static string SubtitlePath(string videoFile) => Path.ChangeExtension(videoFile, ".srt");
+    /// <summary>"Title - S01E04.ar.srt" beside "Title - S01E04.mp4" (language-tagged, as media players expect).</summary>
+    public static string SubtitlePath(string videoFile, string language) => Path.ChangeExtension(videoFile, (language.Length > 0 ? "." + language : "") + ".srt");
+    /// <summary>Subtitles saved beside a video: new ".ar.srt" names first, then the older plain ".srt".</summary>
+    public static IEnumerable<string> SubtitlesBeside(string videoFile)
+    {
+        string folder = Path.GetDirectoryName(videoFile)!, stem = Path.GetFileNameWithoutExtension(videoFile);
+        if (!Directory.Exists(folder)) return [];
+        return Directory.EnumerateFiles(folder, stem + "*.srt").Where(f => Path.GetFileNameWithoutExtension(f) == stem || Path.GetFileName(f).StartsWith(stem + ".", StringComparison.OrdinalIgnoreCase))
+            .OrderBy(f => Path.GetFileName(f).Contains(".ar.", StringComparison.OrdinalIgnoreCase) ? 0 : 1);
+    }
     // Writes the chosen subtitle as UTF-8 SRT with the video's base name so players load it automatically.
     // A subtitle problem never fails the video download; it is reported as a note instead.
     private async Task<string> SaveSubtitle(DownloadSpec spec, PlaybackInfo playback, string videoFile, CancellationToken ct)
     {
         if (spec.SubtitleLanguage.Length == 0) return "";
-        string target = SubtitlePath(videoFile);
+        string target = SubtitlePath(videoFile, spec.SubtitleLanguage);
         if (File.Exists(target)) return "";
         var track = playback.Subtitles.FirstOrDefault(t => t.Language == spec.SubtitleLanguage && t.Url.Length > 0);
         if (track is null) return "لا تتوفر ترجمة بهذه اللغة لهذه الحلقة.";

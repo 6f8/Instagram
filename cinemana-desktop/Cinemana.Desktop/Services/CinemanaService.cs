@@ -130,6 +130,26 @@ public sealed class CinemanaService : IDisposable
         catch (Exception e) when (!ct.IsCancellationRequested && (StorageError(e) || e is HttpRequestException or TaskCanceledException)) { return movie; }
         finally { imageSlots.Release(); }
     }
+    /// <summary>
+    /// One small uncached request at start-up. Null when the service answers in the shape the app expects;
+    /// otherwise a message that says whether the network is down or the site's format changed.
+    /// </summary>
+    public async Task<string?> Health(CancellationToken ct)
+    {
+        try
+        {
+            var list = await FreshJson("latestMovies/level/0/itemsPerPage/1/page/0/", ct);
+            if (list.ValueKind != JsonValueKind.Array) return Changed();
+            var first = list.EnumerateArray().FirstOrDefault();
+            if (first.ValueKind != JsonValueKind.Object || !first.TryGetProperty("nb", out _)) return Changed();
+            return null;
+        }
+        catch (JsonException) { return Changed(); }
+        catch (HttpRequestException e) when (e.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Gone) { return Changed(); }
+        catch (Exception e) when (!ct.IsCancellationRequested && e is HttpRequestException or TaskCanceledException)
+        { Log.Error("health", e); return "تعذّر الوصول إلى سينمانا. تحقق من الاتصال؛ يمكنك فتح «مكتبتي» للمشاهدة بدون إنترنت."; }
+        static string Changed() { Log.Info("health: unexpected service format"); return "يبدو أن موقع سينمانا غيّر طريقة عمله. قد لا تعمل بعض الأقسام حتى يصدر تحديث للتطبيق."; }
+    }
     public void Dispose() => client.Dispose();
 }
 

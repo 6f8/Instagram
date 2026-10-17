@@ -21,12 +21,17 @@ public sealed class MainViewModel : Observable, IDisposable
     public MainViewModel(LibraryStore? store = null, CinemanaService? api = null)
     {
         Store = store ?? new(); service = api ?? new(Store.Root); favorites = Store.Favorites(); settings = Store.Load("settings", new AppSettings());
-        NavigateCommand = new(async p => { searching?.Cancel(); section = p?.ToString() ?? "home"; page = 0; ResetFilters(); await Load(); });
+        NavigateCommand = new(async p => { searching?.Cancel(); await GoTo(p?.ToString() ?? "home"); });
+        BackCommand = new(async _ => await Back(), _ => CanGoBack);
+        PickSuggestionCommand = new(async p => { if (p is Movie m) { SuggestionsOpen = false; await Select(m); SelectionRequested?.Invoke(); } else if (p is string q) { SearchText = q; await SearchNow(); } });
+        ContinueCommand = new(_ => { if (NextToWatch is { } m) WatchRequested?.Invoke(m); }, _ => NextToWatch is not null);
+        DownloadUnwatchedCommand = new(_ => { if (Selected is { } s) UnwatchedDownloadRequested?.Invoke(s, UnwatchedEpisodes().ToList()); }, _ => Selected?.Kind == "2" && allEpisodes.Count > 0);
         SearchCommand = new(async _ => await SearchNow());
         RefreshCommand = new(async _ => await Load(true));
         NextCommand = new(async _ => { page++; await Load(); }, _ => CanNext && !IsBusy);
         PreviousCommand = new(async _ => { page--; await Load(); }, _ => page > 0 && !IsBusy);
-        SelectCommand = new(async p => { if (p is Movie m) await Select(m); });
+        SelectCommand = new(async p => { if (p is Movie m) { DetailsOpen = true; await Select(m); SelectionRequested?.Invoke(); } });
+        MoviesView = System.Windows.Data.CollectionViewSource.GetDefaultView(Movies);
         FavoriteCommand = new(_ => ToggleFavorite(), _ => Selected is not null);
         WatchCommand = new(p => { if (p is Movie m) WatchRequested?.Invoke(m); else if (Selected is not null) WatchRequested?.Invoke(Selected); }, p => p is Movie || Selected is not null);
         DownloadCommand = new(p => { if (p is Movie m) DownloadRequested?.Invoke(m); else if (Selected is not null) DownloadRequested?.Invoke(Selected); }, p => p is Movie || Selected is not null);
@@ -37,12 +42,89 @@ public sealed class MainViewModel : Observable, IDisposable
         PreviousHeroCommand = new(_ => MoveHero(-1));
         HeroDotCommand = new(p => { if (p is Movie m && HeroItems.IndexOf(m) is >= 0 and var i) { heroIndex = i; NotifyHero(); } });
         status = Store.LoadWarning ?? "مرحبًا بك في مكتبتك السينمائية";
+        foreach (var q in settings.RecentSearches) RecentSearches.Add(q);
+        section = settings.LastSection is "home" or "movies" or "series" or "favorites" or "history" or "library" ? settings.LastSection : "home";
     }
     public event Action<Movie>? WatchRequested;
+    /// <summary>A title picked from the search list: the window opens its details panel.</summary>
+    public event Action? SelectionRequested;
+    public event Action<Movie, List<Movie>>? UnwatchedDownloadRequested;
+    public RelayCommand BackCommand { get; }
+    public RelayCommand PickSuggestionCommand { get; }
+    public RelayCommand ContinueCommand { get; }
+    public RelayCommand DownloadUnwatchedCommand { get; }
+    // --- Back navigation: sections visited, newest last ---
+    private readonly Stack<string> history = new();
+    public bool CanGoBack => history.Count > 0;
+    private async Task GoTo(string target, bool remember = true)
+    {
+        if (remember && target != section) { history.Push(section); BackCommand.Refresh(); }
+        section = target; page = 0; ResetFilters();
+        if (target != "search") Change(settings with { LastSection = target }, nameof(Section));
+        await Load();
+    }
+    /// <summary>Esc / Alt+← / back button: closes the open title first, then returns to the previous section.</summary>
+    public async Task<bool> Back()
+    {
+        if (Selected is not null && (IsHome || DetailsOpen)) { ClearSelection(); DetailsOpen = false; return true; }
+        if (history.Count == 0) return false;
+        string previous = history.Pop(); BackCommand.Refresh();
+        await GoTo(previous, remember: false);
+        return true;
+    }
+    private bool detailsOpen;
+    public bool DetailsOpen { get => detailsOpen; set => Set(ref detailsOpen, value); }
+    // --- Notices shown in a strip under the header ---
+    private string serviceNotice = "", updateNotice = "", updateUrl = "";
+    public string ServiceNotice { get => serviceNotice; set { Set(ref serviceNotice, value); Notify(nameof(HasServiceNotice)); } }
+    public bool HasServiceNotice => serviceNotice.Length > 0;
+    public string UpdateNotice { get => updateNotice; set { Set(ref updateNotice, value); Notify(nameof(HasUpdate)); } }
+    public string UpdateUrl { get => updateUrl; set => Set(ref updateUrl, value); }
+    public bool HasUpdate => updateNotice.Length > 0;
+    public async Task CheckServiceAndUpdates()
+    {
+        ServiceNotice = await service.Health(CancellationToken.None) ?? "";
+        if (await UpdateCheck.Find(CancellationToken.None) is { } update)
+        { UpdateNotice = $"يتوفر إصدار جديد {update.Version.ToString(3)}"; UpdateUrl = update.Url; Log.Info($"update available {update.Version}"); }
+    }
+    // --- Instant search suggestions and recent searches ---
+    public ObservableCollection<Movie> Suggestions { get; } = [];
+    public ObservableCollection<string> RecentSearches { get; } = [];
+    private bool suggestionsOpen;
+    public bool SuggestionsOpen { get => suggestionsOpen; set => Set(ref suggestionsOpen, value); }
+    private void RememberSearch(string text)
+    {
+        var list = settings.RecentSearches.Where(q => q != text).Prepend(text).Take(8).ToList();
+        Change(settings with { RecentSearches = list }, nameof(RecentSearches));
+        RecentSearches.Clear(); foreach (var q in list) RecentSearches.Add(q);
+    }
+    public void ShowRecent() { if (SearchText.Length == 0 && RecentSearches.Count > 0) { Suggestions.Clear(); SuggestionsOpen = true; } }
+    // --- "Continue" for a series: the first episode after the last one watched ---
+    public Movie? NextToWatch
+    {
+        get
+        {
+            if (Selected is null) return null;
+            if (Selected.Kind != "2" || allEpisodes.Count == 0) return Selected;
+            var seen = Store.History().DistinctBy(e => e.Movie.Id).ToDictionary(e => e.Movie.Id, e => e.Percent);
+            int last = allEpisodes.FindLastIndex(e => seen.ContainsKey(e.Id));
+            if (last < 0) return allEpisodes[0];
+            return seen[allEpisodes[last].Id] < 95 || last + 1 >= allEpisodes.Count ? allEpisodes[last] : allEpisodes[last + 1];
+        }
+    }
+    public string ContinueLabel => NextToWatch is { Kind: "2" } m ? $"تابع: م{m.Season} ح{m.Episode}" : "شاهد الآن";
+    public IEnumerable<Movie> UnwatchedEpisodes()
+    {
+        var seen = Store.History().Where(e => e.Percent >= 95).Select(e => e.Movie.Id).ToHashSet();
+        return allEpisodes.Where(e => !seen.Contains(e.Id));
+    }
     public event Action<Movie?>? DownloadRequested;
     /// <summary>Completed downloads for "My library"; supplied by the window that owns the download manager.</summary>
     public Func<IEnumerable<Movie>> LibraryProvider { get; set; } = () => [];
     public ObservableCollection<Movie> Movies { get; } = [];
+    /// <summary>The section grid; in "My library" it is grouped by series or film title.</summary>
+    public System.ComponentModel.ICollectionView MoviesView { get; }
+    public int[] SkeletonCards { get; } = Enumerable.Range(0, 12).ToArray();
     public ObservableCollection<Movie> Episodes { get; } = [];
     public ObservableCollection<int> Seasons { get; } = [];
     public ObservableCollection<WatchEntry> Recent { get; } = [];
@@ -132,14 +214,26 @@ public sealed class MainViewModel : Observable, IDisposable
     private async void DebounceSearch()
     {
         searching?.Cancel(); searching?.Dispose(); searching = new(); var token = searching.Token;
-        try { await Task.Delay(500, token); if (SearchText.Trim().Length >= 2) await SearchNow(); }
+        if (SearchText.Trim().Length < 2) { Suggestions.Clear(); SuggestionsOpen = SearchText.Length == 0 && RecentSearches.Count > 0; return; }
+        try
+        {
+            // Typing shows up to six matches under the box; Enter opens the full results page.
+            await Task.Delay(300, token);
+            var found = await service.Catalog("search", 0, SearchText.Trim(), false, false, token);
+            token.ThrowIfCancellationRequested();
+            Suggestions.Clear(); foreach (var m in found.Value.Take(6)) Suggestions.Add(m);
+            SuggestionsOpen = Suggestions.Count > 0;
+        }
         catch (OperationCanceledException) { }
+        catch (Exception e) when (e is HttpRequestException or System.Text.Json.JsonException or InvalidDataException) { Log.Error("suggest", e); }
     }
     private async Task SearchNow()
     {
         searching?.Cancel();
         if (string.IsNullOrWhiteSpace(SearchText)) return;
-        section = "search"; query = SearchText.Trim(); page = 0; ResetFilters(); await Load();
+        query = SearchText.Trim(); SuggestionsOpen = false; RememberSearch(query);
+        if (section != "search") { history.Push(section); BackCommand.Refresh(); }
+        section = "search"; page = 0; ResetFilters(); await Load();
     }
     public void RefreshHistory()
     {
@@ -165,7 +259,7 @@ public sealed class MainViewModel : Observable, IDisposable
             {
                 "favorites" => new([.. favorites]),
                 "history" => new(Store.History().Select(e => e.Movie with { ProgressText = e.ProgressLabel }).ToList()),
-                "library" => new(LibraryProvider().ToList()),
+                "library" => new(LibraryProvider().OrderBy(m => m.GroupTitle).ThenBy(m => m.Season).ThenBy(m => m.Episode).ToList()),
                 "home" => await service.Catalog("movies", page, "", refresh, false, token),
                 _ => await service.Catalog(section, page, query, refresh, false, token)
             };
@@ -235,6 +329,15 @@ public sealed class MainViewModel : Observable, IDisposable
     }
     private void ApplyFilters()
     {
+        if (MoviesView is not null)
+        {
+            bool grouped = section == "library";
+            if (grouped != MoviesView.GroupDescriptions.Count > 0)
+            {
+                MoviesView.GroupDescriptions.Clear();
+                if (grouped) MoviesView.GroupDescriptions.Add(new System.Windows.Data.PropertyGroupDescription(nameof(Movie.GroupTitle)));
+            }
+        }
         Movies.Clear(); foreach (var movie in Filter(current, selectedGenre ?? "الكل", selectedYear ?? "الكل", RatingIndex == 0 ? 0 : RatingIndex + 5, SortIndex)) Movies.Add(movie);
         Notify(nameof(IsEmpty));
         NotifyHero();
@@ -248,13 +351,14 @@ public sealed class MainViewModel : Observable, IDisposable
         {
             var full = await service.Details(movie.Id, token);
             token.ThrowIfCancellationRequested(); Selected = full with { LocalPoster = movie.LocalPoster, LocalFile = movie.LocalFile };
-            DetailsStatus = "";
+            DetailsStatus = ""; NotifyContinue();
             if (full.Kind == "2")
             {
                 allEpisodes = await service.Episodes(movie.Id, token); token.ThrowIfCancellationRequested();
                 foreach (var season in allEpisodes.Select(m => m.Season).Distinct()) Seasons.Add(season);
                 selectedSeason = 0; SelectedSeason = Seasons.FirstOrDefault(); UpdateEpisodes();
                 if (allEpisodes.Count == 0) DetailsStatus = "تعذّر العثور على قائمة الحلقات لهذا العنوان حاليًا.";
+                NotifyContinue();
             }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
@@ -262,7 +366,8 @@ public sealed class MainViewModel : Observable, IDisposable
         { if (!token.IsCancellationRequested) DetailsStatus = "تعذّر تحديث التفاصيل. يمكنك استخدام البيانات المتاحة أو إعادة اختيار العنوان."; }
         finally { if (!token.IsCancellationRequested) DetailsBusy = false; }
     }
-    public void ClearSelection() { selecting?.Cancel(); Selected = null; Episodes.Clear(); Seasons.Clear(); DetailsBusy = false; DetailsStatus = ""; }
+    public void ClearSelection() { selecting?.Cancel(); Selected = null; Episodes.Clear(); Seasons.Clear(); allEpisodes = []; DetailsBusy = false; DetailsStatus = ""; NotifyContinue(); }
+    private void NotifyContinue() { Notify(nameof(NextToWatch)); Notify(nameof(ContinueLabel)); ContinueCommand?.Refresh(); DownloadUnwatchedCommand?.Refresh(); }
     private void UpdateEpisodes() { Episodes.Clear(); foreach (var episode in allEpisodes.Where(m => m.Season == SelectedSeason)) Episodes.Add(episode); }
     private void ToggleFavorite()
     {

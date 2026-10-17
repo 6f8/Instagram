@@ -19,7 +19,7 @@ public sealed class DownloadPlanner(Func<Movie, CancellationToken, Task<Playback
                 var selected = quality switch { -1 => available, -2 => available.TakeLast(1).ToList(), _ => available.Where(s => s.Height == quality).ToList() };
                 if (selected.Count == 0) notices.Add($"{movie.Title} {movie.EpisodeLabel}: الجودة المطلوبة غير متاحة للتنزيل.");
                 foreach (var source in selected)
-                    files.Add(new(movie, source.Height, source.Container, DownloadPaths.FilePath(directory, title, groupId, movie, source), subtitleLanguage));
+                    files.Add(new(movie, source.Height, source.Container, DownloadPaths.FilePath(directory, title, groupId, movie, source, withQuality: quality == -1), subtitleLanguage));
             }
             catch (Exception ex) when (!ct.IsCancellationRequested && ex is System.Net.Http.HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or System.IO.InvalidDataException)
             { notices.Add($"{movie.Title} {movie.EpisodeLabel}: تعذّر جلب الجودات المتاحة."); }

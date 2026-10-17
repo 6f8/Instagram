@@ -25,14 +25,29 @@ public static class DownloadPaths
         if (Regex.IsMatch(name, @"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)", RegexOptions.IgnoreCase)) name = "_" + name;
         return name.Length > 70 ? name[..70].TrimEnd('.', ' ') : name;
     }
-    public static string FilePath(string root, string title, string groupId, Movie movie, VideoSource source)
+    /// <summary>
+    /// Media-server style names that VLC, Plex, Jellyfin and TVs recognise:
+    /// مسلسلات/Title/الموسم 01/Title - S01E04.mp4 and أفلام/Title (2023)/Title (2023).mp4.
+    /// The quality is added to the name only when several qualities of one title are downloaded.
+    /// </summary>
+    public static string FilePath(string root, string title, string groupId, Movie movie, VideoSource source, bool withQuality = false)
     {
-        string folder = Path.Combine(Path.GetFullPath(root), SafeName(title) + " [" + SafeName(groupId) + "]");
-        if (movie.Kind == "2") folder = Path.Combine(folder, $"Season {movie.Season:00}");
-        folder = Path.Combine(folder, source.Height + "p");
-        string episode = movie.Kind == "2" ? $".S{movie.Season:00}E{movie.Episode:00}" : "";
+        string name = SafeName(title);
         string extension = source.Container switch { "mkv" => ".mkv", "ts" => ".ts", _ => ".mp4" };
-        string file = SafeName(title) + episode + " [" + SafeName(movie.Id) + $"].{source.Height}p" + extension;
+        string suffix = withQuality ? $" [{source.Height}p]" : "";
+        string folder, file;
+        if (movie.Kind == "2")
+        {
+            folder = Path.Combine(Path.GetFullPath(root), "مسلسلات", name, $"الموسم {movie.Season:00}");
+            file = $"{name} - S{movie.Season:00}E{movie.Episode:00}{suffix}{extension}";
+        }
+        else
+        {
+            string titled = movie.Year.Length == 4 ? $"{name} ({movie.Year})" : name;
+            folder = Path.Combine(Path.GetFullPath(root), "أفلام", titled);
+            file = titled + suffix + extension;
+        }
+        _ = groupId; // kept for callers; names no longer carry service ids
         string full = Path.GetFullPath(Path.Combine(folder, file));
         string prefix = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         if (!full.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("مسار التنزيل غير صالح.");

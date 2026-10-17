@@ -21,6 +21,9 @@ jobs:
       - name: Publish single small exe
         run: dotnet publish cinemana-desktop/Cinemana.Desktop/Cinemana.Desktop.csproj -c Release -o out
 
+      - name: Unit tests
+        run: dotnet run --project cinemana-desktop/Cinemana.Desktop.Tests -c Release
+
       - name: UI regression test
         run: dotnet run --project cinemana-desktop/Cinemana.Desktop.UiTests -c Release
 
@@ -48,4 +51,20 @@ jobs:
           git add cinemana-desktop-release/Cinemana.exe
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) { git commit -m "Build Cinemana.exe from ${{ github.sha }}"; git push origin HEAD:${{ github.ref_name }} }
+          exit 0
+
+      # One GitHub release per app version (tag cinemana-v<Version>); the app's update check reads these.
+      - name: Publish release for a new version
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Item out/Cinemana.exe).VersionInfo.ProductVersion -replace '\+.*$', ''
+          $tag = "cinemana-v$version"
+          gh release view $tag --repo ${{ github.repository }} *> $null
+          if ($LASTEXITCODE -eq 0) { "Release $tag already exists"; exit 0 }
+          $hash = (Get-FileHash out/Cinemana.exe -Algorithm SHA256).Hash.ToLower()
+          $notes = "سينمانا Desktop $version`n`nحمّل Cinemana.exe وشغّله (يحتاج .NET 10 Desktop Runtime).`n`nSHA256: $hash"
+          gh release create $tag out/Cinemana.exe --repo ${{ github.repository }} --target ${{ github.sha }} --title "سينمانا Desktop $version" --notes "$notes"
           exit 0

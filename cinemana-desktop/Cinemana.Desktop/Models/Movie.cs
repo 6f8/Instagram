@@ -17,6 +17,10 @@ public record Movie(string Id, string Title, string Description, string Poster, 
     public string? LocalPoster { get; init; }
     /// <summary>Set for titles in "My library": the downloaded video to play offline.</summary>
     public string? LocalFile { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore] public bool IsLocal => LocalFile is not null;
+    [System.Text.Json.Serialization.JsonIgnore] public bool IsRemote => LocalFile is null;
+    /// <summary>Group name in "My library": the series (or film) title.</summary>
+    [System.Text.Json.Serialization.JsonIgnore] public string GroupTitle => DisplayTitle;
     public string ProgressText { get; init; } = "";
     public string ImageSource => LocalPoster ?? Poster;
     public string DisplayTitle => string.IsNullOrWhiteSpace(ArabicTitle) ? Title : ArabicTitle;
@@ -64,6 +68,8 @@ public record AppSettings(bool CacheImages = true, double CardWidth = 174, doubl
     public int ParallelDownloads { get; init; } = 2;
     public int SpeedLimitKBps { get; init; } // 0 = unlimited
     public bool AutoResumeDownloads { get; init; }
+    public string LastSection { get; init; } = "home";
+    public List<string> RecentSearches { get; init; } = [];
     public bool NotifyOnComplete { get; init; } = true;
     public double SubtitleSize { get; init; } = 27;
     public double PlaybackSpeed { get; init; } = 1;

@@ -18,6 +18,7 @@ public partial class DownloadsWindow : Window
     private Movie? target;
     private List<Movie> episodes = [];
     private DownloadPlan? plan;
+    private List<Movie>? only;
     private bool initializing, closed;
     public DownloadsWindow(DownloadManager manager, string root)
     {
@@ -27,8 +28,13 @@ public partial class DownloadsWindow : Window
         PlanPanel.Visibility = Visibility.Collapsed;
         Closed += (_, _) => { closed = true; operation?.Cancel(); operation?.Dispose(); api.Dispose(); };
     }
-    public async Task SetTarget(Movie movie, int selectedSeason)
+    /// <summary>
+    /// Opens ready to go: a series starts on its current season, best quality and Arabic subtitles, and the
+    /// preview runs at once so "Start" is one click away. <paramref name="episodes"/> limits it to those episodes.
+    /// </summary>
+    public async Task SetTarget(Movie movie, int selectedSeason, List<Movie>? episodes = null)
     {
+        only = episodes is { Count: > 0 } ? episodes : null;
         operation?.Cancel(); operation?.Dispose(); operation = new(); var token = operation.Token;
         initializing = true; target = movie; plan = null; episodes = [];
         PlanPanel.Visibility = Visibility.Visible; TargetLabel.Text = movie.DisplayTitle;
@@ -49,7 +55,10 @@ public partial class DownloadsWindow : Window
             Season.SelectedItem = seasons.Contains(selectedSeason) ? selectedSeason : seasons.FirstOrDefault();
             if (playback.Sources.All(s => !s.CanDownload)) { PlanStatus.Text = "لا يتوفر ملف مباشر قابل للتنزيل لهذا العنوان."; return; }
             PrepareButton.IsEnabled = true;
-            PlanStatus.Text = series ? $"{episodes.Count} حلقة متاحة عبر {seasons.Count} موسم. اختر النطاق والجودة ثم اعرض المعاينة." : "اختر الجودة ومجلد الحفظ ثم اعرض المعاينة.";
+            PlanStatus.Text = series ? $"{episodes.Count} حلقة متاحة عبر {seasons.Count} موسم." : "";
+            if (series && only is null) Scope.SelectedIndex = 1;
+            initializing = false;
+            PrepareClick(this, new RoutedEventArgs());
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or InvalidDataException)
@@ -59,7 +68,7 @@ public partial class DownloadsWindow : Window
     private void SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (initializing || StartButton is null) return;
-        operation?.Cancel(); plan = null; StartButton.IsEnabled = false;
+        operation?.Cancel(); plan = null; StartButton.IsEnabled = false; only = null;
         PlanStatus.Text = "تغيّرت الخيارات. اضغط معاينة ملفات التنزيل.";
     }
     private void ChooseFolder(object sender, RoutedEventArgs e)
@@ -74,7 +83,8 @@ public partial class DownloadsWindow : Window
         operation?.Cancel(); operation?.Dispose(); operation = new(); var token = operation.Token;
         string subtitle = (SubtitleLanguage.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
         int scope = Scope.SelectedIndex; int season = Season.SelectedItem is int s ? s : target.Season;
-        var selected = scope switch { 1 => episodes.Where(ep => ep.Season == season).ToList(), 2 => episodes, _ => new List<Movie> { target } };
+        var selected = only is not null ? only : scope switch { 1 => episodes.Where(ep => ep.Season == season).ToList(), 2 => episodes, _ => new List<Movie> { target } };
+        if (only is not null) TargetLabel.Text = $"{target.DisplayTitle} • {only.Count} حلقة لم تُشاهَد";
         if (selected.Count == 0) { PlanStatus.Text = "لا توجد حلقات متاحة للنطاق المحدد."; return; }
         plan = null; StartButton.IsEnabled = PrepareButton.IsEnabled = false; CancelPlanButton.IsEnabled = true;
         Scope.IsEnabled = Quality.IsEnabled = Season.IsEnabled = SubtitleLanguage.IsEnabled = FolderButton.IsEnabled = false;

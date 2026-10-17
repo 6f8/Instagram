@@ -6,6 +6,7 @@
     <local:IndexEqualsConverter x:Key="IndexEquals" />
     <local:PosterHeightConverter x:Key="PosterHeight" />
     <local:RankConverter x:Key="Rank" />
+    <local:PosterConverter x:Key="Poster" />
     <SolidColorBrush x:Key="Accent" Color="#FFB020" />
     <SolidColorBrush x:Key="Ink" Color="#F5F1E6" />
     <SolidColorBrush x:Key="Muted" Color="#A9AEC4" />
