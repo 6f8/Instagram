@@ -75,6 +75,14 @@ public record AppSettings(bool CacheImages = true, double CardWidth = 174, doubl
     public string LastSection { get; init; } = "home";
     public List<string> RecentSearches { get; init; } = [];
     public bool NotifyOnComplete { get; init; } = true;
+    // Downloads: schedule window (hours, local), night limit, metered pause, action after the queue
+    public bool ScheduleEnabled { get; init; }
+    public int ScheduleStart { get; init; } = 2;
+    public int ScheduleEnd { get; init; } = 8;
+    public int NightSpeedLimitKBps { get; init; } = -1; // -1 = same as day
+    public bool PauseOnMetered { get; init; } = true;
+    public int AfterQueue { get; init; } // 0 nothing, 1 sleep, 2 shut down
+    public bool AutoDownloadFollowed { get; init; } = true;
     public double SubtitleSize { get; init; } = 27;
     public double PlaybackSpeed { get; init; } = 1;
     // Player

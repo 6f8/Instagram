@@ -111,6 +111,7 @@ public sealed class FileDownloader(HttpClient client, Func<Movie, CancellationTo
         }
         ct.ThrowIfCancellationRequested();
         if (bytes == 0 || total.HasValue && bytes != total) throw new IOException("انقطع الملف قبل اكتماله. يمكن متابعة التنزيل.");
+        if (!LooksLikeVideo(partial)) throw new InvalidDataException("الملف المنزّل ليس فيديو صالحًا. اضغط متابعة لإعادة تنزيله.");
         // Publish only a complete file; never overwrite an existing final file.
         await SaveMetadata(metaFile, metadata with { Total = bytes, Complete = true }, ct);
         File.Move(partial, file, false);
@@ -118,6 +119,22 @@ public sealed class FileDownloader(HttpClient client, Func<Movie, CancellationTo
         return new(bytes, false, await SaveSubtitle(spec, playback, file, ct));
     }
     /// <summary>"Title - S01E04.ar.srt" beside "Title - S01E04.mp4" (language-tagged, as media players expect).</summary>
+    /// <summary>Integrity check after download: an MP4 carries "ftyp" near the start, MKV the EBML header, TS a 0x47 sync byte.</summary>
+    public static bool LooksLikeVideo(string file)
+    {
+        try
+        {
+            using var stream = File.OpenRead(file);
+            var head = new byte[16]; int read = stream.Read(head, 0, head.Length);
+            if (read < 12) return false;
+            string box = System.Text.Encoding.ASCII.GetString(head, 4, 4);
+            bool mp4 = box is "ftyp" or "moov" or "free" or "mdat" or "wide" or "skip";
+            bool mkv = head[0] == 0x1A && head[1] == 0x45 && head[2] == 0xDF && head[3] == 0xA3;
+            bool ts = head[0] == 0x47;
+            return mp4 || mkv || ts;
+        }
+        catch (IOException) { return false; }
+    }
     public static string SubtitlePath(string videoFile, string language) => Path.ChangeExtension(videoFile, (language.Length > 0 ? "." + language : "") + ".srt");
     /// <summary>Subtitles saved beside a video: new ".ar.srt" names first, then the older plain ".srt".</summary>
     public static IEnumerable<string> SubtitlesBeside(string videoFile)

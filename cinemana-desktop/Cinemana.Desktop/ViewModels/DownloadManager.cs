@@ -75,7 +75,7 @@ public sealed class DownloadManager : Observable, IDisposable
         downloader = new(http, (movie, token) => api.Playback(movie.Id, token))
         {
             // The overall limit is shared evenly between the transfers running at that moment.
-            SpeedLimit = () => Settings.SpeedLimitKBps <= 0 ? 0 : Settings.SpeedLimitKBps * 1024L / Math.Max(1, active.Count)
+            SpeedLimit = () => CurrentLimitKBps() <= 0 ? 0 : CurrentLimitKBps() * 1024L / Math.Max(1, active.Count)
         };
         string videos = Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
         if (videos.Length == 0) videos = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Videos");
@@ -91,8 +91,14 @@ public sealed class DownloadManager : Observable, IDisposable
         CancelCommand = new(p => { if (p is DownloadItem item) Cancel(item); });
         RemoveCommand = new(p => { if (p is DownloadItem item && !item.CanPause) { Items.Remove(item); Save(); } });
         ToggleCommand = new(p => { if (p is DownloadItem item) { if (item.CanPause) Pause(item); else if (item.CanResume) ResumeCommand.Execute(item); } });
+        MoveUpCommand = new(p => Move(p as DownloadItem, -1));
+        MoveDownCommand = new(p => Move(p as DownloadItem, 1));
+        FirstCommand = new(p => { if (p is DownloadItem item && Items.IndexOf(item) > 0) { Items.Move(Items.IndexOf(item), 0); Save(); } });
+        holdTimer.Tick += (_, _) => { if (Items.Any(i => i.State == DownloadState.Queued) || active.Count > 0) Start(); };
+        holdTimer.Start();
         PauseAllCommand = new(_ => PauseAll()); ResumeAllCommand = new(_ => { foreach (var item in Items.Where(i => i.State == DownloadState.Paused)) item.State = DownloadState.Queued; Save(); Start(); });
         FolderCommand = new(p => { if (p is DownloadItem item) OpenFolder(Path.GetDirectoryName(item.Destination)!); else OpenFolder(Directory); });
+        foreach (var h in store.Load("download-history", new List<HistoryEntry>())) History.Add(h);
         if (resume) Start();
         _ = Rescan();
     }
@@ -193,6 +199,46 @@ public sealed class DownloadManager : Observable, IDisposable
     public RelayCommand RemoveCommand { get; }
     public RelayCommand ToggleCommand { get; }
     public RelayCommand PauseAllCommand { get; }
+    /// <summary>Folder chosen for one series or film; otherwise the general download folder.</summary>
+    public string FolderFor(string title) => store.Load("series-folders", new Dictionary<string, string>()).GetValueOrDefault(title) ?? directory;
+    public void SetFolderFor(string title, string? folder)
+    {
+        var map = store.Load("series-folders", new Dictionary<string, string>());
+        if (folder is null) map.Remove(title); else map[title] = Path.GetFullPath(folder);
+        store.Save("series-folders", map);
+    }
+    public RelayCommand MoveUpCommand { get; }
+    public RelayCommand MoveDownCommand { get; }
+    public RelayCommand FirstCommand { get; }
+    private void Move(DownloadItem? item, int step)
+    {
+        if (item is null) return;
+        int from = Items.IndexOf(item), to = Math.Clamp(from + step, 0, Items.Count - 1);
+        if (from >= 0 && to != from) { Items.Move(from, to); Save(); }
+    }
+    // --- History of finished and failed files (newest first, 300 kept) ---
+    public sealed record HistoryEntry(string Title, string Quality, string Result, long Size, DateTimeOffset At)
+    {
+        public string Line => $"{At.ToLocalTime():yyyy/MM/dd HH:mm} · {Result} · {Title} · {Quality} · {DownloadPaths.Size(Size)}";
+    }
+    public ObservableCollection<HistoryEntry> History { get; } = [];
+    private void Record(DownloadItem item, string result)
+    {
+        History.Insert(0, new(item.Title, item.QualityLabel, result, item.FileSize, DateTimeOffset.UtcNow));
+        while (History.Count > 300) History.RemoveAt(History.Count - 1);
+        try { store.Save("download-history", History.ToList()); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+    }
+    private static void TryDelete(string path) { try { if (File.Exists(path)) File.Delete(path); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { } }
+    // --- Export / import of the queue (to move it to another computer) ---
+    public void Export(string file) => File.WriteAllText(file, JsonSerializer.Serialize(Items.Select(i => i.Snapshot() with { State = i.State == DownloadState.Completed ? DownloadState.Completed : DownloadState.Paused }).ToList()));
+    public int Import(string file)
+    {
+        var list = JsonSerializer.Deserialize<List<DownloadSnapshot>>(File.ReadAllText(file)) ?? [];
+        int added = 0;
+        foreach (var snapshot in list.Where(s => Items.All(i => i.Spec.Key != s.Spec.Key)))
+        { Items.Add(new(snapshot with { State = snapshot.State == DownloadState.Completed && File.Exists(snapshot.Spec.Destination) ? DownloadState.Completed : DownloadState.Paused })); added++; }
+        Save(); return added;
+    }
     public RelayCommand ResumeAllCommand { get; }
     public RelayCommand FolderCommand { get; }
     public static string Duration(double seconds)
@@ -213,9 +259,39 @@ public sealed class DownloadManager : Observable, IDisposable
         Save(); Start(); return added;
     }
     /// <summary>Fills free worker slots up to the configured number of parallel downloads (1–3).</summary>
+    /// <summary>Day limit, or the night limit between midnight and 7 am when one is set.</summary>
+    private int CurrentLimitKBps()
+    {
+        var s = Settings;
+        return s.NightSpeedLimitKBps >= 0 && DateTime.Now.Hour < 7 ? s.NightSpeedLimitKBps : s.SpeedLimitKBps;
+    }
+    /// <summary>Why queued files are not starting right now (schedule window or metered connection), or null.</summary>
+    public string? HoldReason()
+    {
+        var s = Settings;
+        if (s.ScheduleEnabled)
+        {
+            int hour = DateTime.Now.Hour;
+            bool inside = s.ScheduleStart <= s.ScheduleEnd ? hour >= s.ScheduleStart && hour < s.ScheduleEnd : hour >= s.ScheduleStart || hour < s.ScheduleEnd;
+            if (!inside) return $"التنزيل مجدول بين {s.ScheduleStart}:00 و{s.ScheduleEnd}:00؛ الملفات في الانتظار.";
+        }
+        if (s.PauseOnMetered && Network.IsMetered()) return "الاتصال الحالي محدود الباقة؛ التنزيل متوقف حتى تتصل بشبكة غير محدودة.";
+        return null;
+    }
+    private readonly System.Windows.Threading.DispatcherTimer holdTimer = new() { Interval = TimeSpan.FromMinutes(1) };
+    private bool hadWork;
+    /// <summary>Raised once when the queue empties after work, for the "after the queue" action.</summary>
+    public event Action? QueueFinished;
     public void Start()
     {
         if (disposed) return;
+        if (HoldReason() is { } reason)
+        {
+            Status = reason;
+            // Running files stop at the end of the window or on a metered connection; they resume later by themselves.
+            foreach (var item in active.Keys.ToList()) { item.State = DownloadState.Queued; active[item].Cancel(); }
+            return;
+        }
         int limit = Math.Clamp(Settings.ParallelDownloads, 1, 3);
         while (workers < limit && Items.Any(i => i.State == DownloadState.Queued)) { workers++; _ = Worker(); }
     }
@@ -223,14 +299,19 @@ public sealed class DownloadManager : Observable, IDisposable
     {
         try
         {
-            while (!disposed && Items.FirstOrDefault(i => i.State == DownloadState.Queued) is { } item)
+            while (!disposed && HoldReason() is null && Items.FirstOrDefault(i => i.State == DownloadState.Queued) is { } item)
                 await Run(item);
         }
-        finally { workers--; Notify(nameof(Summary)); if (disposed && workers == 0) { api.Dispose(); http.Dispose(); } }
+        finally
+        {
+            workers--; Notify(nameof(Summary));
+            if (disposed && workers == 0) { api.Dispose(); http.Dispose(); }
+            else if (workers == 0 && hadWork && !Items.Any(i => i.State is DownloadState.Queued or DownloadState.Running)) { hadWork = false; QueueFinished?.Invoke(); }
+        }
     }
     private async Task Run(DownloadItem item)
     {
-        var cancellation = new CancellationTokenSource(); var token = cancellation.Token;
+        var cancellation = new CancellationTokenSource(); var token = cancellation.Token; hadWork = true;
         active[item] = cancellation;
         item.State = DownloadState.Running; item.Message = ""; Save();
         if (CheckDiskSpace(item) is { } warning) { item.State = DownloadState.Failed; item.Message = warning; active.Remove(item); cancellation.Dispose(); Save(); return; }
@@ -241,9 +322,10 @@ public sealed class DownloadManager : Observable, IDisposable
             item.Progress(new(result.Bytes, result.Bytes, 0)); item.State = DownloadState.Completed;
             item.Message = (result.AlreadyComplete ? "الملف مكتمل مسبقًا؛ لم يُنزّل مجددًا." : "تم حفظ الملف.")
                 + (result.SubtitleNote.Length > 0 ? " " + result.SubtitleNote : item.Spec.SubtitleLanguage.Length > 0 ? " مع ملف الترجمة (.srt)." : "");
-            if (!result.AlreadyComplete) Completed?.Invoke(item);
+            if (!result.AlreadyComplete) { Completed?.Invoke(item); Record(item, "اكتمل"); }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested) { if (item.State == DownloadState.Running) item.State = DownloadState.Paused; }
+        catch (InvalidDataException e) when (e.Message.Contains("ليس فيديو")) { item.State = DownloadState.Failed; item.Message = e.Message; Record(item, "فشل التحقق"); TryDelete(item.Destination + ".part"); }
         catch (QualityUnavailableException e) { item.State = DownloadState.Unavailable; item.Message = e.Message; }
         catch (Exception e) when (e is IOException or HttpRequestException or TaskCanceledException or JsonException or UnauthorizedAccessException)
         {
@@ -256,7 +338,7 @@ public sealed class DownloadManager : Observable, IDisposable
                 HttpRequestException or TaskCanceledException => "انقطع الاتصال أو انتهت مهلة الانتظار. اضغط متابعة لإعادة المحاولة.",
                 _ => "تعذّر حفظ الملف. تحقق من المساحة والمجلد ثم اضغط متابعة."
             };
-            Log.Error("download", e);
+            Log.Error("download", e); Record(item, "فشل");
             // A dropped connection is retried by itself after a short wait (up to three times); other failures wait for the user.
             bool dropped = e is HttpRequestException { StatusCode: null } or TaskCanceledException || e is IOException io && io.Message.Contains("انقطع", StringComparison.Ordinal);
             if (dropped && item.AutoRetries < 3)
@@ -299,7 +381,7 @@ public sealed class DownloadManager : Observable, IDisposable
     public void Dispose()
     {
         if (disposed) return;
-        disposed = true; PauseAll(); Save();
+        disposed = true; holdTimer.Stop(); PauseAll(); Save();
         if (workers == 0) { api.Dispose(); http.Dispose(); }
     }
 }

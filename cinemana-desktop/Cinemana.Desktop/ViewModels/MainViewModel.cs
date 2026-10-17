@@ -33,6 +33,7 @@ public sealed class MainViewModel : Observable, IDisposable
             try { if (watched) Store.RemoveProgress(m.Id); else Store.SaveProgress(m, 1, 1); } catch (Exception e) when (StorageError(e)) { Status = "تعذّر حفظ حالة المشاهدة."; }
             UpdateEpisodes(); RefreshHistory(); NotifyContinue();
         });
+        FollowCommand = new(_ => { if (Selected is { Kind: "2" } s) { FollowToggled?.Invoke(s, allEpisodes); Notify(nameof(FollowLabel)); } }, _ => Selected?.Kind == "2");
         DownloadUnwatchedCommand = new(_ => { if (Selected is { } s) UnwatchedDownloadRequested?.Invoke(s, UnwatchedEpisodes().ToList()); }, _ => Selected?.Kind == "2" && allEpisodes.Count > 0);
         SearchCommand = new(async _ => await SearchNow());
         RefreshCommand = new(async _ => await Load(true));
@@ -62,6 +63,10 @@ public sealed class MainViewModel : Observable, IDisposable
     public RelayCommand ContinueCommand { get; }
     public RelayCommand DownloadUnwatchedCommand { get; }
     public RelayCommand MarkWatchedCommand { get; }
+    public RelayCommand FollowCommand { get; }
+    public event Action<Movie, List<Movie>>? FollowToggled;
+    public Func<string, bool> IsFollowed { get; set; } = _ => false;
+    public string FollowLabel => Selected is not null && IsFollowed(Selected.Id) ? "✓ تتابعه" : "متابعة المسلسل";
     // --- Back navigation: sections visited, newest last ---
     private readonly Stack<string> history = new();
     public bool CanGoBack => history.Count > 0;
@@ -203,6 +208,14 @@ public sealed class MainViewModel : Observable, IDisposable
     public int ParallelIndex { get => ParallelDownloads - 1; set { ParallelDownloads = value + 1; Notify(); } }
     public int SpeedLimitIndex { get => Math.Max(0, Array.IndexOf(SpeedLimits, SpeedLimitKBps)); set { SpeedLimitKBps = SpeedLimits[Math.Clamp(value, 0, SpeedLimits.Length - 1)]; Notify(); } }
     public event Action? DownloadSettingsChanged;
+    public bool ScheduleEnabled { get => settings.ScheduleEnabled; set => Change(settings with { ScheduleEnabled = value }); }
+    public int ScheduleStart { get => settings.ScheduleStart; set => Change(settings with { ScheduleStart = Math.Clamp(value, 0, 23) }); }
+    public int ScheduleEnd { get => settings.ScheduleEnd; set => Change(settings with { ScheduleEnd = Math.Clamp(value, 0, 23) }); }
+    public int[] Hours { get; } = Enumerable.Range(0, 24).ToArray();
+    public int NightLimitIndex { get => settings.NightSpeedLimitKBps < 0 ? 0 : Array.IndexOf(SpeedLimits, settings.NightSpeedLimitKBps) + 1; set { Change(settings with { NightSpeedLimitKBps = value <= 0 ? -1 : SpeedLimits[Math.Clamp(value - 1, 0, SpeedLimits.Length - 1)] }, nameof(SpeedLimitKBps)); Notify(); } }
+    public bool PauseOnMetered { get => settings.PauseOnMetered; set => Change(settings with { PauseOnMetered = value }, nameof(SpeedLimitKBps)); }
+    public int AfterQueue { get => settings.AfterQueue; set => Change(settings with { AfterQueue = value }); }
+    public bool AutoDownloadFollowed { get => settings.AutoDownloadFollowed; set => Change(settings with { AutoDownloadFollowed = value }); }
     private void Change(AppSettings value, [System.Runtime.CompilerServices.CallerMemberName] string? name = null)
     {
         // Re-read first: the player saves speed and subtitle size to the same file.
@@ -210,7 +223,7 @@ public sealed class MainViewModel : Observable, IDisposable
         settings = value with { SubtitleSize = latest.SubtitleSize, PlaybackSpeed = latest.PlaybackSpeed };
         Notify(name);
         try { Store.Save("settings", settings); } catch (Exception e) when (StorageError(e)) { Status = "تعذّر حفظ الإعدادات على القرص."; }
-        if (name is nameof(ParallelDownloads) or nameof(SpeedLimitKBps)) DownloadSettingsChanged?.Invoke();
+        if (name is nameof(ParallelDownloads) or nameof(SpeedLimitKBps) or nameof(ScheduleEnabled) or nameof(ScheduleStart) or nameof(ScheduleEnd)) DownloadSettingsChanged?.Invoke();
     }
     private static bool StorageError(Exception e) => e is IOException or UnauthorizedAccessException;
     private void RefreshCommands() { NextCommand?.Refresh(); PreviousCommand?.Refresh(); Notify(nameof(IsEmpty)); Notify(nameof(PageLabel)); }
@@ -376,7 +389,7 @@ public sealed class MainViewModel : Observable, IDisposable
         finally { if (!token.IsCancellationRequested) DetailsBusy = false; }
     }
     public void ClearSelection() { selecting?.Cancel(); Selected = null; Episodes.Clear(); Seasons.Clear(); allEpisodes = []; DetailsBusy = false; DetailsStatus = ""; NotifyContinue(); }
-    private void NotifyContinue() { Notify(nameof(NextToWatch)); Notify(nameof(ContinueLabel)); ContinueCommand?.Refresh(); DownloadUnwatchedCommand?.Refresh(); }
+    private void NotifyContinue() { Notify(nameof(FollowLabel)); FollowCommand?.Refresh(); Notify(nameof(NextToWatch)); Notify(nameof(ContinueLabel)); ContinueCommand?.Refresh(); DownloadUnwatchedCommand?.Refresh(); }
     private void UpdateEpisodes()
     {
         var seen = Store.History().DistinctBy(h => h.Movie.Id).ToDictionary(h => h.Movie.Id, h => h.Percent);

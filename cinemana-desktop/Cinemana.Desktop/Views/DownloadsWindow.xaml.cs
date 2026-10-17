@@ -10,6 +10,16 @@ using Microsoft.Win32;
 
 namespace Cinemana.Desktop.Views;
 
+/// <summary>One episode in the pick list of the downloads window.</summary>
+public sealed class EpisodeChoice(Movie movie, bool selected) : Observable
+{
+    private bool picked = selected;
+    public Movie Movie { get; } = movie;
+    public string Label => Movie.EpisodeLabel;
+    public bool Selected { get => picked; set { if (Set(ref picked, value)) Changed?.Invoke(); } }
+    public event Action? Changed;
+}
+
 public partial class DownloadsWindow : Window
 {
     private readonly DownloadManager manager;
@@ -20,10 +30,12 @@ public partial class DownloadsWindow : Window
     private DownloadPlan? plan;
     private List<Movie>? only;
     private bool initializing, closed;
+    private static readonly HttpClient Sizes = new() { Timeout = TimeSpan.FromSeconds(8) };
+    public System.Collections.ObjectModel.ObservableCollection<EpisodeChoice> Choices { get; } = [];
     public DownloadsWindow(DownloadManager manager, string root)
     {
         this.manager = manager; api = new(root);
-        InitializeComponent(); DataContext = manager;
+        InitializeComponent(); DataContext = manager; EpisodeList.ItemsSource = Choices;
         Width = Math.Min(1060, SystemParameters.WorkArea.Width - 32); Height = Math.Min(780, SystemParameters.WorkArea.Height - 32);
         PlanPanel.Visibility = Visibility.Collapsed;
         Closed += (_, _) => { closed = true; operation?.Cancel(); operation?.Dispose(); api.Dispose(); };
@@ -57,6 +69,8 @@ public partial class DownloadsWindow : Window
             PrepareButton.IsEnabled = true;
             PlanStatus.Text = series ? $"{episodes.Count} حلقة متاحة عبر {seasons.Count} موسم." : "";
             if (series && only is null) Scope.SelectedIndex = 1;
+            FillChoices();
+            UpdateFolderLabel();
             initializing = false;
             PrepareClick(this, new RoutedEventArgs());
         }
@@ -65,10 +79,64 @@ public partial class DownloadsWindow : Window
         { if (!closed && !token.IsCancellationRequested) PlanStatus.Text = "تعذّر جلب خيارات التنزيل. أعد فتح التنزيل من العنوان للمحاولة مجددًا."; }
         finally { if (!token.IsCancellationRequested) initializing = false; }
     }
+    /// <summary>Episodes of the chosen scope with a tick each; unwatched-only requests start with just those ticked.</summary>
+    private void FillChoices()
+    {
+        Choices.Clear();
+        if (target?.Kind != "2" || Scope.SelectedIndex == 0) { EpisodeList.Visibility = PickRow.Visibility = Visibility.Collapsed; return; }
+        int season = Season.SelectedItem is int s ? s : target.Season;
+        var list = Scope.SelectedIndex == 1 ? episodes.Where(ep => ep.Season == season) : episodes;
+        var keep = only?.Select(m => m.Id).ToHashSet();
+        foreach (var ep in list)
+        {
+            var choice = new EpisodeChoice(ep, keep is null || keep.Contains(ep.Id));
+            choice.Changed += () => { plan = null; StartButton.IsEnabled = false; PlanStatus.Text = $"اخترت {Choices.Count(c => c.Selected)} حلقة. اضغط معاينة ملفات التنزيل."; };
+            Choices.Add(choice);
+        }
+        EpisodeList.Visibility = PickRow.Visibility = Choices.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+    private void PickAllClick(object sender, RoutedEventArgs e) { foreach (var c in Choices) c.Selected = true; }
+    private void PickNoneClick(object sender, RoutedEventArgs e) { foreach (var c in Choices) c.Selected = false; }
+    private string Folder => target is null ? manager.Directory : manager.FolderFor(target.Title);
+    private void UpdateFolderLabel() => SeriesFolderLabel.Text = target is not null && Folder != manager.Directory ? "مجلد خاص بهذا العنوان: " + Folder : "";
+    private void ChooseSeriesFolder(object sender, RoutedEventArgs e)
+    {
+        if (target is null) return;
+        var chooser = new OpenFolderDialog { Title = "مجلد خاص بـ " + target.DisplayTitle, Multiselect = false };
+        if (chooser.ShowDialog(this) != true) return;
+        manager.SetFolderFor(target.Title, chooser.FolderName); UpdateFolderLabel();
+        plan = null; StartButton.IsEnabled = false; PlanStatus.Text = "تم تعيين مجلد لهذا العنوان. أعد المعاينة.";
+    }
+    private void ResetSeriesFolder(object sender, RoutedEventArgs e) { if (target is null) return; manager.SetFolderFor(target.Title, null); UpdateFolderLabel(); }
+    private void ExportClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SaveFileDialog { Title = "تصدير قائمة التنزيل", Filter = "قائمة سينمانا (*.json)|*.json", FileName = "cinemana-queue.json" };
+        if (dialog.ShowDialog(this) != true) return;
+        try { manager.Export(dialog.FileName); PlanStatus.Text = "صُدّرت القائمة."; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { PlanStatus.Text = "تعذّر حفظ الملف."; }
+    }
+    private void ImportClick(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog { Title = "استيراد قائمة التنزيل", Filter = "قائمة سينمانا (*.json)|*.json" };
+        if (dialog.ShowDialog(this) != true) return;
+        try { PlanStatus.Text = $"استُورد {manager.Import(dialog.FileName)} ملفًا متوقفًا مؤقتًا. اضغط «متابعة المتوقف» للبدء."; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { PlanStatus.Text = "الملف ليس قائمة تنزيل صالحة."; }
+    }
+    private static async Task<long?> HeadSize(string url, CancellationToken ct)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Head, url);
+            using var response = await Sizes.SendAsync(request, ct);
+            return response.IsSuccessStatusCode ? response.Content.Headers.ContentLength : null;
+        }
+        catch (Exception e) when (!ct.IsCancellationRequested && e is HttpRequestException or TaskCanceledException) { return null; }
+    }
     private void SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (initializing || StartButton is null) return;
-        operation?.Cancel(); plan = null; StartButton.IsEnabled = false; only = null;
+        if (sender == Scope || sender == Season) FillChoices();
+        operation?.Cancel(); plan = null; StartButton.IsEnabled = false; if (sender != Scope && sender != Season) only = null;
         PlanStatus.Text = "تغيّرت الخيارات. اضغط معاينة ملفات التنزيل.";
     }
     private void ChooseFolder(object sender, RoutedEventArgs e)
@@ -83,20 +151,21 @@ public partial class DownloadsWindow : Window
         operation?.Cancel(); operation?.Dispose(); operation = new(); var token = operation.Token;
         string subtitle = (SubtitleLanguage.SelectedItem as ComboBoxItem)?.Tag as string ?? "";
         int scope = Scope.SelectedIndex; int season = Season.SelectedItem is int s ? s : target.Season;
-        var selected = only is not null ? only : scope switch { 1 => episodes.Where(ep => ep.Season == season).ToList(), 2 => episodes, _ => new List<Movie> { target } };
+        var selected = Choices.Count > 0 ? Choices.Where(c => c.Selected).Select(c => c.Movie).ToList() : only is not null ? only : scope switch { 1 => episodes.Where(ep => ep.Season == season).ToList(), 2 => episodes, _ => new List<Movie> { target } };
         if (only is not null) TargetLabel.Text = $"{target.DisplayTitle} • {only.Count} حلقة لم تُشاهَد";
         if (selected.Count == 0) { PlanStatus.Text = "لا توجد حلقات متاحة للنطاق المحدد."; return; }
         plan = null; StartButton.IsEnabled = PrepareButton.IsEnabled = false; CancelPlanButton.IsEnabled = true;
         Scope.IsEnabled = Quality.IsEnabled = Season.IsEnabled = SubtitleLanguage.IsEnabled = FolderButton.IsEnabled = false;
         try
         {
-            var planner = new DownloadPlanner((movie, ct) => api.Playback(movie.Id, ct));
+            var planner = new DownloadPlanner((movie, ct) => api.Playback(movie.Id, ct), HeadSize);
             string groupId = target.Kind == "2" ? episodes.FirstOrDefault()?.Id ?? target.Id : target.Id;
             var progress = new Progress<(int Done, int Total)>(p => { if (!token.IsCancellationRequested) PlanStatus.Text = $"فحص الجودات: {p.Done} / {p.Total}…"; });
-            var result = await planner.Build(selected, target.Title, groupId, manager.Directory, quality.Height, subtitle, progress, token);
+            var result = await planner.Build(selected, target.Title, groupId, Folder, quality.Height, subtitle, progress, token);
             token.ThrowIfCancellationRequested(); plan = result;
             int count = result.Files.Select(f => f.Movie.Id).Distinct().Count();
-            PlanStatus.Text = $"المعاينة: {result.Files.Count} ملفًا لـ {count} عنوانًا/حلقة. الحجم والسرعة سيظهران عند بدء كل ملف.";
+            string size = result.KnownBytes > 0 ? $" الحجم الكلي نحو {DownloadPaths.Size(result.KnownBytes)}" + (result.UnknownSizes > 0 ? $" (+{result.UnknownSizes} ملف لم يُعلن حجمه)" : "") + "." : "";
+            PlanStatus.Text = $"المعاينة: {result.Files.Count} ملفًا لـ {count} عنوانًا/حلقة.{size} {manager.FreeSpaceLabel}";
             if (result.Notices.Count > 0) PlanStatus.Text += $"\nتعذّر تجهيز {result.Notices.Count} عنوانًا أو جودة. " + string.Join("\n", result.Notices.Take(3));
             StartButton.Content = $"بدء تنزيل {result.Files.Count} ملفًا"; StartButton.IsEnabled = result.Files.Count > 0;
         }
@@ -112,4 +181,11 @@ public partial class DownloadsWindow : Window
         plan = null; StartButton.IsEnabled = false;
     }
     private void CancelPlanClick(object sender, RoutedEventArgs e) => operation?.Cancel();
+    private void HistoryClick(object sender, RoutedEventArgs e)
+    {
+        bool show = HistoryList.Visibility != Visibility.Visible;
+        HistoryList.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        QueueList.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
+        HistoryToggle.Content = show ? "القائمة" : "السجل";
+    }
 }

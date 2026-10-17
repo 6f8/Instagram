@@ -12,7 +12,12 @@ public sealed record DownloadSpec(Movie Movie, int Quality, string Container, st
 public sealed record DownloadSnapshot(DownloadSpec Spec, DownloadState State, long Bytes = 0, long? Total = null, string Message = "");
 public sealed record DownloadProgress(long Bytes, long? Total, double BytesPerSecond);
 public sealed record DownloadResult(long Bytes, bool AlreadyComplete = false, string SubtitleNote = "");
-public sealed record DownloadPlan(List<DownloadSpec> Files, List<string> Notices);
+public sealed record DownloadPlan(List<DownloadSpec> Files, List<string> Notices)
+{
+    /// <summary>Sum of sizes the server announced (HEAD); <see cref="UnknownSizes"/> files did not say.</summary>
+    public long KnownBytes { get; init; }
+    public int UnknownSizes { get; init; }
+}
 public sealed record QualityChoice(int Height, string Label) { public override string ToString() => Label; }
 public sealed record DownloadMetadata(string MovieId, int Quality, string SourcePath, long? Total, string? ETag, DateTimeOffset? LastModified, bool Complete = false);
 

@@ -32,6 +32,8 @@ public partial class MainWindow : Window
     private DownloadsWindow? downloadsWindow;
     private readonly DispatcherTimer carousel = new() { Interval = TimeSpan.FromSeconds(8) };
     private System.Windows.Forms.NotifyIcon? tray;
+    private readonly FollowWatcher follow;
+    private readonly DispatcherTimer followTimer = new() { Interval = TimeSpan.FromHours(6) };
     public static readonly DependencyProperty HeroTextWidthProperty = DependencyProperty.Register(nameof(HeroTextWidth), typeof(double), typeof(MainWindow), new PropertyMetadata(560d));
     public double HeroTextWidth { get => (double)GetValue(HeroTextWidthProperty); set => SetValue(HeroTextWidthProperty, value); }
     private const string Shortcuts = """
@@ -62,6 +64,15 @@ public partial class MainWindow : Window
         downloads.Completed += ShowCompleted;
         model.DownloadSettingsChanged += downloads.Start;
         model.LibraryProvider = LibraryItems;
+        follow = new FollowWatcher(model.Store, downloads.Add, downloads.FolderFor);
+        model.IsFollowed = follow.IsFollowed;
+        model.FollowToggled += (series, episodes) => follow.Toggle(series, episodes);
+        followTimer.Tick += async (_, _) => await CheckFollowed();
+        followTimer.Start();
+        downloads.QueueFinished += AfterQueue;
+        // Taskbar button shows overall download progress.
+        TaskbarItemInfo = new System.Windows.Shell.TaskbarItemInfo();
+        downloads.PropertyChanged += (_, e) => { if (e.PropertyName is nameof(DownloadManager.TotalsLabel) or nameof(DownloadManager.DockItem)) UpdateTaskbar(); };
         model.DownloadRequested += async movie => await ShowDownloads(movie);
         model.UnwatchedDownloadRequested += async (series, episodes) => await ShowDownloads(series, episodes);
         model.SelectionRequested += () => { CatalogScroll.ScrollToTop(); DetailsPanel.BringIntoView(); };
@@ -75,6 +86,7 @@ public partial class MainWindow : Window
         {
             await model.Load();
             _ = model.CheckServiceAndUpdates();
+            _ = CheckFollowed();
             var args = Environment.GetCommandLineArgs();
             int playIndex = Array.IndexOf(args, "--play");
             if (playIndex < 0 || playIndex + 1 >= args.Length || !args[playIndex + 1].All(char.IsAsciiDigit)) return;
@@ -87,7 +99,7 @@ public partial class MainWindow : Window
             catch (Exception ex) when (ex is System.Net.Http.HttpRequestException or OperationCanceledException or InvalidDataException or System.Text.Json.JsonException)
             { if (IsLoaded) MessageBox.Show(this, "تعذّر فتح العنوان المطلوب. يمكنك اختياره من المكتبة.", "سينمانا"); }
         };
-        Closed += (_, _) => { playbackGeneration++; carousel.Stop(); activePlayer?.Dispose(); downloads.Dispose(); model.Dispose(); tray?.Dispose(); Log.Info("closed"); };
+        Closed += (_, _) => { playbackGeneration++; carousel.Stop(); followTimer.Stop(); activePlayer?.Dispose(); downloads.Dispose(); model.Dispose(); tray?.Dispose(); Log.Info("closed"); };
         PreviewKeyDown += async (_, e) =>
         {
             if (PlayerHost.Visibility == Visibility.Visible)
@@ -141,6 +153,50 @@ public partial class MainWindow : Window
         catch (Exception e) when (e is ArgumentException or IOException or System.ComponentModel.Win32Exception) { Log.Error("tray", e); }
     }
     private async void TrayClicked(object? sender, EventArgs e) { Activate(); await ShowDownloads(null); }
+    private void Balloon(string title, string text)
+    {
+        try
+        {
+            tray ??= new System.Windows.Forms.NotifyIcon { Icon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath!), Text = "سينمانا", Visible = true };
+            tray.ShowBalloonTip(6000, title, text, System.Windows.Forms.ToolTipIcon.Info);
+        }
+        catch (Exception e) when (e is ArgumentException or IOException or System.ComponentModel.Win32Exception) { Log.Error("tray", e); }
+    }
+    private async Task CheckFollowed()
+    {
+        var news = await follow.Check(model.AutoDownloadFollowed, CancellationToken.None);
+        if (news.Count > 0) Balloon("حلقات جديدة", string.Join("\n", news.Take(4)) + (model.AutoDownloadFollowed ? "\nأُضيفت إلى قائمة التنزيل." : ""));
+    }
+    private void UpdateTaskbar()
+    {
+        var running = downloads.Items.Where(i => i.State == DownloadState.Running).ToList();
+        if (TaskbarItemInfo is null) return;
+        if (running.Count == 0) { TaskbarItemInfo.ProgressState = System.Windows.Shell.TaskbarItemProgressState.None; return; }
+        TaskbarItemInfo.ProgressState = running.All(i => i.Total is null) ? System.Windows.Shell.TaskbarItemProgressState.Indeterminate : System.Windows.Shell.TaskbarItemProgressState.Normal;
+        TaskbarItemInfo.ProgressValue = running.Average(i => i.Percent) / 100;
+    }
+    /// <summary>After the whole queue: sleep or shut down, with one minute to cancel.</summary>
+    private void AfterQueue()
+    {
+        int action = model.AfterQueue;
+        if (action == 0) return;
+        string what = action == 1 ? "إسبات الجهاز" : "إطفاء الجهاز";
+        Log.Info("queue finished, " + what);
+        var cancel = new DispatcherTimer { Interval = TimeSpan.FromSeconds(60) };
+        cancel.Tick += (_, _) =>
+        {
+            cancel.Stop();
+            try
+            {
+                if (action == 2) Process.Start(new ProcessStartInfo("shutdown", "/s /t 0") { CreateNoWindow = true, UseShellExecute = false });
+                else System.Windows.Forms.Application.SetSuspendState(System.Windows.Forms.PowerState.Suspend, false, false);
+            }
+            catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException) { Log.Error("after-queue", e); }
+        };
+        cancel.Start();
+        if (MessageBox.Show(this, $"اكتملت قائمة التنزيل. سيتم {what} خلال دقيقة.\nاضغط «إلغاء» للتراجع.", "سينمانا", MessageBoxButton.OKCancel, MessageBoxImage.Information) == MessageBoxResult.Cancel)
+            cancel.Stop();
+    }
     private void RowWheel(object sender, MouseWheelEventArgs e)
     {
         // Rows scroll sideways with the wheel; the page keeps scrolling once a row reaches its end.
