@@ -6,7 +6,7 @@
       <Button x:Name="DownloadButton" Content="⬇ تنزيل" Click="DownloadClick" DockPanel.Dock="Right"/>
       <Button x:Name="NextEpisodeButton" Content="الحلقة التالية" Click="NextClick" DockPanel.Dock="Left" Visibility="Collapsed"/>
       <Button Content="ملء الشاشة F11" Click="FullscreenClick" DockPanel.Dock="Left"/>
-      <Button Content="نافذة صغيرة" Click="PipClick" DockPanel.Dock="Left" ToolTip="صورة داخل صورة: نافذة صغيرة فوق التطبيقات (P)"/>
+      <Button AutomationProperties.Name="صورة داخل صورة: نافذة صغيرة فوق التطبيقات (P)" Content="نافذة صغيرة" Click="PipClick" DockPanel.Dock="Left" ToolTip="صورة داخل صورة: نافذة صغيرة فوق التطبيقات (P)"/>
       <TextBlock x:Name="TitleLabel" FontSize="21" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="16,0"/>
     </DockPanel>
     <Grid Grid.Row="1" Background="Black" x:Name="VideoSurface" Focusable="True" PreviewKeyDown="OverlayKeyDown" MouseLeftButtonDown="VideoClick" MouseWheel="VideoWheel" ClipToBounds="True">
@@ -24,17 +24,17 @@
           </TextBlock>
         </Border>
       </StackPanel>
-      <Button x:Name="SkipIntroButton" Content="تخطي المقدمة ⏭" Click="SkipIntroClick" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="30,0,0,90" Padding="22,12" Background="#E6F5F1E6" Foreground="#0E1222" FontWeight="Bold" Visibility="Collapsed"/>
+      <Button x:Name="SkipIntroButton" Content="تخطي المقدمة ⏭" Click="SkipIntroClick" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="30,0,0,90" Padding="22,12" Background="#E6F5F1E6" Foreground="{StaticResource OnAccent}" FontWeight="Bold" Visibility="Collapsed"/>
       <!-- Next episode countdown -->
       <Border x:Name="NextPanel" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="30,0,0,90" Padding="18" Background="#EE141A30" Visibility="Collapsed">
         <StackPanel Width="300">
           <TextBlock x:Name="NextCountdown" FontWeight="Bold" FontSize="16"/>
           <TextBlock x:Name="NextTitle" Foreground="#A9AEC4" Margin="0,4,0,12" TextTrimming="CharacterEllipsis"/>
-          <StackPanel Orientation="Horizontal"><Button Content="شغّل الآن" Click="NextClick" Background="#FFB020" Foreground="#0E1222" FontWeight="Bold"/><Button Content="إلغاء" Click="CancelNextClick"/></StackPanel>
+          <StackPanel Orientation="Horizontal"><Button Content="شغّل الآن" Click="NextClick" Background="{StaticResource Accent}" Foreground="{StaticResource OnAccent}" FontWeight="Bold"/><Button Content="إلغاء" Click="CancelNextClick"/></StackPanel>
         </StackPanel>
       </Border>
       <StackPanel x:Name="LoadingPanel" VerticalAlignment="Center" HorizontalAlignment="Center" Width="280" Background="#DA121317" IsHitTestVisible="False">
-        <ProgressBar Height="3" IsIndeterminate="True" Foreground="#FFB020"/>
+        <ProgressBar Height="3" IsIndeterminate="True" Foreground="{StaticResource Accent}"/>
         <TextBlock x:Name="LoadingLabel" Text="جارٍ تجهيز الفيديو…" TextAlignment="Center" TextWrapping="Wrap" Margin="16" Foreground="#DBE3F2"/>
       </StackPanel>
       <!-- Search inside the subtitle text -->
@@ -42,7 +42,7 @@
         <DockPanel>
           <DockPanel DockPanel.Dock="Top"><Button Content="✕" DockPanel.Dock="Left" Click="CloseSearchClick" Padding="10,4"/><TextBox x:Name="SubtitleQuery" TextChanged="SubtitleQueryChanged" AutomationProperties.Name="ابحث في نص الترجمة"/></DockPanel>
           <ListBox x:Name="SubtitleMatches" Background="Transparent" BorderThickness="0" Foreground="#F5F1E6" Margin="0,8,0,0" SelectionChanged="MatchPicked" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-            <ListBox.ItemTemplate><DataTemplate><StackPanel Margin="0,4"><TextBlock Text="{Binding Stamp}" Foreground="#FFB020" FontSize="11" FlowDirection="LeftToRight" HorizontalAlignment="Right"/><TextBlock Text="{Binding Text}" TextWrapping="Wrap"/></StackPanel></DataTemplate></ListBox.ItemTemplate>
+            <ListBox.ItemTemplate><DataTemplate><StackPanel Margin="0,4"><TextBlock Text="{Binding Stamp}" Foreground="{StaticResource Accent}" FontSize="11" FlowDirection="LeftToRight" HorizontalAlignment="Right"/><TextBlock Text="{Binding Text}" TextWrapping="Wrap"/></StackPanel></DataTemplate></ListBox.ItemTemplate>
           </ListBox>
         </DockPanel>
       </Border>
@@ -55,14 +55,14 @@
         <TextBlock x:Name="TotalTime" Grid.Column="2" Text="00:00:00" VerticalAlignment="Center" HorizontalAlignment="Right" Foreground="#CAD5E8"/>
       </Grid>
       <WrapPanel Margin="16,4,16,4" VerticalAlignment="Center">
-        <Button x:Name="PlayButton" Content="إيقاف مؤقت" Click="PlayClick" IsEnabled="False" Background="#FFB020" Foreground="#0E1222" FontWeight="Bold"/>
+        <Button x:Name="PlayButton" Content="إيقاف مؤقت" Click="PlayClick" IsEnabled="False" Background="{StaticResource Accent}" Foreground="{StaticResource OnAccent}" FontWeight="Bold"/>
         <Button Content="−10 ث" Click="RewindClick"/><Button Content="+10 ث" Click="ForwardClick"/>
         <Button x:Name="ResumeButton" Content="الموضع المحفوظ" Click="ResumeClick" IsEnabled="False"/>
         <Button Content="إعادة المحاولة" Click="RetryClick"/>
         <TextBlock Text="الجودة" VerticalAlignment="Center" Margin="12,0,2,0"/><ComboBox x:Name="Quality" MinWidth="85" SelectionChanged="QualityChanged" AutomationProperties.Name="جودة الفيديو"/>
         <TextBlock Text="السرعة" VerticalAlignment="Center" Margin="12,0,2,0"/><ComboBox x:Name="Speed" MinWidth="75" SelectionChanged="SpeedChanged" AutomationProperties.Name="سرعة التشغيل"/>
         <TextBlock Text="مؤقت النوم" VerticalAlignment="Center" Margin="12,0,2,0"/><ComboBox x:Name="SleepTimer" MinWidth="110" SelectedIndex="0" SelectionChanged="SleepChanged" AutomationProperties.Name="مؤقت النوم"><ComboBoxItem Content="معطّل"/><ComboBoxItem Content="30 دقيقة"/><ComboBoxItem Content="60 دقيقة"/><ComboBoxItem Content="نهاية الحلقة"/></ComboBox>
-        <Button x:Name="ZoomButton" Content="ملء الإطار" Click="ZoomClick" ToolTip="قصّ الحواف السوداء (Z)"/>
+        <Button AutomationProperties.Name="قصّ الحواف السوداء (Z)" x:Name="ZoomButton" Content="ملء الإطار" Click="ZoomClick" ToolTip="قصّ الحواف السوداء (Z)"/>
         <TextBlock Text="السطوع" VerticalAlignment="Center" Margin="12,0,2,0"/><Slider x:Name="Brightness" Width="80" Minimum="-0.6" Maximum="0.4" Value="0" ValueChanged="BrightnessChanged" VerticalAlignment="Center" FlowDirection="LeftToRight" AutomationProperties.Name="السطوع"/>
         <Button x:Name="MuteButton" Content="الصوت" Click="MuteClick" Padding="10" Margin="12,3,3,3"/>
         <Slider x:Name="VolumeBar" Width="85" Minimum="0" Maximum="1" Value="0.8" ValueChanged="VolumeChanged" VerticalAlignment="Center" AutomationProperties.Name="مستوى الصوت" FlowDirection="LeftToRight"/>
@@ -70,19 +70,19 @@
       <WrapPanel Margin="16,0,16,12" VerticalAlignment="Center">
         <TextBlock Text="الترجمة" VerticalAlignment="Center" Margin="0,0,2,0"/><ComboBox x:Name="Subtitles" MinWidth="110" SelectionChanged="SubtitleChanged" AutomationProperties.Name="ترجمة الفيديو"/>
         <TextBlock Text="ترجمة ثانية" VerticalAlignment="Center" Margin="12,0,2,0"/><ComboBox x:Name="SecondSubtitles" MinWidth="110" SelectionChanged="SecondSubtitleChanged" AutomationProperties.Name="الترجمة الثانية"/>
-        <Button Content="من ملف…" Click="LoadSubtitleFileClick" ToolTip="تحميل ملف ترجمة من جهازك"/>
-        <Button Content="−0.5ث" Click="SubtitleEarlierClick" Padding="9,8" ToolTip="إظهار الترجمة أبكر ([)"/>
+        <Button AutomationProperties.Name="تحميل ملف ترجمة من جهازك" Content="من ملف…" Click="LoadSubtitleFileClick" ToolTip="تحميل ملف ترجمة من جهازك"/>
+        <Button AutomationProperties.Name="إظهار الترجمة أبكر ([)" Content="−0.5ث" Click="SubtitleEarlierClick" Padding="9,8" ToolTip="إظهار الترجمة أبكر ([)"/>
         <TextBlock x:Name="OffsetLabel" Text="توقيت 0.0ث" VerticalAlignment="Center" Margin="4,0" Foreground="#CAD5E8" FlowDirection="LeftToRight"/>
-        <Button Content="+0.5ث" Click="SubtitleLaterClick" Padding="9,8" ToolTip="تأخير الترجمة (])"/>
+        <Button AutomationProperties.Name="تأخير الترجمة (])" Content="+0.5ث" Click="SubtitleLaterClick" Padding="9,8" ToolTip="تأخير الترجمة (])"/>
         <TextBlock Text="الحجم" VerticalAlignment="Center" Margin="12,0,2,0"/>
         <Slider x:Name="SubtitleSize" Width="70" Minimum="16" Maximum="48" Value="27" ValueChanged="SubtitleSizeChanged" VerticalAlignment="Center" FlowDirection="LeftToRight" AutomationProperties.Name="حجم خط الترجمة"/>
         <ComboBox x:Name="SubtitleFont" MinWidth="110" SelectionChanged="SubtitleStyleChanged" AutomationProperties.Name="خط الترجمة"><ComboBoxItem Content="Segoe UI"/><ComboBoxItem Content="Tahoma"/><ComboBoxItem Content="Arial"/><ComboBoxItem Content="Traditional Arabic"/></ComboBox>
         <ComboBox x:Name="SubtitleColor" MinWidth="80" SelectionChanged="SubtitleStyleChanged" AutomationProperties.Name="لون الترجمة"><ComboBoxItem Content="أبيض" Tag="#FFFFFF"/><ComboBoxItem Content="أصفر" Tag="#FFE066"/><ComboBoxItem Content="سماوي" Tag="#9FE7FF"/></ComboBox>
         <TextBlock Text="الخلفية" VerticalAlignment="Center" Margin="12,0,2,0"/><Slider x:Name="SubtitleBackground" Width="70" Minimum="0" Maximum="1" Value="0.6" ValueChanged="SubtitleBackgroundChanged" VerticalAlignment="Center" FlowDirection="LeftToRight" AutomationProperties.Name="شفافية خلفية الترجمة"/>
         <Button x:Name="PositionButton" Content="الترجمة للأعلى" Click="SubtitlePositionClick"/>
-        <Button Content="بحث في الترجمة" Click="SearchSubtitleClick" ToolTip="Ctrl+F"/>
-        <Button Content="حفظ النص" Click="ExportSubtitleClick" ToolTip="حفظ نص الترجمة كملف نصي"/>
-        <Button x:Name="MarkIntroButton" Content="نهاية المقدمة هنا" Click="MarkIntroClick" ToolTip="يحفظ مدة المقدمة لهذا المسلسل لزر التخطي"/>
+        <Button AutomationProperties.Name="Ctrl+F" Content="بحث في الترجمة" Click="SearchSubtitleClick" ToolTip="Ctrl+F"/>
+        <Button AutomationProperties.Name="حفظ نص الترجمة كملف نصي" Content="حفظ النص" Click="ExportSubtitleClick" ToolTip="حفظ نص الترجمة كملف نصي"/>
+        <Button AutomationProperties.Name="يحفظ مدة المقدمة لهذا المسلسل لزر التخطي" x:Name="MarkIntroButton" Content="نهاية المقدمة هنا" Click="MarkIntroClick" ToolTip="يحفظ مدة المقدمة لهذا المسلسل لزر التخطي"/>
         <CheckBox x:Name="AutoNextBox" Content="الحلقة التالية تلقائيًا" Checked="AutoNextChanged" Unchecked="AutoNextChanged" Margin="12,8,4,8" Foreground="#F5F1E6"/>
       </WrapPanel>
     </StackPanel>

@@ -90,6 +90,16 @@ public record AppSettings(bool CacheImages = true, double CardWidth = 174, doubl
     public bool AutoDownloadFollowed { get; init; } = true;
     // Library
     public int AutoDeleteWatchedDays { get; init; } // 0 = never
+    // Look
+    public int ThemeMode { get; init; } // 0 dark, 1 light, 2 follow Windows
+    public string AccentColor { get; init; } = "#FFB020";
+    public bool HighContrast { get; init; }
+    public double UiScale { get; init; } = 1;
+    public bool AutoCardWidth { get; init; } = true;
+    public bool OnboardingDone { get; init; }
+    public bool StartWithWindows { get; init; }
+    public bool StartMinimized { get; init; }
+    public string Language { get; init; } = "ar";
     public double SubtitleSize { get; init; } = 27;
     public double PlaybackSpeed { get; init; } = 1;
     // Player

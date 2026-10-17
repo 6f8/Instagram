@@ -24,6 +24,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Resource Include="Assets/Fonts/*.ttf" />
     <Using Remove="System.Windows.Forms" />
     <Using Remove="System.Drawing" />
   </ItemGroup>

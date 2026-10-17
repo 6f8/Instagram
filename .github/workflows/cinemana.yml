@@ -18,6 +18,10 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      # The app icon is drawn from the same vector mark as the UI (accent colour) so they always match.
+      - name: Export app icon
+        run: dotnet run --project cinemana-desktop/Cinemana.Desktop.UiTests -c Release -- --export-icon cinemana-desktop/Cinemana.Desktop/Assets/app.ico
+
       - name: Publish single small exe
         run: dotnet publish cinemana-desktop/Cinemana.Desktop/Cinemana.Desktop.csproj -c Release -o out
 

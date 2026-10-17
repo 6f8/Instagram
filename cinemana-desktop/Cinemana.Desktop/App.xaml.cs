@@ -6,6 +6,8 @@ namespace Cinemana.Desktop;
 
 public partial class App : Application
 {
+    public static bool SafeMode { get; private set; }
+    public static Models.AppSettings Settings { get; private set; } = new();
     protected override void OnStartup(StartupEventArgs e)
     {
         Services.Log.Init(System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Cinemana.Desktop"));
@@ -18,6 +20,18 @@ public partial class App : Application
         };
         AppDomain.CurrentDomain.UnhandledException += (_, args) => { if (args.ExceptionObject is Exception ex) Services.Log.Error("fatal", ex); };
         TaskScheduler.UnobservedTaskException += (_, args) => { Services.Log.Error("task", args.Exception); args.SetObserved(); };
+        var settings = new Services.LibraryStore().Load("settings", new Models.AppSettings());
+        // A held Shift key (or --safe) starts with default settings, in case a setting stops the app from opening.
+        if (e.Args.Contains("--safe") || System.Windows.Input.Keyboard.Modifiers.HasFlag(System.Windows.Input.ModifierKeys.Shift))
+        {
+            SafeMode = true; settings = new Models.AppSettings(); Services.Log.Info("safe mode");
+            // Set the saved settings aside (not deleted) so every part of the app starts from defaults.
+            string root = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Cinemana.Desktop");
+            try { string f = System.IO.Path.Combine(root, "settings.json"); if (System.IO.File.Exists(f)) System.IO.File.Move(f, System.IO.Path.Combine(root, "settings.before-safe-mode.json"), true); }
+            catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { Services.Log.Error("safe-mode", ex); }
+        }
+        Settings = settings;
+        Services.Theme.Apply(Resources, settings.ThemeMode, settings.AccentColor, settings.HighContrast);
         base.OnStartup(e);
     }
 }
@@ -90,5 +104,12 @@ public sealed class GroupSummaryConverter : IValueConverter
         string per = string.Join(" · ", seasons);
         return $"{Models.DownloadPaths.Size(list.Sum(m => m.SizeBytes))} · شوهد {list.Count(m => m.WatchedPercent >= 95)} من {list.Count}" + (per.Length > 0 ? "  —  " + per : "");
     }
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
+}
+
+/// <summary>Visible when the bound value is false (e.g. the home content while a title page is open).</summary>
+public sealed class InverseVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) => value is true ? Visibility.Collapsed : Visibility.Visible;
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotSupportedException();
 }

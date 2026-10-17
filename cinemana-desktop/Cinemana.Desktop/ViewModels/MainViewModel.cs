@@ -195,7 +195,34 @@ public sealed class MainViewModel : Observable, IDisposable
     public int SortIndex { get => sortIndex; set { if (Set(ref sortIndex, value)) ApplyFilters(); } }
     public int RatingIndex { get => ratingIndex; set { if (Set(ref ratingIndex, value)) ApplyFilters(); } }
     public int SelectedSeason { get => selectedSeason; set { if (Set(ref selectedSeason, value)) UpdateEpisodes(); } }
-    public double CardWidth { get => settings.CardWidth; set => Change(settings with { CardWidth = value }); }
+    public double CardWidth
+    {
+        get
+        {
+            if (!settings.AutoCardWidth || availableWidth <= 0) return settings.CardWidth;
+            // Cards share the row evenly: as many ~200 px columns as fit, with the 24 px gap.
+            int columns = Math.Max(2, (int)((availableWidth + 24) / (200 + 24)));
+            return Math.Floor((availableWidth + 24) / columns - 24);
+        }
+        set => Change(settings with { CardWidth = value });
+    }
+    private double availableWidth;
+    public void SetAvailableWidth(double width) { if (Math.Abs(width - availableWidth) > 8) { availableWidth = width; Notify(nameof(CardWidth)); } }
+    public int ThemeMode { get => settings.ThemeMode; set { Change(settings with { ThemeMode = value }); RestartNeeded(); } }
+    public string AccentColor { get => settings.AccentColor; set { Change(settings with { AccentColor = value }); RestartNeeded(); } }
+    public IEnumerable<object> AccentChoices => Theme.Accents.Select(a => new { a.Name, a.Hex });
+    public bool HighContrast { get => settings.HighContrast; set { Change(settings with { HighContrast = value }); RestartNeeded(); } }
+    public double UiScale { get => settings.UiScale; set => Change(settings with { UiScale = Math.Clamp(Math.Round(value, 2), 0.8, 1.6) }); }
+    public bool TvMode { get => settings.UiScale >= 1.35; set { UiScale = value ? 1.4 : 1; Notify(); TvModeChanged?.Invoke(value); } }
+    public event Action<bool>? TvModeChanged;
+    public bool AutoCardWidth { get => settings.AutoCardWidth; set { Change(settings with { AutoCardWidth = value }); Notify(nameof(CardWidth)); } }
+    public bool StartWithWindows { get => settings.StartWithWindows; set { Change(settings with { StartWithWindows = value }); StartupChanged?.Invoke(); } }
+    public bool StartMinimized { get => settings.StartMinimized; set { Change(settings with { StartMinimized = value }); StartupChanged?.Invoke(); } }
+    public event Action? StartupChanged;
+    private bool needsRestart;
+    public bool NeedsRestart { get => needsRestart; private set => Set(ref needsRestart, value); }
+    private void RestartNeeded() { NeedsRestart = true; Status = "تُطبَّق تغييرات المظهر بعد إعادة التشغيل."; }
+    public bool OnboardingDone { get => settings.OnboardingDone; set => Change(settings with { OnboardingDone = value }); }
     public double TextSize { get => settings.TextSize; set => Change(settings with { TextSize = value }); }
     public bool CacheImages { get => settings.CacheImages; set => Change(settings with { CacheImages = value }); }
     public string UserName { get => settings.UserName; set { Change(settings with { UserName = value.Trim() }); Notify(nameof(DisplayName)); Notify(nameof(UserInitial)); } }

@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
@@ -76,6 +77,20 @@ public partial class MainWindow : Window
         model.DownloadRequested += async movie => await ShowDownloads(movie);
         model.UnwatchedDownloadRequested += async (series, episodes) => await ShowDownloads(series, episodes);
         model.SelectionRequested += () => { CatalogScroll.ScrollToTop(); DetailsPanel.BringIntoView(); };
+        undoTimer.Tick += (_, _) => { CommitPendingDelete(); _ = model.Load(); };
+        ApplyScale();
+        model.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(MainViewModel.UiScale)) { ApplyScale(); AdaptLayout(); }
+            if (e.PropertyName == nameof(MainViewModel.Hero)) FadeBanner();
+            if (e.PropertyName == nameof(MainViewModel.DetailsOpen) && model.DetailsOpen) FadeIn(DetailsPanel);
+        };
+        model.StartupChanged += ApplyStartup;
+        model.TvModeChanged += on => { if (on && WindowState != WindowState.Maximized) { WindowStyle = WindowStyle.None; WindowState = WindowState.Maximized; } else if (!on) { WindowStyle = WindowStyle.SingleBorderWindow; WindowState = WindowState.Normal; } };
+        SizeChanged += (_, _) => AdaptLayout();
+        // Ctrl + mouse wheel zooms the whole interface.
+        PreviewMouseWheel += (_, e) => { if (Keyboard.Modifiers == ModifierKeys.Control && PlayerHost.Visibility != Visibility.Visible) { model.UiScale += e.Delta > 0 ? 0.05 : -0.05; e.Handled = true; } };
+        StateChanged += (_, _) => { if (WindowState == WindowState.Minimized && model.StartMinimized) MinimizeToTray(); };
         Width = Math.Min(1500, SystemParameters.WorkArea.Width - 32);
         Height = Math.Min(940, SystemParameters.WorkArea.Height - 32);
         model.WatchRequested += async movie => await ShowPlayer(movie);
@@ -84,7 +99,12 @@ public partial class MainWindow : Window
         carousel.Start();
         Loaded += async (_, _) =>
         {
+            var started = Stopwatch.StartNew();
+            if (Environment.GetCommandLineArgs().Contains("--minimized")) MinimizeToTray();
+            if (App.SafeMode) model.SetStatus("الوضع الآمن: بدأ التطبيق بالإعدادات الافتراضية. حُفظت إعداداتك السابقة باسم settings.before-safe-mode.json.");
+            if (!model.OnboardingDone) ShowTour();
             await model.Load();
+            Log.Info($"startup: first page shown in {started.ElapsedMilliseconds} ms");
             _ = model.CheckServiceAndUpdates();
             _ = CheckFollowed();
             if (model.AutoDeleteDays > 0)
@@ -104,7 +124,7 @@ public partial class MainWindow : Window
             catch (Exception ex) when (ex is System.Net.Http.HttpRequestException or OperationCanceledException or InvalidDataException or System.Text.Json.JsonException)
             { if (IsLoaded) MessageBox.Show(this, "تعذّر فتح العنوان المطلوب. يمكنك اختياره من المكتبة.", "سينمانا"); }
         };
-        Closed += (_, _) => { playbackGeneration++; carousel.Stop(); followTimer.Stop(); activePlayer?.Dispose(); downloads.Dispose(); model.Dispose(); tray?.Dispose(); Log.Info("closed"); };
+        Closed += (_, _) => { CommitPendingDelete(); playbackGeneration++; carousel.Stop(); followTimer.Stop(); activePlayer?.Dispose(); downloads.Dispose(); model.Dispose(); tray?.Dispose(); Log.Info("closed"); };
         PreviewKeyDown += async (_, e) =>
         {
             if (PlayerHost.Visibility == Visibility.Visible)
@@ -138,6 +158,7 @@ public partial class MainWindow : Window
     {
         var watched = model.Store.History().DistinctBy(h => h.Movie.Id).ToDictionary(h => h.Movie.Id, h => h.Percent);
         return downloads.Library
+            .Where(i => !hiddenFromLibrary.Contains(i.Destination))
             .GroupBy(i => i.Destination, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
             .Select(i =>
             {
@@ -281,9 +302,91 @@ public partial class MainWindow : Window
         if (sender is not FrameworkElement { Tag: Movie { LocalFile: { } file } movie }) return;
         var item = downloads.Items.FirstOrDefault(i => string.Equals(i.Destination, file, StringComparison.OrdinalIgnoreCase));
         if (item is null) return;
-        if (MessageBox.Show(this, $"حذف «{movie.DisplayTitle}» ({DownloadPaths.Size(item.FileSize)}) وملف ترجمته من القرص؟", "حذف من مكتبتي", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
-        if (downloads.DeleteFile(item)) await model.Load();
+        // No confirmation dialog: the card disappears now and the file is deleted after 10 seconds unless undone.
+        CommitPendingDelete();
+        pendingDelete = item; hiddenFromLibrary.Add(file);
+        UndoText.Text = $"سيُحذف «{movie.DisplayTitle}» ({DownloadPaths.Size(item.FileSize)}) خلال 10 ثوانٍ.";
+        UndoBar.Visibility = Visibility.Visible;
+        undoTimer.Stop(); undoTimer.Start();
+        await model.Load();
     }
+    private DownloadItem? pendingDelete;
+    private readonly HashSet<string> hiddenFromLibrary = new(StringComparer.OrdinalIgnoreCase);
+    private readonly DispatcherTimer undoTimer = new() { Interval = TimeSpan.FromSeconds(10) };
+    private void CommitPendingDelete()
+    {
+        undoTimer.Stop(); UndoBar.Visibility = Visibility.Collapsed;
+        if (pendingDelete is { } item) { pendingDelete = null; downloads.DeleteFile(item); hiddenFromLibrary.Remove(item.Destination); }
+    }
+    private async void UndoClick(object sender, RoutedEventArgs e)
+    {
+        undoTimer.Stop(); UndoBar.Visibility = Visibility.Collapsed;
+        if (pendingDelete is { } item) { hiddenFromLibrary.Remove(item.Destination); pendingDelete = null; await model.Load(); }
+    }
+    // --- Look: scale, adaptive layout, transitions ---
+    private void ApplyScale()
+    {
+        double scale = model.UiScale;
+        RootLayout.LayoutTransform = Math.Abs(scale - 1) < 0.01 ? Transform.Identity : new ScaleTransform(scale, scale);
+    }
+    private void AdaptLayout()
+    {
+        double width = ActualWidth / Math.Max(0.5, model.UiScale);
+        // Narrow windows: the banner poster panel steps aside so the title keeps its space.
+        bool narrow = width < 1180;
+        if (Banner.ColumnDefinitions.Count == 3) { Banner.ColumnDefinitions[2].Width = narrow ? new GridLength(0) : new GridLength(5, GridUnitType.Star); Banner.ColumnDefinitions[1].Width = new GridLength(narrow ? 0 : 24); }
+        model.SetAvailableWidth(width - 112 - 20);
+    }
+    private void FadeBanner()
+    {
+        Banner.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0.35, 1, TimeSpan.FromMilliseconds(380)) { EasingFunction = new System.Windows.Media.Animation.QuadraticEase() });
+    }
+    private void FadeIn(UIElement element) => element.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(260)));
+    private void RestartClick(object sender, RoutedEventArgs e)
+    {
+        try { Process.Start(new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = true }); Application.Current.Shutdown(); }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { Log.Error("restart", ex); ToolStatus.Text = "أغلق التطبيق وافتحه يدويًا لتطبيق التغييرات."; }
+    }
+    /// <summary>Registers or removes the app in the current user's Windows start-up list (no admin rights).</summary>
+    private void ApplyStartup()
+    {
+        try
+        {
+            using var run = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
+            if (model.StartWithWindows) run.SetValue("Cinemana", $"\"{Environment.ProcessPath}\"" + (model.StartMinimized ? " --minimized" : ""));
+            else run.DeleteValue("Cinemana", false);
+        }
+        catch (Exception e) when (e is UnauthorizedAccessException or System.Security.SecurityException or IOException) { Log.Error("startup", e); }
+    }
+    private void MinimizeToTray()
+    {
+        try
+        {
+            tray ??= new System.Windows.Forms.NotifyIcon { Icon = System.Drawing.Icon.ExtractAssociatedIcon(Environment.ProcessPath!), Text = "سينمانا", Visible = true };
+            tray.Visible = true;
+            tray.DoubleClick -= RestoreFromTray; tray.DoubleClick += RestoreFromTray;
+            Hide();
+        }
+        catch (Exception e) when (e is ArgumentException or IOException or System.ComponentModel.Win32Exception) { Log.Error("tray", e); }
+    }
+    private void RestoreFromTray(object? sender, EventArgs e) { Show(); WindowState = WindowState.Normal; Activate(); }
+    // --- First-run tour ---
+    private int tourStep;
+    private static readonly (string Title, string Text)[] TourPages =
+    [
+        ("أهلًا بك في سينمانا", "تصفّح الأفلام والمسلسلات من الشريط العلوي، وابحث بالضغط على / . اضغط أي بطاقة لفتح صفحتها وحلقاتها."),
+        ("التحميل بضغطة", "من صفحة المسلسل اختر «تحميل» فتفتح نافذة جاهزة: الموسم الحالي، أفضل جودة، وترجمة عربية .srt بجانب كل حلقة. يمكنك متابعة المسلسل ليُحمَّل الجديد تلقائيًا."),
+        ("مكتبتي والمشاهدة بدون إنترنت", "كل ما حمّلته يظهر في «مكتبتي» مرتبًا حسب المسلسل والموسم، ويُشغَّل مع ترجمته بدون اتصال. الاختصارات كلها في الإعدادات أو بالضغط على ?.")
+    ];
+    private void ShowTour() { tourStep = 0; ShowTourPage(); Tour.Visibility = Visibility.Visible; FadeIn(Tour); }
+    private void ShowTourPage()
+    {
+        TourStep.Text = $"{tourStep + 1} / {TourPages.Length}"; TourTitle.Text = TourPages[tourStep].Title; TourText.Text = TourPages[tourStep].Text;
+        TourNext.Content = tourStep == TourPages.Length - 1 ? "ابدأ" : "التالي";
+    }
+    private void TourNextClick(object sender, RoutedEventArgs e) { if (++tourStep >= TourPages.Length) TourSkipClick(sender, e); else ShowTourPage(); }
+    private void TourSkipClick(object sender, RoutedEventArgs e) { Tour.Visibility = Visibility.Collapsed; model.OnboardingDone = true; }
+    private void TourClick(object sender, RoutedEventArgs e) => ShowTour();
     // --- Discovery ---
     private async void RandomClick(object sender, RoutedEventArgs e) => await model.PickRandom();
     private async void CastClick(object sender, RoutedEventArgs e)
