@@ -9,13 +9,13 @@ namespace Cinemana.Desktop.Services;
 /// </summary>
 public sealed class FollowWatcher(LibraryStore store, Func<IEnumerable<DownloadSpec>, int> enqueue, Func<string, string> folderFor)
 {
-    public sealed record Followed(string Id, string Title, string DisplayTitle, List<string> Known);
+    public sealed record Followed(string Id, string Title, string DisplayTitle, List<string> Known, string Poster = "");
     public List<Followed> All() => store.Load("followed", new List<Followed>());
     public bool IsFollowed(string id) => All().Any(f => f.Id == id);
     public void Toggle(Movie series, IEnumerable<Movie> episodes)
     {
         var list = All();
-        if (list.RemoveAll(f => f.Id == series.Id) == 0) list.Add(new(series.Id, series.Title, series.DisplayTitle, episodes.Select(e => e.Id).ToList()));
+        if (list.RemoveAll(f => f.Id == series.Id) == 0) list.Add(new(series.Id, series.Title, series.DisplayTitle, episodes.Select(e => e.Id).ToList(), series.Poster));
         store.Save("followed", list);
     }
     /// <summary>Returns a line per series with new episodes, e.g. "رمال الشمال: 2 حلقة جديدة".</summary>

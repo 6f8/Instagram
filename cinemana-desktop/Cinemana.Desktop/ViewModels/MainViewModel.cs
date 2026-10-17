@@ -49,10 +49,11 @@ public sealed class MainViewModel : Observable, IDisposable
         ResetFiltersCommand = new(_ => ResetFilters());
         NextHeroCommand = new(_ => MoveHero(1));
         PreviousHeroCommand = new(_ => MoveHero(-1));
+        ShowInBannerCommand = new(p => { if (p is Movie m) { int i = FeaturedMovies.IndexOf(m); if (i >= 0) { if (!HeroItems.Contains(m)) HeroItems.Add(m); heroIndex = HeroItems.IndexOf(m); NotifyHero(); } } });
         HeroDotCommand = new(p => { if (p is Movie m && HeroItems.IndexOf(m) is >= 0 and var i) { heroIndex = i; NotifyHero(); } });
         status = Store.LoadWarning ?? "مرحبًا بك في مكتبتك السينمائية";
         foreach (var q in settings.RecentSearches) RecentSearches.Add(q);
-        section = settings.LastSection is "genres" or "home" or "movies" or "series" or "favorites" or "history" or "library" ? settings.LastSection : "home";
+        section = settings.LastSection is "films" or "popular" or "anime" or "continue" or "later" or "subscriptions" or "genres" or "home" or "movies" or "series" or "favorites" or "history" or "library" ? settings.LastSection : "home";
     }
     public event Action<Movie>? WatchRequested;
     /// <summary>A title picked from the search list: the window opens its details panel.</summary>
@@ -163,6 +164,9 @@ public sealed class MainViewModel : Observable, IDisposable
     public RelayCommand NextHeroCommand { get; }
     public RelayCommand PreviousHeroCommand { get; }
     public RelayCommand HeroDotCommand { get; }
+    public RelayCommand ShowInBannerCommand { get; }
+    /// <summary>Followed series for the "الاشتراكات" section; supplied by the window.</summary>
+    public Func<IEnumerable<Movie>> SubscriptionsProvider { get; set; } = () => [];
     public string SearchText { get => searchText; set { if (Set(ref searchText, value)) DebounceSearch(); } }
     public string Heading { get => heading; private set => Set(ref heading, value); }
     public string Section => section;
@@ -222,6 +226,7 @@ public sealed class MainViewModel : Observable, IDisposable
     private bool needsRestart;
     public bool NeedsRestart { get => needsRestart; private set => Set(ref needsRestart, value); }
     private void RestartNeeded() { NeedsRestart = true; Status = "تُطبَّق تغييرات المظهر بعد إعادة التشغيل."; }
+    public bool MenuCollapsed { get => settings.MenuCollapsed; set => Change(settings with { MenuCollapsed = value }); }
     public string SyncFolder { get => settings.SyncFolder; set { Change(settings with { SyncFolder = value ?? "" }); Notify(nameof(SyncLabel)); } }
     public string SyncLabel => settings.SyncFolder.Length > 0 ? "مزامنة مع: " + settings.SyncFolder : "المزامنة معطّلة";
     public string AboutText => $"سينمانا Desktop {Log.Version} · .NET {Environment.Version} · مجلد البيانات: {Store.Root}";
@@ -359,6 +364,40 @@ public sealed class MainViewModel : Observable, IDisposable
         var filtered = result.Value.Where(m => !hidden.Contains(m.Id) && (parsed.Year is null || m.Year == parsed.Year) && m.NumericRating >= parsed.MinRating).ToList();
         return result with { Value = filtered };
     }
+    /// <summary>"الإصدارات الجديدة": the newest movies and series together.</summary>
+    private async Task<CacheResult<List<Movie>>> NewReleases(bool refresh, CancellationToken token)
+    {
+        var movies = await service.Catalog("movies", page, "", refresh, false, token);
+        var series = await service.Catalog("series", page, "", refresh, false, token);
+        var merged = movies.Value.Zip(series.Value, (a, b) => new[] { a, b }).SelectMany(x => x)
+            .Concat(movies.Value.Skip(series.Value.Count)).Concat(series.Value.Skip(movies.Value.Count)).DistinctBy(m => m.Id).ToList();
+        return new(merged, movies.IsStale || series.IsStale, movies.SavedAt);
+    }
+    /// <summary>"المشهورة": the best-rated of the latest movies and series (the service lists no popularity order).</summary>
+    private async Task<CacheResult<List<Movie>>> Popular(bool refresh, CancellationToken token)
+    {
+        var all = new List<Movie>();
+        for (int p = 0; p < 3; p++)
+            foreach (var kind in new[] { "movies", "series" })
+            {
+                try { all.AddRange((await service.Catalog(kind, p, "", refresh, false, token)).Value); }
+                catch (Exception e) when (!token.IsCancellationRequested && e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidDataException) { }
+            }
+        return new(all.DistinctBy(m => m.Id).OrderByDescending(m => m.NumericRating).Take(48).ToList());
+    }
+    /// <summary>"أنمي": anime and animation found among the latest titles, by their genre names.</summary>
+    private async Task<CacheResult<List<Movie>>> Anime(bool refresh, CancellationToken token)
+    {
+        var all = new List<Movie>();
+        for (int p = 0; p < 4; p++)
+            foreach (var kind in new[] { "series", "movies" })
+            {
+                try { all.AddRange((await service.Catalog(kind, p, "", refresh, false, token)).Value); }
+                catch (Exception e) when (!token.IsCancellationRequested && e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidDataException) { }
+            }
+        string[] words = ["انمي", "أنمي", "انيمي", "رسوم", "كرتون", "Anime", "Animation"];
+        return new(all.DistinctBy(m => m.Id).Where(m => words.Any(w => m.Genres.Contains(w, StringComparison.OrdinalIgnoreCase))).ToList());
+    }
     private async Task SearchNow()
     {
         searching?.Cancel();
@@ -408,7 +447,7 @@ public sealed class MainViewModel : Observable, IDisposable
         Movies.Clear(); current = [];
         selecting?.Cancel(); Selected = null; Episodes.Clear(); Seasons.Clear(); Notify(nameof(Section)); Notify(nameof(IsHome)); Notify(nameof(IsLibrary)); Notify(nameof(IsFavorites)); Notify(nameof(IsGenres)); Notify(nameof(CanSaveSearch)); RefreshListNames();
         if (!IsHome) { HeroItems.Clear(); FeaturedMovies.Clear(); LatestSeries.Clear(); Notify(nameof(HasSeriesRow)); }
-        Heading = section switch { "home" => "أحدث الأفلام", "series" => "أحدث المسلسلات", "favorites" => "مفضلتك", "history" => "سجل المشاهدة", "library" => "مكتبتي • الملفات المنزّلة", "genres" => "التصنيفات", "search" => $"نتائج «{query}»", _ => "أحدث الأفلام" };
+        Heading = section switch { "home" => "أحدث الأفلام", "series" => "أحدث المسلسلات", "favorites" => "مفضلتك", "history" => "سجل المشاهدة", "library" => "مكتبتي • الملفات المنزّلة", "genres" => "التصنيفات", "movies" => "الإصدارات الجديدة", "films" => "الأفلام", "popular" => "المشهورة", "anime" => "أنمي", "continue" => "تابع المشاهدة", "later" => "المشاهدة لاحقًا", "subscriptions" => "الاشتراكات", "search" => $"نتائج «{query}»", _ => "أحدث الأفلام" };
         try
         {
             RefreshHistory();
@@ -419,11 +458,18 @@ public sealed class MainViewModel : Observable, IDisposable
                 "library" => new(SortLibrary(LibraryProvider()).ToList()),
                 "home" => await service.Catalog("movies", page, "", refresh, false, token),
                 "genres" => new(new List<Movie>()),
+                "movies" => await NewReleases(refresh, token),
+                "films" => await service.Catalog("movies", page, "", refresh, false, token),
+                "popular" => await Popular(refresh, token),
+                "anime" => await Anime(refresh, token),
+                "continue" => new(Store.History().Where(e => e.Percent is > 2 and < 95).Select(e => e.Movie with { ProgressText = e.ProgressLabel }).ToList()),
+                "later" => new(Lists().GetValueOrDefault("سأشاهده لاحقًا") ?? new List<Movie>()),
+                "subscriptions" => new(SubscriptionsProvider().ToList()),
                 "search" => await Search(refresh, token),
                 _ => await service.Catalog(section, page, query, refresh, false, token)
             };
             token.ThrowIfCancellationRequested();
-            current = result.Value; CanNext = section is not ("favorites" or "history" or "library") && current.Count >= 24;
+            current = result.Value; CanNext = section is "movies" or "films" or "series" or "search" && current.Count >= 24;
             if (IsHome) await LoadHomeRows(refresh, token);
             if (IsGenres) await LoadGenres(refresh, token);
             if (section is not ("history" or "library" or "favorites")) { var hidden = Hidden(); current = current.Where(m => !hidden.Contains(m.Id)).ToList(); }

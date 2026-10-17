@@ -43,18 +43,19 @@
 </Window.Resources>
 <Grid x:Name="RootLayout">
 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+<Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
 
 <!-- Header bar -->
-<Border x:Name="Sidebar" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="56,0" Height="84">
+<Border x:Name="Sidebar" Grid.Column="1" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1" Padding="28,0,40,0" Height="76">
 <DockPanel>
-  <TextBlock Text="سينمانا" DockPanel.Dock="Right" FontFamily="{StaticResource Display}" FontSize="30" Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="0,0,0,0"/>
+  <Button DockPanel.Dock="Right" Style="{StaticResource NavButton}" Click="MenuToggleClick" ToolTip="إظهار أو طي القائمة" AutomationProperties.Name="القائمة" Margin="0,0,18,0"><TextBlock Text="☰" FontSize="22"/></Button>
   <Button AutomationProperties.Name="رجوع (Esc أو Alt+←)" DockPanel.Dock="Right" Style="{StaticResource NavButton}" Command="{Binding BackCommand}" ToolTip="رجوع (Esc أو Alt+←)" Margin="22,0,0,0" Visibility="{Binding CanGoBack,Converter={StaticResource BoolVisibility}}"><TextBlock Text="→ رجوع"/></Button>
   <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
     <Button AutomationProperties.Name="الإعدادات" Style="{StaticResource NavButton}" Command="{Binding SettingsCommand}" ToolTip="الإعدادات" Margin="10,0"><TextBlock Text="⚙" FontSize="18"/></Button>
     <Border Width="40" Height="40" Background="{StaticResource Surface}" BorderBrush="{StaticResource Numeral}" BorderThickness="1" ToolTip="{Binding DisplayName}"><TextBlock Text="{Binding UserInitial}" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
-    <Border BorderBrush="{StaticResource Faint}" BorderThickness="0,0,0,1" Width="250" Height="40" Margin="20,0,24,0">
+    <Border BorderBrush="{StaticResource Faint}" BorderThickness="0,0,0,1" Width="420" Height="40" Margin="20,0,24,0">
       <DockPanel><TextBlock Text="⌕" FontSize="18" DockPanel.Dock="Right" VerticalAlignment="Center" Foreground="{StaticResource Muted}" Margin="0,0,0,0"/>
-      <Grid><TextBlock Text="ابحث في المكتبة" Foreground="{StaticResource Faint}" VerticalAlignment="Center" Margin="8,0" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding SearchText}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+      <Grid><TextBlock Text="بحث عن فلم أو مسلسلة" Foreground="{StaticResource Faint}" VerticalAlignment="Center" Margin="8,0" IsHitTestVisible="False"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding SearchText}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
       <TextBox x:Name="SearchBox" Text="{Binding SearchText,UpdateSourceTrigger=PropertyChanged}" Background="Transparent" BorderThickness="0" AutomationProperties.Name="ابحث في المكتبة" ToolTip="/ أو Ctrl+F" GotKeyboardFocus="SearchFocused"><TextBox.InputBindings><KeyBinding Key="Enter" Command="{Binding SearchCommand}"/></TextBox.InputBindings></TextBox></Grid></DockPanel>
     </Border>
     <Popup IsOpen="{Binding SuggestionsOpen,Mode=TwoWay}" PlacementTarget="{Binding ElementName=SearchBox}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True" FlowDirection="RightToLeft">
@@ -74,20 +75,39 @@
       </Border>
     </Popup>
   </StackPanel>
-  <StackPanel Orientation="Horizontal" VerticalAlignment="Stretch" Margin="40,0,0,0">
-    <Button Content="الرئيسية" Style="{StaticResource NavButton}" Tag="home" Command="{Binding NavigateCommand}" CommandParameter="home"/>
-    <Button Content="أفلام" Style="{StaticResource NavButton}" Tag="movies" Command="{Binding NavigateCommand}" CommandParameter="movies"/>
-    <Button Content="مسلسلات" Style="{StaticResource NavButton}" Tag="series" Command="{Binding NavigateCommand}" CommandParameter="series"/>
-    <Button Content="تصنيفات" Style="{StaticResource NavButton}" Tag="genres" Command="{Binding NavigateCommand}" CommandParameter="genres"/>
-    <Button Style="{StaticResource NavButton}" Click="OpenDownloadsClick"><StackPanel Orientation="Horizontal"><TextBlock Text="التنزيلات"/>
-      <Border x:Name="DownloadBadge" Background="{StaticResource Accent}" Padding="6,0" Margin="6,0,0,0" VerticalAlignment="Center" Visibility="{Binding HasPending,Converter={StaticResource BoolVisibility}}"><TextBlock Text="{Binding PendingCount}" FontSize="12" FontWeight="Bold" Foreground="{StaticResource OnAccent}"/></Border></StackPanel></Button>
-    <Button Content="مشاهدة" Style="{StaticResource NavButton}" Tag="history" Command="{Binding NavigateCommand}" CommandParameter="history"/>
-    <Button Style="{StaticResource NavButton}" Tag="favorites" Command="{Binding NavigateCommand}" CommandParameter="favorites"><TextBlock><Run Text="المفضلة "/><Run Text="{Binding FavoriteCount,Mode=OneWay}" Foreground="{StaticResource Faint}"/></TextBlock></Button>
-    <Button Content="مكتبتي" Style="{StaticResource NavButton}" Tag="library" Command="{Binding NavigateCommand}" CommandParameter="library"/>
-  </StackPanel>
 </DockPanel></Border>
 
-<Grid x:Name="LibraryPanel" Grid.Row="1"><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+
+<!-- Side menu (right in RTL), as on the Cinemana site: sections, a divider, then personal lists. ☰ folds it to icons. -->
+<Border x:Name="SideMenu" Grid.RowSpan="2" Width="270" Background="{StaticResource Panel}" BorderBrush="{StaticResource Line}" BorderThickness="1,0,0,0">
+<DockPanel>
+  <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Height="76" Margin="22,0">
+    <Image Source="{StaticResource CinemaMark}" Width="40" Height="18" FlowDirection="LeftToRight" VerticalAlignment="Center"/>
+    <TextBlock x:Name="MenuTitle" Text="سينمانا" FontFamily="{StaticResource Display}" FontSize="28" Foreground="{StaticResource Accent}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+  </StackPanel>
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel Margin="0,8,0,16">
+    <Button Style="{StaticResource SideItem}" Tag="home" Command="{Binding NavigateCommand}" CommandParameter="home" ToolTip="الصفحة الرئيسية"><DockPanel><TextBlock Text="⌂" Style="{StaticResource SideIcon}"/><TextBlock Text="الصفحة الرئيسية" Style="{StaticResource SideLabel}"/></DockPanel></Button>
+    <Button Style="{StaticResource SideItem}" Tag="movies" Command="{Binding NavigateCommand}" CommandParameter="movies" ToolTip="الإصدارات الجديدة"><DockPanel><TextBlock Text="✦" Style="{StaticResource SideIcon}"/><TextBlock Text="الإصدارات الجديدة" Style="{StaticResource SideLabel}"/></DockPanel></Button>
+    <Button Style="{StaticResource SideItem}" Tag="popular" Command="{Binding NavigateCommand}" CommandParameter="popular" ToolTip="المشهورة"><DockPanel><TextBlock Text="★" Style="{StaticResource SideIcon}"/><TextBlock Text="المشهورة" Style="{StaticResource SideLabel}"/></DockPanel></Button>
+    <Button Style="{StaticResource SideItem}" Tag="films" Command="{Binding NavigateCommand}" CommandParameter="films" ToolTip="الأفلام"><DockPanel><TextBlock Text="▦" Style="{StaticResource SideIcon}"/><TextBlock Text="الأفلام" Style="{StaticResource SideLabel}"/></DockPanel></Button>
+    <Button Style="{StaticResource SideItem}" Tag="series" Command="{Binding NavigateCommand}" CommandParameter="series" ToolTip="المسلسلات"><DockPanel><TextBlock Text="▣" Style="{StaticResource SideIcon}"/><TextBlock Text="المسلسلات" Style="{StaticResource SideLabel}"/></DockPanel></Button>
+    <Button Style="{StaticResource SideItem}" Tag="anime" Command="{Binding NavigateCommand}" CommandParameter="anime" ToolTip="أنمي"><DockPanel><TextBlock Text="✿" Style="{StaticResource SideIcon}"/><TextBlock Text="أنمي" Style="{StaticResource SideLabel}"/></DockPanel></Button>
+    <Button Style="{StaticResource SideItem}" Tag="genres" Command="{Binding NavigateCommand}" CommandParameter="genres" ToolTip="التصنيفات"><DockPanel><TextBlock Text="☷" Style="{StaticResource SideIcon}"/><TextBlock Text="التصنيفات" Style="{StaticResource SideLabel}"/></DockPanel></Button>
+    <Border Height="1" Background="{StaticResource Line}" Margin="28,12"/>
+    <Button Style="{StaticResource SideItem}" Tag="continue" Command="{Binding NavigateCommand}" CommandParameter="continue" ToolTip="تابع المشاهدة"><DockPanel><TextBlock Text="▶" Style="{StaticResource SideIcon}"/><TextBlock Text="تابع المشاهدة" Style="{StaticResource SideLabel}"/></DockPanel></Button>
+    <Button Style="{StaticResource SideItem}" Tag="later" Command="{Binding NavigateCommand}" CommandParameter="later" ToolTip="المشاهدة لاحقًا"><DockPanel><TextBlock Text="⧉" Style="{StaticResource SideIcon}"/><TextBlock Text="المشاهدة لاحقًا" Style="{StaticResource SideLabel}"/></DockPanel></Button>
+    <Button Style="{StaticResource SideItem}" Tag="favorites" Command="{Binding NavigateCommand}" CommandParameter="favorites" ToolTip="المفضلة"><DockPanel><TextBlock Text="♥" Style="{StaticResource SideIcon}"/><TextBlock Style="{StaticResource SideLabel}"><Run Text="المفضلة "/><Run Text="{Binding FavoriteCount,Mode=OneWay}" Foreground="{StaticResource Faint}"/></TextBlock></DockPanel></Button>
+    <Button Style="{StaticResource SideItem}" Tag="subscriptions" Command="{Binding NavigateCommand}" CommandParameter="subscriptions" ToolTip="الاشتراكات"><DockPanel><TextBlock Text="◉" Style="{StaticResource SideIcon}"/><TextBlock Text="الاشتراكات" Style="{StaticResource SideLabel}"/></DockPanel></Button>
+    <Button Style="{StaticResource SideItem}" Tag="history" Command="{Binding NavigateCommand}" CommandParameter="history" ToolTip="سجل المشاهدة"><DockPanel><TextBlock Text="◷" Style="{StaticResource SideIcon}"/><TextBlock Text="سجل المشاهدة" Style="{StaticResource SideLabel}"/></DockPanel></Button>
+    <Border Height="1" Background="{StaticResource Line}" Margin="28,12"/>
+    <Button Style="{StaticResource SideItem}" Tag="library" Command="{Binding NavigateCommand}" CommandParameter="library" ToolTip="مكتبتي"><DockPanel><TextBlock Text="▤" Style="{StaticResource SideIcon}"/><TextBlock Text="مكتبتي" Style="{StaticResource SideLabel}"/></DockPanel></Button>
+    <Button Style="{StaticResource SideItem}" Click="OpenDownloadsClick" ToolTip="التنزيلات"><DockPanel><TextBlock Text="⬇" Style="{StaticResource SideIcon}"/>
+      <Border x:Name="DownloadBadge" DockPanel.Dock="Left" Background="{StaticResource Accent}" Padding="7,0" CornerRadius="9" VerticalAlignment="Center" Visibility="{Binding HasPending,Converter={StaticResource BoolVisibility}}"><TextBlock Text="{Binding PendingCount}" FontSize="12" FontWeight="Bold" Foreground="{StaticResource OnAccent}"/></Border>
+      <TextBlock Text="التنزيلات" Style="{StaticResource SideLabel}"/></DockPanel></Button>
+  </StackPanel></ScrollViewer>
+</DockPanel>
+</Border>
+<Grid x:Name="LibraryPanel" Grid.Row="1" Grid.Column="1"><Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
 <ScrollViewer x:Name="CatalogScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel Margin="56,0">
 
 <!-- Notices: service problems and available updates -->
@@ -99,14 +119,18 @@
 </Border>
 <!-- Editorial banner: text on the right, poster panel on the left -->
 <StackPanel Visibility="{Binding DetailsOpen,Converter={StaticResource NotVisibility}}">
-<Grid x:Name="Banner" Height="470" Margin="0,36,0,0" Visibility="{Binding HasHero,Converter={StaticResource BoolVisibility}}">
+<Grid x:Name="Banner" Height="640" Margin="0,36,0,0" Visibility="{Binding HasHero,Converter={StaticResource BoolVisibility}}">
   <Grid.ColumnDefinitions><ColumnDefinition Width="7*"/><ColumnDefinition Width="24"/><ColumnDefinition Width="5*"/></Grid.ColumnDefinitions>
-  <StackPanel VerticalAlignment="Center">
+  <StackPanel VerticalAlignment="Center" Margin="0,0,0,170">
     <TextBlock Foreground="{StaticResource Accent}" FontSize="15" Margin="0,0,0,16"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Text" Value="اختيار المحرر"/><Style.Triggers><DataTrigger Binding="{Binding IsHome}" Value="False"><Setter Property="Text" Value="{Binding Hero.TypeLabel}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
-    <TextBlock Text="{Binding Hero.DisplayTitle}" FontFamily="{StaticResource Display}" FontSize="92" LineHeight="100" LineStackingStrategy="BlockLineHeight" TextWrapping="Wrap" MaxHeight="210" TextTrimming="CharacterEllipsis"/>
+    <DockPanel>
+      <Border DockPanel.Dock="Left" Background="{StaticResource Accent}" CornerRadius="16" Padding="12,4" Margin="14,0,0,0" VerticalAlignment="Center"><TextBlock Foreground="{StaticResource OnAccent}" FontWeight="Bold" FlowDirection="LeftToRight"><Run Text="★ "/><Run Text="{Binding Hero.Rating,Mode=OneWay}"/></TextBlock></Border>
+      <TextBlock Text="{Binding Hero.DisplayTitle}" FontFamily="{StaticResource Display}" FontSize="64" LineHeight="76" LineStackingStrategy="BlockLineHeight" TextWrapping="Wrap" MaxHeight="160" TextTrimming="CharacterEllipsis"/>
+    </DockPanel>
     <TextBlock Text="{Binding Hero.Description}" FontSize="18" LineHeight="32" TextWrapping="Wrap" MaxHeight="64" TextTrimming="CharacterEllipsis" Foreground="{StaticResource Body}" Margin="0,18,0,0" MaxWidth="620" HorizontalAlignment="Left"/>
     <StackPanel Orientation="Horizontal" Margin="0,26,0,0">
-      <Button Content="شاهد الآن" Style="{StaticResource PrimaryButton}" Command="{Binding WatchCommand}" CommandParameter="{Binding Hero}" Padding="40,16" FontSize="18" Margin="0,0,14,0"/>
+      <Button Style="{StaticResource PillButton}" Command="{Binding WatchCommand}" CommandParameter="{Binding Hero}" Margin="0,0,18,0"><StackPanel Orientation="Horizontal"><TextBlock Text="شاهد الآن"/><TextBlock Text="  ▶" FlowDirection="LeftToRight"/></StackPanel></Button>
+      <Button Content="+  أضف إلى القائمة" Style="{StaticResource LinkButton}" Foreground="{StaticResource Ink}" FontSize="16" Click="HeroLaterClick" VerticalAlignment="Center" Margin="0,0,10,0"/>
       <Button Content="تحميل" Style="{StaticResource GhostButton}" Command="{Binding DownloadCommand}" CommandParameter="{Binding Hero}" Padding="30,16" FontSize="18" Margin="0,0,14,0"/>
       <Button Content="♡" Style="{StaticResource GhostButton}" Command="{Binding FavoriteCommand}" ToolTip="{Binding FavoriteLabel}" Padding="18,16" FontSize="18" Margin="0,0,14,0"/>
       <Button Content="الحلقات والتفاصيل" Style="{StaticResource LinkButton}" Click="ToggleDetailsClick" VerticalAlignment="Center"/>
@@ -116,7 +140,7 @@
       <Run Text="{Binding Hero.FirstGenre,Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Hero.Year,Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Hero.HoursLabel,Mode=OneWay}"/><Run Text=" · ★ "/><Run Text="{Binding Hero.Rating,Mode=OneWay}"/>
     </TextBlock>
   </StackPanel>
-  <Grid Grid.Column="2" Background="{StaticResource Surface}" ClipToBounds="True">
+  <Grid Grid.Column="2" Background="{StaticResource Surface}" ClipToBounds="True" Margin="0,0,0,170">
     <Image Source="{Binding Hero.ImageSource,Converter={StaticResource Poster},ConverterParameter=900}" Stretch="UniformToFill"/>
     <Border VerticalAlignment="Bottom" Background="#D90E1222" Padding="22,16" Visibility="{Binding IsHome,Converter={StaticResource BoolVisibility}}">
       <DockPanel>
@@ -126,6 +150,20 @@
       </DockPanel>
     </Border>
   </Grid>
+  <!-- Strip of titles along the bottom of the banner; picking one shows it above -->
+  <ScrollViewer Grid.ColumnSpan="3" VerticalAlignment="Bottom" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" PreviewMouseWheel="RowWheel" Visibility="{Binding IsHome,Converter={StaticResource BoolVisibility}}">
+    <ItemsControl ItemsSource="{Binding FeaturedMovies}" ItemsPanel="{StaticResource Row}">
+      <ItemsControl.ItemTemplate><DataTemplate>
+        <Button Padding="0" Margin="0,0,14,0" Background="Transparent" Command="{Binding DataContext.ShowInBannerCommand,RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" ToolTip="{Binding DisplayTitle}" AutomationProperties.Name="{Binding DisplayTitle}">
+          <Border Width="250" Height="150" CornerRadius="14" ClipToBounds="True" Background="{StaticResource Surface}" BorderThickness="2">
+            <Border.Style><Style TargetType="Border"><Setter Property="BorderBrush" Value="Transparent"/><Style.Triggers><DataTrigger Value="True"><DataTrigger.Binding><MultiBinding Converter="{StaticResource IndexEquals}"><Binding/><Binding Path="DataContext.Hero" RelativeSource="{RelativeSource AncestorType=Window}"/></MultiBinding></DataTrigger.Binding><Setter Property="BorderBrush" Value="{StaticResource Accent}"/></DataTrigger></Style.Triggers></Style></Border.Style>
+            <Grid><Image Source="{Binding ImageSource,Converter={StaticResource Poster},ConverterParameter=320}" Stretch="UniformToFill"/>
+              <Border VerticalAlignment="Bottom" Background="#C00E1222" Padding="10,5"><TextBlock Text="{Binding DisplayTitle}" Foreground="#F5F1E6" FontWeight="Bold" TextTrimming="CharacterEllipsis"/></Border></Grid>
+          </Border>
+        </Button>
+      </DataTemplate></ItemsControl.ItemTemplate>
+    </ItemsControl>
+  </ScrollViewer>
 </Grid>
 
 </StackPanel>
@@ -370,7 +408,7 @@
 </Border>
 </Grid>
 <!-- First-run tour -->
-<Border x:Name="Tour" Grid.RowSpan="2" Panel.ZIndex="20" Background="#D90E1222" Visibility="Collapsed">
+<Border x:Name="Tour" Grid.RowSpan="2" Grid.ColumnSpan="2" Panel.ZIndex="20" Background="#D90E1222" Visibility="Collapsed">
   <Border Width="560" Padding="34" Background="{StaticResource Panel}" BorderBrush="{StaticResource Accent}" BorderThickness="0,4,0,0" VerticalAlignment="Center" HorizontalAlignment="Center">
     <StackPanel>
       <TextBlock x:Name="TourStep" Foreground="{StaticResource Accent}"/>
@@ -380,5 +418,5 @@
     </StackPanel>
   </Border>
 </Border>
-<Border x:Name="PlayerHost" Grid.RowSpan="2" Panel.ZIndex="10" Background="#08090B" Visibility="Collapsed"/>
+<Border x:Name="PlayerHost" Grid.RowSpan="2" Grid.ColumnSpan="2" Panel.ZIndex="10" Background="#08090B" Visibility="Collapsed"/>
 </Grid></Window>

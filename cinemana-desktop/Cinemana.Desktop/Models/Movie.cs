@@ -101,6 +101,7 @@ public record AppSettings(bool CacheImages = true, double CardWidth = 174, doubl
     public bool StartMinimized { get; init; }
     public string Language { get; init; } = "ar";
     public string SyncFolder { get; init; } = "";
+    public bool MenuCollapsed { get; init; }
     public double SubtitleSize { get; init; } = 27;
     public double PlaybackSpeed { get; init; } = 1;
     // Player

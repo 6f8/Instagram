@@ -67,6 +67,7 @@ public partial class MainWindow : Window
         model.LibraryProvider = LibraryItems;
         follow = new FollowWatcher(model.Store, downloads.Add, downloads.FolderFor);
         model.IsFollowed = follow.IsFollowed;
+        model.SubscriptionsProvider = () => follow.All().Select(f => new Movie(f.Id, f.Title, "", f.Poster, "", "") { ArabicTitle = f.DisplayTitle, Kind = "2", ProgressText = $"{f.Known.Count} حلقة" });
         model.FollowToggled += (series, episodes) => follow.Toggle(series, episodes);
         followTimer.Tick += async (_, _) => await CheckFollowed();
         followTimer.Start();
@@ -103,6 +104,7 @@ public partial class MainWindow : Window
             if (Environment.GetCommandLineArgs().Contains("--minimized")) MinimizeToTray();
             if (App.SafeMode) model.SetStatus("الوضع الآمن: بدأ التطبيق بالإعدادات الافتراضية. حُفظت إعداداتك السابقة باسم settings.before-safe-mode.json.");
             if (!model.OnboardingDone) ShowTour();
+            if (model.MenuCollapsed) SetMenuCollapsed(true);
             await model.Load();
             Log.Info($"startup: first page shown in {started.ElapsedMilliseconds} ms");
             _ = model.CheckServiceAndUpdates();
@@ -440,6 +442,26 @@ public partial class MainWindow : Window
         GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
         try { EmptyWorkingSet(Process.GetCurrentProcess().Handle); } catch (Exception e) when (e is System.ComponentModel.Win32Exception or EntryPointNotFoundException) { }
     }
+    // --- Side menu ---
+    /// <summary>☰ folds the side menu to its icons (as on the site) and back; the choice is remembered.</summary>
+    private void MenuToggleClick(object sender, RoutedEventArgs e) => SetMenuCollapsed(SideMenu.Width > 100);
+    private void SetMenuCollapsed(bool collapsed)
+    {
+        SideMenu.Width = collapsed ? 74 : 270;
+        MenuTitle.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        foreach (var label in Descendants(SideMenu).OfType<TextBlock>().Where(t => t.Style == (Style)FindResource("SideLabel")))
+            label.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
+        model.MenuCollapsed = collapsed;
+    }
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+    {
+        foreach (var child in LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>())
+        {
+            yield return child;
+            foreach (var nested in Descendants(child)) yield return nested;
+        }
+    }
+    private void HeroLaterClick(object sender, RoutedEventArgs e) { if (model.Hero is { } m) model.AddToList("سأشاهده لاحقًا", m); }
     // --- Discovery ---
     private async void RandomClick(object sender, RoutedEventArgs e) => await model.PickRandom();
     private async void CastClick(object sender, RoutedEventArgs e)
@@ -524,14 +546,14 @@ public partial class MainWindow : Window
         if (pip) TogglePip();
         activePlayer?.Dispose(); activePlayer = null;
         PlayerHost.Child = null; PlayerHost.Visibility = Visibility.Collapsed;
-        Sidebar.Visibility = LibraryPanel.Visibility = Visibility.Visible;
+        Sidebar.Visibility = LibraryPanel.Visibility = SideMenu.Visibility = Visibility.Visible;
         model.RefreshHistory();
     }
     private async Task ShowPlayer(Movie movie)
     {
         ClosePlayer();
         ++playbackGeneration;
-        Sidebar.Visibility = LibraryPanel.Visibility = Visibility.Hidden;
+        Sidebar.Visibility = LibraryPanel.Visibility = SideMenu.Visibility = Visibility.Hidden;
         PlayerHost.Visibility = Visibility.Visible;
         var player = new PlayerView(movie, model.Store);
         activePlayer = player;
