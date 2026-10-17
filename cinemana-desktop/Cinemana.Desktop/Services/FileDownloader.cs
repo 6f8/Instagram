@@ -25,7 +25,7 @@ public sealed class FileDownloader(HttpClient client, Func<Movie, CancellationTo
             if (owned && previous!.Complete && previous.Total == new FileInfo(file).Length)
             {
                 progress?.Report(new(previous.Total.Value, previous.Total, 0));
-                string note = spec.SubtitleLanguage.Length > 0 && !File.Exists(SubtitlePath(file, spec.SubtitleLanguage)) ? await SaveSubtitle(spec, await resolve(spec.Movie, ct), file, ct) : "";
+                string note = spec.SubtitleLanguage.Split('+', StringSplitOptions.RemoveEmptyEntries).Any(l => !File.Exists(SubtitlePath(file, l))) ? await SaveSubtitle(spec, await resolve(spec.Movie, ct), file, ct) : "";
                 return new(previous.Total.Value, true, note);
             }
             throw new IOException("يوجد ملف بهذا الاسم. لن يُستبدل؛ اختر مجلدًا آخر.");
@@ -127,31 +127,34 @@ public sealed class FileDownloader(HttpClient client, Func<Movie, CancellationTo
         return Directory.EnumerateFiles(folder, stem + "*.srt").Where(f => Path.GetFileNameWithoutExtension(f) == stem || Path.GetFileName(f).StartsWith(stem + ".", StringComparison.OrdinalIgnoreCase))
             .OrderBy(f => Path.GetFileName(f).Contains(".ar.", StringComparison.OrdinalIgnoreCase) ? 0 : 1);
     }
-    // Writes the chosen subtitle as UTF-8 SRT with the video's base name so players load it automatically.
-    // A subtitle problem never fails the video download; it is reported as a note instead.
+    // Writes each chosen subtitle language ("ar", "en" or "ar+en") as UTF-8 SRT named after the video, e.g.
+    // "Title - S01E04.ar.srt", so players load it automatically. A subtitle problem never fails the video.
     private async Task<string> SaveSubtitle(DownloadSpec spec, PlaybackInfo playback, string videoFile, CancellationToken ct)
     {
-        if (spec.SubtitleLanguage.Length == 0) return "";
-        string target = SubtitlePath(videoFile, spec.SubtitleLanguage);
-        if (File.Exists(target)) return "";
-        var track = playback.Subtitles.FirstOrDefault(t => t.Language == spec.SubtitleLanguage && t.Url.Length > 0);
-        if (track is null) return "لا تتوفر ترجمة بهذه اللغة لهذه الحلقة.";
-        try
+        var notes = new List<string>();
+        foreach (string language in spec.SubtitleLanguage.Split('+', StringSplitOptions.RemoveEmptyEntries))
         {
-            if (!PlaybackInfo.IsServiceUrl(track.Url)) return "مصدر الترجمة غير صالح.";
-            using var response = await client.GetAsync(track.Url, ct).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-            string body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            if (body.Length > 2_000_000) return "ملف الترجمة أكبر من الحد المدعوم.";
-            var cues = SubtitleParser.Parse(body);
-            if (cues.Count == 0) return "ملف الترجمة فارغ أو غير مدعوم.";
-            string temp = target + ".tmp";
-            await File.WriteAllTextAsync(temp, SubtitleParser.ToSrt(cues), new System.Text.UTF8Encoding(true), ct).ConfigureAwait(false);
-            File.Move(temp, target, false);
-            return "";
+            string target = SubtitlePath(videoFile, language);
+            if (File.Exists(target)) continue;
+            var track = playback.Subtitles.FirstOrDefault(t => t.Language == language && t.Url.Length > 0);
+            if (track is null) { notes.Add(language == "ar" ? "لا تتوفر ترجمة عربية." : "لا تتوفر ترجمة إنجليزية."); continue; }
+            try
+            {
+                if (!PlaybackInfo.IsServiceUrl(track.Url)) { notes.Add("مصدر الترجمة غير صالح."); continue; }
+                using var response = await client.GetAsync(track.Url, ct).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                byte[] raw = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+                if (raw.Length > 4_000_000) { notes.Add("ملف الترجمة أكبر من الحد المدعوم."); continue; }
+                var cues = SubtitleParser.Parse(SubtitleParser.Decode(raw));
+                if (cues.Count == 0) { notes.Add("ملف الترجمة فارغ أو غير مدعوم."); continue; }
+                string temp = target + ".tmp";
+                await File.WriteAllTextAsync(temp, SubtitleParser.ToSrt(cues), new System.Text.UTF8Encoding(true), ct).ConfigureAwait(false);
+                File.Move(temp, target, false);
+            }
+            catch (Exception e) when (!ct.IsCancellationRequested && e is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException)
+            { Log.Error("subtitle", e); notes.Add("تعذّر حفظ ملف الترجمة."); }
         }
-        catch (Exception e) when (!ct.IsCancellationRequested && e is HttpRequestException or TaskCanceledException or IOException or UnauthorizedAccessException)
-        { return "تعذّر حفظ ملف الترجمة."; }
+        return string.Join(" ", notes);
     }
     private static async Task SaveMetadata(string path, DownloadMetadata value, CancellationToken ct)
     {

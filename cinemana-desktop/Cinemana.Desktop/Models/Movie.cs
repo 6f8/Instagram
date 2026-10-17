@@ -14,6 +14,8 @@ public record Movie(string Id, string Title, string Description, string Poster, 
     public int Season { get; init; }
     public int Episode { get; init; }
     public double Duration { get; init; }
+    /// <summary>The service lists at least one subtitle file (known after the details request).</summary>
+    public bool HasSubtitles { get; init; }
     public string? LocalPoster { get; init; }
     /// <summary>Set for titles in "My library": the downloaded video to play offline.</summary>
     public string? LocalFile { get; init; }
@@ -51,6 +53,8 @@ public record Movie(string Id, string Title, string Description, string Poster, 
             Kind = Get("kind"),
             Season = Number("season"),
             Episode = Number("episodeNummer"),
+            HasSubtitles = e.TryGetProperty("translations", out var tr) && tr.ValueKind == JsonValueKind.Array && tr.GetArrayLength() > 0
+                || Get("arTranslationFilePath").Length > 0 || Get("enTranslationFilePath").Length > 0,
             Duration = duration,
             Language = e.TryGetProperty("videoLanguages", out var language) && language.ValueKind == JsonValueKind.Object && language.TryGetProperty("ar_title", out var name) ? name.ToString() : ""
         };
@@ -73,5 +77,13 @@ public record AppSettings(bool CacheImages = true, double CardWidth = 174, doubl
     public bool NotifyOnComplete { get; init; } = true;
     public double SubtitleSize { get; init; } = 27;
     public double PlaybackSpeed { get; init; } = 1;
+    // Player
+    public bool AutoNext { get; init; } = true;
+    public double Volume { get; init; } = 0.8;
+    public bool Muted { get; init; }
+    public string SubtitleFont { get; init; } = "Segoe UI";
+    public string SubtitleColor { get; init; } = "#FFFFFF";
+    public double SubtitleBackground { get; init; } = 0.6;
+    public bool SubtitleTop { get; init; }
 }
 public record CacheResult<T>(T Value, bool IsStale = false, DateTimeOffset? SavedAt = null);

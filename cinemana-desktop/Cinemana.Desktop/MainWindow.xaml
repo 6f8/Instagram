@@ -124,6 +124,7 @@
 <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="5*"/><ColumnDefinition Width="24"/><ColumnDefinition Width="7*"/></Grid.ColumnDefinitions>
   <StackPanel>
     <TextBlock Text="{Binding Selected.DisplayTitle}" FontFamily="{StaticResource Display}" FontSize="40" TextWrapping="Wrap"/>
+    <Border Style="{StaticResource Chip}" HorizontalAlignment="Right" Margin="0,10,0,0" Visibility="{Binding Selected.HasSubtitles,Converter={StaticResource BoolVisibility},FallbackValue=Collapsed}"><TextBlock Text="مترجم" Foreground="{StaticResource Accent}" FontSize="12"/></Border>
     <TextBlock Text="{Binding Selected.Description}" TextWrapping="Wrap" LineHeight="28" FontSize="15" Foreground="#C9CCDA" Margin="0,14"/>
     <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
       <TextBlock Text="الإخراج" Foreground="{StaticResource Muted}"/><TextBlock Grid.Column="1" Text="{Binding Selected.Director}" TextWrapping="Wrap"/>
@@ -155,8 +156,9 @@
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
               <Button Content="مشاهدة" Style="{StaticResource LinkButton}" Command="{Binding DataContext.WatchCommand,RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
               <Button Content="تحميل" Style="{StaticResource LinkButton}" Foreground="{StaticResource Muted}" Command="{Binding DataContext.DownloadCommand,RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
+              <Button Content="✓" Style="{StaticResource LinkButton}" Foreground="{StaticResource Muted}" ToolTip="تعليم كمُشاهَدة / غير مُشاهَدة" Command="{Binding DataContext.MarkWatchedCommand,RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"/>
             </StackPanel>
-            <StackPanel VerticalAlignment="Center"><TextBlock Text="{Binding EpisodeLabel}" FontWeight="Bold" FontSize="17"/><TextBlock Text="{Binding DurationLabel}" Foreground="{StaticResource Muted}" FontSize="13" Margin="0,3,0,0"/></StackPanel>
+            <StackPanel VerticalAlignment="Center"><TextBlock Text="{Binding EpisodeLabel}" FontWeight="Bold" FontSize="17"/><TextBlock Foreground="{StaticResource Muted}" FontSize="13" Margin="0,3,0,0"><Run Text="{Binding DurationLabel,Mode=OneWay}"/><Run Text="  "/><Run Text="{Binding ProgressText,Mode=OneWay}" Foreground="{StaticResource Accent}"/></TextBlock></StackPanel>
           </DockPanel>
         </Border>
       </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>

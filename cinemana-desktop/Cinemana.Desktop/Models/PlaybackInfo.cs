@@ -61,6 +61,18 @@ public sealed record PlaybackInfo(Movie Movie, List<VideoSource> Sources, List<S
 public sealed record SubtitleCue(double Start, double End, string Text);
 public static class SubtitleParser
 {
+    static SubtitleParser() => System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+    /// <summary>
+    /// Text of a subtitle file: UTF-8 (with or without BOM) or UTF-16 when valid, otherwise Arabic Windows-1256,
+    /// the usual cause of unreadable Arabic subtitles.
+    /// </summary>
+    public static string Decode(byte[] bytes)
+    {
+        if (bytes.Length >= 2 && (bytes[0] == 0xFF && bytes[1] == 0xFE || bytes[0] == 0xFE && bytes[1] == 0xFF))
+            return new System.IO.StreamReader(new System.IO.MemoryStream(bytes), true).ReadToEnd();
+        try { return new System.Text.UTF8Encoding(false, true).GetString(bytes).TrimStart('\uFEFF'); }
+        catch (System.Text.DecoderFallbackException) { return System.Text.Encoding.GetEncoding(1256).GetString(bytes); }
+    }
     private static readonly Regex Timing = new(@"(?<start>(?:\d+:)?\d{2}:\d{2}[,.]\d{1,3})\s*-->\s*(?<end>(?:\d+:)?\d{2}:\d{2}[,.]\d{1,3})", RegexOptions.Compiled);
     public static List<SubtitleCue> Parse(string text)
     {

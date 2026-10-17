@@ -24,7 +24,8 @@ public partial class MainWindow : Window
         return new();
     }
     private PlayerView? activePlayer;
-    private bool playerFullscreen;
+    private bool playerFullscreen, pip;
+    private Rect boundsBeforePip;
     private WindowState stateBeforeFullscreen;
     private int playbackGeneration;
     private readonly DownloadManager downloads;
@@ -92,7 +93,7 @@ public partial class MainWindow : Window
             if (PlayerHost.Visibility == Visibility.Visible)
             {
                 if (e.Key == Key.F11) { TogglePlayerFullscreen(); e.Handled = true; }
-                else if (e.Key == Key.Escape) { if (playerFullscreen) TogglePlayerFullscreen(); else ClosePlayer(); e.Handled = true; }
+                else if (e.Key == Key.Escape) { if (pip) TogglePip(); else if (playerFullscreen) TogglePlayerFullscreen(); else ClosePlayer(); e.Handled = true; }
                 else if (activePlayer is not null) e.Handled = activePlayer.HandleKey(e);
                 return;
             }
@@ -217,6 +218,7 @@ public partial class MainWindow : Window
     {
         playbackGeneration++;
         if (playerFullscreen) TogglePlayerFullscreen();
+        if (pip) TogglePip();
         activePlayer?.Dispose(); activePlayer = null;
         PlayerHost.Child = null; PlayerHost.Visibility = Visibility.Collapsed;
         Sidebar.Visibility = LibraryPanel.Visibility = Visibility.Visible;
@@ -232,6 +234,7 @@ public partial class MainWindow : Window
         activePlayer = player;
         player.CloseRequested += ClosePlayer;
         player.FullscreenRequested += TogglePlayerFullscreen;
+        player.PipRequested += TogglePip;
         player.DownloadRequested += async selected => await ShowDownloads(selected);
         player.EscapeRequested += () => { if (playerFullscreen) TogglePlayerFullscreen(); else ClosePlayer(); };
         PlayerHost.Child = player; player.Focus();
@@ -240,6 +243,24 @@ public partial class MainWindow : Window
         Log.Info(local is not null && File.Exists(local) ? "play local" : "play stream");
         if (local is not null && File.Exists(local)) player.OpenLocal(movie, local);
         else await player.Open(movie);
+    }
+    /// <summary>Picture-in-picture: a small borderless window that stays above other apps; P or Esc returns.</summary>
+    private void TogglePip()
+    {
+        if (activePlayer is null) return;
+        if (!pip)
+        {
+            if (playerFullscreen) TogglePlayerFullscreen();
+            boundsBeforePip = new Rect(Left, Top, Width, Height);
+            WindowState = WindowState.Normal; WindowStyle = WindowStyle.ToolWindow; Topmost = true; ResizeMode = ResizeMode.CanResizeWithGrip;
+            Width = 480; Height = 300; Left = SystemParameters.WorkArea.Right - Width - 16; Top = SystemParameters.WorkArea.Bottom - Height - 16;
+        }
+        else
+        {
+            WindowStyle = WindowStyle.SingleBorderWindow; Topmost = false; ResizeMode = ResizeMode.CanResize;
+            Left = boundsBeforePip.Left; Top = boundsBeforePip.Top; Width = boundsBeforePip.Width; Height = boundsBeforePip.Height;
+        }
+        pip = !pip; activePlayer.SetCompact(pip);
     }
     private void TogglePlayerFullscreen()
     {

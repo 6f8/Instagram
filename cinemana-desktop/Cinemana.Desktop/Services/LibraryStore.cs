@@ -37,6 +37,10 @@ public sealed class LibraryStore
     }
     public List<Movie> Favorites() => Load("favorites", new List<Movie>());
     public List<WatchEntry> History() => Load("history", new List<WatchEntry>());
+    public void RemoveProgress(string id)
+    {
+        lock (gate) { var entries = History(); entries.RemoveAll(e => e.Movie.Id == id); Save("history", entries); }
+    }
     public void SaveProgress(Movie movie, double position, double duration)
     {
         if (!double.IsFinite(position) || !double.IsFinite(duration) || position < 0 || duration <= 0 || position > duration + 2) return;

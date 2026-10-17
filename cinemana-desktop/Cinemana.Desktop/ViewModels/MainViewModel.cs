@@ -25,6 +25,14 @@ public sealed class MainViewModel : Observable, IDisposable
         BackCommand = new(async _ => await Back(), _ => CanGoBack);
         PickSuggestionCommand = new(async p => { if (p is Movie m) { SuggestionsOpen = false; await Select(m); SelectionRequested?.Invoke(); } else if (p is string q) { SearchText = q; await SearchNow(); } });
         ContinueCommand = new(_ => { if (NextToWatch is { } m) WatchRequested?.Invoke(m); }, _ => NextToWatch is not null);
+        MarkWatchedCommand = new(p =>
+        {
+            if (p is not Movie m) return;
+            // Toggle: a watched episode becomes unwatched again.
+            bool watched = Store.History().Any(h => h.Movie.Id == m.Id && h.Percent >= 95);
+            try { if (watched) Store.RemoveProgress(m.Id); else Store.SaveProgress(m, 1, 1); } catch (Exception e) when (StorageError(e)) { Status = "تعذّر حفظ حالة المشاهدة."; }
+            UpdateEpisodes(); RefreshHistory(); NotifyContinue();
+        });
         DownloadUnwatchedCommand = new(_ => { if (Selected is { } s) UnwatchedDownloadRequested?.Invoke(s, UnwatchedEpisodes().ToList()); }, _ => Selected?.Kind == "2" && allEpisodes.Count > 0);
         SearchCommand = new(async _ => await SearchNow());
         RefreshCommand = new(async _ => await Load(true));
@@ -53,6 +61,7 @@ public sealed class MainViewModel : Observable, IDisposable
     public RelayCommand PickSuggestionCommand { get; }
     public RelayCommand ContinueCommand { get; }
     public RelayCommand DownloadUnwatchedCommand { get; }
+    public RelayCommand MarkWatchedCommand { get; }
     // --- Back navigation: sections visited, newest last ---
     private readonly Stack<string> history = new();
     public bool CanGoBack => history.Count > 0;
@@ -368,7 +377,13 @@ public sealed class MainViewModel : Observable, IDisposable
     }
     public void ClearSelection() { selecting?.Cancel(); Selected = null; Episodes.Clear(); Seasons.Clear(); allEpisodes = []; DetailsBusy = false; DetailsStatus = ""; NotifyContinue(); }
     private void NotifyContinue() { Notify(nameof(NextToWatch)); Notify(nameof(ContinueLabel)); ContinueCommand?.Refresh(); DownloadUnwatchedCommand?.Refresh(); }
-    private void UpdateEpisodes() { Episodes.Clear(); foreach (var episode in allEpisodes.Where(m => m.Season == SelectedSeason)) Episodes.Add(episode); }
+    private void UpdateEpisodes()
+    {
+        var seen = Store.History().DistinctBy(h => h.Movie.Id).ToDictionary(h => h.Movie.Id, h => h.Percent);
+        Episodes.Clear();
+        foreach (var episode in allEpisodes.Where(m => m.Season == SelectedSeason))
+            Episodes.Add(episode with { ProgressText = seen.TryGetValue(episode.Id, out var p) ? p >= 95 ? "✓ شوهدت" : $"{p:0}%" : "" });
+    }
     private void ToggleFavorite()
     {
         if (Selected is null) return;

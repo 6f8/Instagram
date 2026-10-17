@@ -103,9 +103,9 @@ public sealed class CinemanaService : IDisposable
         if (!PlaybackInfo.IsServiceUrl(track.Url)) throw new InvalidDataException("مصدر الترجمة غير صالح.");
         using var response = await client.GetAsync(track.Url, ct);
         response.EnsureSuccessStatusCode();
-        string body = await response.Content.ReadAsStringAsync(ct);
-        if (body.Length > 2_000_000) throw new InvalidDataException("ملف الترجمة أكبر من الحد المدعوم.");
-        return SubtitleParser.Parse(body);
+        byte[] raw = await response.Content.ReadAsByteArrayAsync(ct);
+        if (raw.Length > 4_000_000) throw new InvalidDataException("ملف الترجمة أكبر من الحد المدعوم.");
+        return SubtitleParser.Parse(SubtitleParser.Decode(raw));
     }
     public async Task<Movie> WithImage(Movie movie, CancellationToken ct)
     {
