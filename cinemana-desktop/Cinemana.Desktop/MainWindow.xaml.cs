@@ -178,6 +178,8 @@ public partial class MainWindow : Window
     private async Task CheckFollowed()
     {
         var news = await follow.Check(model.AutoDownloadFollowed, CancellationToken.None);
+        var found = await model.CheckSavedSearches(CancellationToken.None);
+        if (found.Count > 0) Balloon("نتائج بحث جديدة", string.Join("\n", found.Take(4)));
         if (news.Count > 0) Balloon("حلقات جديدة", string.Join("\n", news.Take(4)) + (model.AutoDownloadFollowed ? "\nأُضيفت إلى قائمة التنزيل." : ""));
     }
     private void UpdateTaskbar()
@@ -281,6 +283,28 @@ public partial class MainWindow : Window
         if (item is null) return;
         if (MessageBox.Show(this, $"حذف «{movie.DisplayTitle}» ({DownloadPaths.Size(item.FileSize)}) وملف ترجمته من القرص؟", "حذف من مكتبتي", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return;
         if (downloads.DeleteFile(item)) await model.Load();
+    }
+    // --- Discovery ---
+    private async void RandomClick(object sender, RoutedEventArgs e) => await model.PickRandom();
+    private async void CastClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string name }) { model.SearchText = name; await Task.Delay(1); model.SearchCommand.Execute(null); }
+    }
+    private void SaveSearchClick(object sender, RoutedEventArgs e) => model.SaveCurrentSearch();
+    private void ShowHiddenClick(object sender, RoutedEventArgs e) { model.ClearHidden(); ToolStatus.Text = "عادت العناوين المخفية للظهور."; }
+    /// <summary>Right-click on a card: watch, download, favourite list, copy title, hide.</summary>
+    private void CardMenuOpening(object sender, ContextMenuEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: Movie movie, ContextMenu: { } menu }) return;
+        menu.FlowDirection = FlowDirection.RightToLeft; menu.Items.Clear();
+        void Add(string header, Action action) { var item = new MenuItem { Header = header }; item.Click += (_, _) => action(); menu.Items.Add(item); }
+        Add("مشاهدة", () => model.WatchCommand.Execute(movie));
+        if (movie.IsRemote) Add("تحميل…", () => model.DownloadCommand.Execute(movie));
+        Add("التفاصيل والحلقات", () => model.SelectCommand.Execute(movie));
+        Add("أضف إلى «سأشاهده لاحقًا»", () => model.AddToList("سأشاهده لاحقًا", movie));
+        Add("نسخ الاسم", () => { try { Clipboard.SetText(movie.DisplayTitle); } catch (COMException) { } });
+        menu.Items.Add(new Separator());
+        Add("إخفاء من الاقتراحات", () => model.Hide(movie));
     }
     // --- My library tools ---
     private async void ImportVideosClick(object sender, RoutedEventArgs e)

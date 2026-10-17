@@ -52,7 +52,7 @@ public sealed class MainViewModel : Observable, IDisposable
         HeroDotCommand = new(p => { if (p is Movie m && HeroItems.IndexOf(m) is >= 0 and var i) { heroIndex = i; NotifyHero(); } });
         status = Store.LoadWarning ?? "مرحبًا بك في مكتبتك السينمائية";
         foreach (var q in settings.RecentSearches) RecentSearches.Add(q);
-        section = settings.LastSection is "home" or "movies" or "series" or "favorites" or "history" or "library" ? settings.LastSection : "home";
+        section = settings.LastSection is "genres" or "home" or "movies" or "series" or "favorites" or "history" or "library" ? settings.LastSection : "home";
     }
     public event Action<Movie>? WatchRequested;
     /// <summary>A title picked from the search list: the window opens its details panel.</summary>
@@ -312,6 +312,21 @@ public sealed class MainViewModel : Observable, IDisposable
         catch (OperationCanceledException) { }
         catch (Exception e) when (e is HttpRequestException or System.Text.Json.JsonException or InvalidDataException) { Log.Error("suggest", e); }
     }
+    /// <summary>
+    /// Search with "2023" (year) and "7+" (minimum rating) words applied as filters, and a second try with
+    /// normalised Arabic spelling (أ/ا، ة/ه، ى/ي) when the exact text finds nothing.
+    /// </summary>
+    private async Task<CacheResult<List<Movie>>> Search(bool refresh, CancellationToken token)
+    {
+        var parsed = ArabicText.Parse(query);
+        string text = parsed.Text.Length > 0 ? parsed.Text : query;
+        var result = await service.Catalog("search", page, text, refresh, false, token);
+        if (result.Value.Count == 0 && ArabicText.Normalize(text) != text)
+            result = await service.Catalog("search", page, ArabicText.Normalize(text), refresh, false, token);
+        var hidden = Hidden();
+        var filtered = result.Value.Where(m => !hidden.Contains(m.Id) && (parsed.Year is null || m.Year == parsed.Year) && m.NumericRating >= parsed.MinRating).ToList();
+        return result with { Value = filtered };
+    }
     private async Task SearchNow()
     {
         searching?.Cancel();
@@ -334,9 +349,9 @@ public sealed class MainViewModel : Observable, IDisposable
         IsBusy = true; Status = "جارٍ تحميل العناوين…"; CanNext = false;
         // Clear the previous section immediately; failed navigation must not masquerade as new results.
         Movies.Clear(); current = [];
-        selecting?.Cancel(); Selected = null; Episodes.Clear(); Seasons.Clear(); Notify(nameof(Section)); Notify(nameof(IsHome)); Notify(nameof(IsLibrary)); Notify(nameof(IsFavorites)); RefreshListNames();
+        selecting?.Cancel(); Selected = null; Episodes.Clear(); Seasons.Clear(); Notify(nameof(Section)); Notify(nameof(IsHome)); Notify(nameof(IsLibrary)); Notify(nameof(IsFavorites)); Notify(nameof(IsGenres)); Notify(nameof(CanSaveSearch)); RefreshListNames();
         if (!IsHome) { HeroItems.Clear(); FeaturedMovies.Clear(); LatestSeries.Clear(); Notify(nameof(HasSeriesRow)); }
-        Heading = section switch { "home" => "أحدث الأفلام", "series" => "أحدث المسلسلات", "favorites" => "مفضلتك", "history" => "سجل المشاهدة", "library" => "مكتبتي • الملفات المنزّلة", "search" => $"نتائج «{query}»", _ => "أحدث الأفلام" };
+        Heading = section switch { "home" => "أحدث الأفلام", "series" => "أحدث المسلسلات", "favorites" => "مفضلتك", "history" => "سجل المشاهدة", "library" => "مكتبتي • الملفات المنزّلة", "genres" => "التصنيفات", "search" => $"نتائج «{query}»", _ => "أحدث الأفلام" };
         try
         {
             RefreshHistory();
@@ -346,11 +361,15 @@ public sealed class MainViewModel : Observable, IDisposable
                 "history" => new(Store.History().Select(e => e.Movie with { ProgressText = e.ProgressLabel }).ToList()),
                 "library" => new(SortLibrary(LibraryProvider()).ToList()),
                 "home" => await service.Catalog("movies", page, "", refresh, false, token),
+                "genres" => new(new List<Movie>()),
+                "search" => await Search(refresh, token),
                 _ => await service.Catalog(section, page, query, refresh, false, token)
             };
             token.ThrowIfCancellationRequested();
             current = result.Value; CanNext = section is not ("favorites" or "history" or "library") && current.Count >= 24;
             if (IsHome) await LoadHomeRows(refresh, token);
+            if (IsGenres) await LoadGenres(refresh, token);
+            if (section is not ("history" or "library" or "favorites")) { var hidden = Hidden(); current = current.Where(m => !hidden.Contains(m.Id)).ToList(); }
             var oldGenre = SelectedGenre; var oldYear = SelectedYear;
             Genres.Clear(); Genres.Add("الكل"); foreach (var g in current.SelectMany(m => m.Genres.Split('،', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)).Distinct().Order()) Genres.Add(g);
             Years.Clear(); Years.Add("الكل"); foreach (var y in current.Select(m => m.Year).Where(y => y.Length > 0).Distinct().OrderDescending()) Years.Add(y);
@@ -381,9 +400,105 @@ public sealed class MainViewModel : Observable, IDisposable
         }
         catch (Exception e) when (!token.IsCancellationRequested && e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidDataException) { }
         Notify(nameof(HasSeriesRow));
+        BuildDiscoveryRows();
         if (CacheImages) _ = CacheRow(HeroItems, token);
         if (CacheImages) _ = CacheRow(FeaturedMovies, token);
         if (CacheImages) _ = CacheRow(LatestSeries, token);
+    }
+    // --- Discovery rows on the home page ---
+    public ObservableCollection<Movie> TopRated { get; } = [];
+    public ObservableCollection<Movie> BecauseRow { get; } = [];
+    public ObservableCollection<Movie> NewSinceRow { get; } = [];
+    private string becauseTitle = "";
+    public string BecauseTitle { get => becauseTitle; private set => Set(ref becauseTitle, value); }
+    public bool HasBecause => BecauseRow.Count > 0;
+    public bool HasNewSince => NewSinceRow.Count > 0;
+    private void BuildDiscoveryRows()
+    {
+        var pool = FeaturedMovies.Concat(LatestSeries).Concat(current).DistinctBy(m => m.Id).Where(m => !Hidden().Contains(m.Id)).ToList();
+        TopRated.Clear(); foreach (var m in pool.OrderByDescending(m => m.NumericRating).Take(12)) TopRated.Add(m);
+        // "Because you watched X": same first genre as the last title watched.
+        var last = Store.History().FirstOrDefault(h => h.Movie.FirstGenre.Length > 0);
+        BecauseRow.Clear();
+        if (last is not null)
+        {
+            var seen = Store.History().Select(h => h.Movie.Id).ToHashSet();
+            foreach (var m in pool.Where(m => m.Genres.Contains(last.Movie.FirstGenre) && !seen.Contains(m.Id)).Take(12)) BecauseRow.Add(m);
+            BecauseTitle = $"لأنك شاهدت {last.Movie.DisplayTitle}";
+        }
+        // "New since your last visit": titles not in the snapshot saved at the previous start.
+        var before = Store.Load("seen-catalog", new List<string>()).ToHashSet();
+        NewSinceRow.Clear();
+        if (before.Count > 0) foreach (var m in pool.Where(m => !before.Contains(m.Id)).Take(12)) NewSinceRow.Add(m);
+        try { Store.Save("seen-catalog", before.Union(pool.Select(m => m.Id)).TakeLast(3000).ToList()); } catch (Exception e) when (StorageError(e)) { }
+        Notify(nameof(HasBecause)); Notify(nameof(HasNewSince));
+    }
+    /// <summary>"What should I watch tonight?": a random unwatched title from what is loaded.</summary>
+    public async Task PickRandom()
+    {
+        var seen = Store.History().Select(h => h.Movie.Id).ToHashSet();
+        var pool = FeaturedMovies.Concat(LatestSeries).Concat(Movies).DistinctBy(m => m.Id).Where(m => !seen.Contains(m.Id) && !Hidden().Contains(m.Id)).ToList();
+        if (pool.Count == 0) { Status = "لا توجد عناوين جديدة محمّلة للاختيار منها."; return; }
+        DetailsOpen = true; await Select(pool[Random.Shared.Next(pool.Count)]); SelectionRequested?.Invoke();
+    }
+    // --- Hidden titles ---
+    public HashSet<string> Hidden() => Store.Load("hidden", new List<string>()).ToHashSet();
+    public void Hide(Movie movie)
+    {
+        var list = Store.Load("hidden", new List<string>()); if (!list.Contains(movie.Id)) list.Add(movie.Id);
+        try { Store.Save("hidden", list); } catch (Exception e) when (StorageError(e)) { }
+        foreach (var row in new[] { Movies, FeaturedMovies, LatestSeries, TopRated, BecauseRow, NewSinceRow }) { var hit = row.FirstOrDefault(m => m.Id == movie.Id); if (hit is not null) row.Remove(hit); }
+        current.RemoveAll(m => m.Id == movie.Id);
+        Status = $"أُخفي «{movie.DisplayTitle}». يمكنك إظهار المخفي من الإعدادات.";
+    }
+    public void ClearHidden() { try { Store.Save("hidden", new List<string>()); } catch (Exception e) when (StorageError(e)) { } _ = Load(); }
+    // --- Genre page: the latest movies and series grouped by their first genre ---
+    public ObservableCollection<GenreRow> GenreRows { get; } = [];
+    public sealed record GenreRow(string Name, List<Movie> Items);
+    public bool IsGenres => section == "genres";
+    private async Task LoadGenres(bool refresh, CancellationToken token)
+    {
+        var all = new List<Movie>();
+        foreach (var (kind, pages) in new[] { ("movies", 3), ("series", 2) })
+            for (int p = 0; p < pages; p++)
+            {
+                try { all.AddRange((await service.Catalog(kind, p, "", refresh, false, token)).Value); }
+                catch (Exception e) when (!token.IsCancellationRequested && e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidDataException) { }
+            }
+        var hidden = Hidden();
+        GenreRows.Clear();
+        foreach (var g in all.DistinctBy(m => m.Id).Where(m => !hidden.Contains(m.Id))
+                     .SelectMany(m => m.Genres.Split('،', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).Select(g => (g, m)))
+                     .GroupBy(x => x.g).OrderByDescending(g => g.Count()).Take(12))
+            GenreRows.Add(new(g.Key, g.Select(x => x.m).Take(14).ToList()));
+    }
+    // --- Saved searches: notify when a new result appears ---
+    public sealed record SavedSearch(string Query, List<string> Known);
+    public bool CanSaveSearch => section == "search";
+    public void SaveCurrentSearch()
+    {
+        var list = Store.Load("saved-searches", new List<SavedSearch>());
+        list.RemoveAll(s => s.Query == query);
+        list.Add(new(query, current.Select(m => m.Id).ToList()));
+        try { Store.Save("saved-searches", list); Status = $"سننبّهك عند ظهور نتائج جديدة لـ «{query}»."; } catch (Exception e) when (StorageError(e)) { }
+    }
+    public async Task<List<string>> CheckSavedSearches(CancellationToken token)
+    {
+        var news = new List<string>();
+        var list = Store.Load("saved-searches", new List<SavedSearch>());
+        for (int i = 0; i < list.Count; i++)
+        {
+            try
+            {
+                var found = (await service.Catalog("search", 0, list[i].Query, true, false, token)).Value;
+                var fresh = found.Where(m => !list[i].Known.Contains(m.Id)).ToList();
+                if (fresh.Count > 0) news.Add($"«{list[i].Query}»: {string.Join("، ", fresh.Take(3).Select(m => m.DisplayTitle))}");
+                list[i] = list[i] with { Known = list[i].Known.Union(found.Select(m => m.Id)).ToList() };
+            }
+            catch (Exception e) when (!token.IsCancellationRequested && e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidDataException) { }
+        }
+        try { Store.Save("saved-searches", list); } catch (Exception e) when (StorageError(e)) { }
+        return news;
     }
     private async Task CacheRow(ObservableCollection<Movie> row, CancellationToken token)
     {

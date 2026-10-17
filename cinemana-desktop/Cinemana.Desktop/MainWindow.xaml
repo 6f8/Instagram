@@ -4,7 +4,8 @@
 <Window.Resources>
   <!-- Design 5 poster card: square poster, title and meta under it, amber rating, text actions. -->
   <DataTemplate x:Key="PosterCard">
-    <StackPanel Width="{Binding DataContext.CardWidth,RelativeSource={RelativeSource AncestorType=Window}}" Margin="0,0,24,26">
+    <StackPanel Width="{Binding DataContext.CardWidth,RelativeSource={RelativeSource AncestorType=Window}}" Margin="0,0,24,26" Tag="{Binding}" ContextMenuOpening="CardMenuOpening">
+      <StackPanel.ContextMenu><ContextMenu/></StackPanel.ContextMenu>
       <Button Command="{Binding DataContext.SelectCommand,RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Padding="0" Margin="0" Background="Transparent" AutomationProperties.Name="{Binding DisplayTitle}" ToolTip="{Binding DisplayTitle}">
         <Grid Height="{Binding DataContext.CardWidth,RelativeSource={RelativeSource AncestorType=Window},Converter={StaticResource PosterHeight}}" Background="#1A2038" ClipToBounds="True">
           <Image Source="{Binding ImageSource,Converter={StaticResource Poster},ConverterParameter=360}" Stretch="UniformToFill"/>
@@ -72,6 +73,7 @@
     <Button Content="الرئيسية" Style="{StaticResource NavButton}" Tag="home" Command="{Binding NavigateCommand}" CommandParameter="home"/>
     <Button Content="أفلام" Style="{StaticResource NavButton}" Tag="movies" Command="{Binding NavigateCommand}" CommandParameter="movies"/>
     <Button Content="مسلسلات" Style="{StaticResource NavButton}" Tag="series" Command="{Binding NavigateCommand}" CommandParameter="series"/>
+    <Button Content="تصنيفات" Style="{StaticResource NavButton}" Tag="genres" Command="{Binding NavigateCommand}" CommandParameter="genres"/>
     <Button Style="{StaticResource NavButton}" Click="OpenDownloadsClick"><StackPanel Orientation="Horizontal"><TextBlock Text="التنزيلات"/>
       <Border x:Name="DownloadBadge" Background="{StaticResource Accent}" Padding="6,0" Margin="6,0,0,0" VerticalAlignment="Center" Visibility="{Binding HasPending,Converter={StaticResource BoolVisibility}}"><TextBlock Text="{Binding PendingCount}" FontSize="12" FontWeight="Bold" Foreground="{StaticResource Ground}"/></Border></StackPanel></Button>
     <Button Content="مشاهدة" Style="{StaticResource NavButton}" Tag="history" Command="{Binding NavigateCommand}" CommandParameter="history"/>
@@ -102,6 +104,7 @@
       <Button Content="تحميل" Style="{StaticResource GhostButton}" Command="{Binding DownloadCommand}" CommandParameter="{Binding Hero}" Padding="30,16" FontSize="18" Margin="0,0,14,0"/>
       <Button Content="♡" Style="{StaticResource GhostButton}" Command="{Binding FavoriteCommand}" ToolTip="{Binding FavoriteLabel}" Padding="18,16" FontSize="18" Margin="0,0,14,0"/>
       <Button Content="الحلقات والتفاصيل" Style="{StaticResource LinkButton}" Click="ToggleDetailsClick" VerticalAlignment="Center"/>
+      <Button Content="🎲 ماذا أشاهد الليلة؟" Style="{StaticResource LinkButton}" Click="RandomClick" VerticalAlignment="Center" ToolTip="اختيار عشوائي من العناوين التي لم تشاهدها"/>
     </StackPanel>
     <TextBlock Foreground="{StaticResource Muted}" FontSize="15" Margin="0,18,0,0">
       <Run Text="{Binding Hero.FirstGenre,Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Hero.Year,Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Hero.HoursLabel,Mode=OneWay}"/><Run Text=" · ★ "/><Run Text="{Binding Hero.Rating,Mode=OneWay}"/>
@@ -128,7 +131,7 @@
     <TextBlock Text="{Binding Selected.Description}" TextWrapping="Wrap" LineHeight="28" FontSize="15" Foreground="#C9CCDA" Margin="0,14"/>
     <Grid Margin="0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
       <TextBlock Text="الإخراج" Foreground="{StaticResource Muted}"/><TextBlock Grid.Column="1" Text="{Binding Selected.Director}" TextWrapping="Wrap"/>
-      <TextBlock Grid.Row="1" Text="التمثيل" Foreground="{StaticResource Muted}" Margin="0,6"/><TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Selected.Cast}" TextWrapping="Wrap" Margin="0,6"/>
+      <TextBlock Grid.Row="1" Text="التمثيل" Foreground="{StaticResource Muted}" Margin="0,6"/><ItemsControl Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Selected.CastNames}" Margin="-10,0,0,0"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate><Button Content="{Binding}" Style="{StaticResource LinkButton}" Foreground="{StaticResource Ink}" Click="CastClick" Tag="{Binding}" ToolTip="ابحث عن أعماله"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
       <TextBlock Grid.Row="2" Text="اللغة" Foreground="{StaticResource Muted}"/><TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Selected.Language}"/>
       <TextBlock Grid.Row="3" Text="المدة" Foreground="{StaticResource Muted}" Margin="0,6"/><TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding Selected.DurationLabel}" Margin="0,6"/>
     </Grid>
@@ -202,6 +205,7 @@
       <Button Content="حذف الملفات الجزئية القديمة" Style="{StaticResource LinkButton}" Click="CleanupClick"/>
       <Button x:Name="ClearCacheButton" Content="مسح ذاكرة الصور" Style="{StaticResource LinkButton}" Click="ClearCacheClick"/>
       <Button Content="الاختصارات (?)" Style="{StaticResource LinkButton}" Click="ShortcutsClick"/>
+      <Button Content="إظهار العناوين المخفية" Style="{StaticResource LinkButton}" Click="ShowHiddenClick"/>
       <Button Content="التحقق من التحديثات" Style="{StaticResource LinkButton}" Click="CheckUpdatesClick"/>
     </WrapPanel>
     <TextBlock x:Name="ToolStatus" Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,6,0,0"/>
@@ -229,14 +233,36 @@
     <DockPanel Margin="0,0,0,18"><Button Content="عرض الكل" DockPanel.Dock="Left" Style="{StaticResource LinkButton}" Command="{Binding NavigateCommand}" CommandParameter="history"/><TextBlock Text="تابع المشاهدة" Style="{StaticResource SectionTitle}"/></DockPanel>
     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" PreviewMouseWheel="RowWheel"><ItemsControl ItemsSource="{Binding ContinueWatching}" ItemsPanel="{StaticResource Row}" ItemTemplate="{StaticResource ContinueCard}"/></ScrollViewer>
   </StackPanel>
+  <StackPanel Visibility="{Binding HasNewSince,Converter={StaticResource BoolVisibility}}" Margin="0,44,0,0">
+    <TextBlock Text="جديد منذ آخر زيارة" Style="{StaticResource SectionTitle}" Margin="0,0,0,18"/>
+    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" PreviewMouseWheel="RowWheel"><ItemsControl ItemsSource="{Binding NewSinceRow}" ItemsPanel="{StaticResource Row}" ItemTemplate="{StaticResource PosterCard}"/></ScrollViewer>
+  </StackPanel>
   <DockPanel Margin="0,44,0,18"><Button Content="عرض الكل" DockPanel.Dock="Left" Style="{StaticResource LinkButton}" Command="{Binding NavigateCommand}" CommandParameter="movies"/><TextBlock Text="أفلام مميزة" Style="{StaticResource SectionTitle}"/></DockPanel>
   <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" PreviewMouseWheel="RowWheel"><ItemsControl ItemsSource="{Binding FeaturedMovies}" ItemsPanel="{StaticResource Row}" ItemTemplate="{StaticResource PosterCard}"/></ScrollViewer>
+  <StackPanel Visibility="{Binding HasBecause,Converter={StaticResource BoolVisibility}}" Margin="0,24,0,0">
+    <TextBlock Text="{Binding BecauseTitle}" Style="{StaticResource SectionTitle}" Margin="0,0,0,18"/>
+    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" PreviewMouseWheel="RowWheel"><ItemsControl ItemsSource="{Binding BecauseRow}" ItemsPanel="{StaticResource Row}" ItemTemplate="{StaticResource PosterCard}"/></ScrollViewer>
+  </StackPanel>
+  <StackPanel Margin="0,24,0,0">
+    <TextBlock Text="الأعلى تقييمًا" Style="{StaticResource SectionTitle}" Margin="0,0,0,18"/>
+    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" PreviewMouseWheel="RowWheel"><ItemsControl ItemsSource="{Binding TopRated}" ItemsPanel="{StaticResource Row}" ItemTemplate="{StaticResource PosterCard}"/></ScrollViewer>
+  </StackPanel>
   <StackPanel Visibility="{Binding HasSeriesRow,Converter={StaticResource BoolVisibility}}" Margin="0,24,0,0">
     <DockPanel Margin="0,0,0,18"><Button Content="عرض الكل" DockPanel.Dock="Left" Style="{StaticResource LinkButton}" Command="{Binding NavigateCommand}" CommandParameter="series"/><TextBlock Text="أحدث المسلسلات" Style="{StaticResource SectionTitle}"/></DockPanel>
     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" PreviewMouseWheel="RowWheel"><ItemsControl ItemsSource="{Binding LatestSeries}" ItemsPanel="{StaticResource Row}" ItemTemplate="{StaticResource PosterCard}"/></ScrollViewer>
   </StackPanel>
 </StackPanel>
 
+<!-- Genre page -->
+<ItemsControl ItemsSource="{Binding GenreRows}" Visibility="{Binding IsGenres,Converter={StaticResource BoolVisibility}}" Margin="0,30,0,0">
+  <ItemsControl.ItemTemplate><DataTemplate>
+    <StackPanel Margin="0,0,0,26">
+      <TextBlock Text="{Binding Name}" Style="{StaticResource SectionTitle}" Margin="0,0,0,16"/>
+      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled" PreviewMouseWheel="RowWheel"><ItemsControl ItemsSource="{Binding Items}" ItemsPanel="{StaticResource Row}" ItemTemplate="{StaticResource PosterCard}"/></ScrollViewer>
+    </StackPanel>
+  </DataTemplate></ItemsControl.ItemTemplate>
+</ItemsControl>
+<Button Content="🔔 نبّهني بالنتائج الجديدة لهذا البحث" Style="{StaticResource LinkButton}" Click="SaveSearchClick" HorizontalAlignment="Right" Margin="-10,30,0,0" Visibility="{Binding CanSaveSearch,Converter={StaticResource BoolVisibility}}"/>
 <!-- Section grid -->
 <DockPanel Margin="0,44,0,8"><TextBlock Text="{Binding Heading}" Style="{StaticResource SectionTitle}"/></DockPanel>
 <WrapPanel Margin="0,0,0,10" Visibility="{Binding IsLibrary,Converter={StaticResource BoolVisibility}}">
