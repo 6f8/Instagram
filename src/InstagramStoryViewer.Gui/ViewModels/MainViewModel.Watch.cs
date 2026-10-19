@@ -77,7 +77,11 @@ public sealed partial class MainViewModel
         var urls = targets.Select(t => Planner.StoryUrl(t.Username, t.Item)).ToList();
         AppLog.Info($"Watch start: {targets.Count} stories, mode {mode}");
 
-        var shown = await _dialogs.WatchStoriesAsync(_client.Cookies.ToHeader(), urls, background: mode != WatchMode.Manual, onShown);
+        // "Like every story I watch": the like is pressed in the same visit, within the daily like limit.
+        var likes = new Dictionary<int, LikeOutcome>();
+        var likeBudget = LikeWhileWatching ? _settings.AutoLikeCount.Remaining(AutoLike.DailyLimit, Now) : 0;
+        var shown = await _dialogs.WatchStoriesAsync(_client.Cookies.ToHeader(), urls, background: mode != WatchMode.Manual, onShown,
+            like: likeBudget > 0, onLiked: (i, r) => likes[i] = r);
         var verified = await VerifySeenAsync(targets.Where((_, i) => i < shown.Count && shown[i]).ToList());
 
         var records = new List<WatchRecord>();
@@ -99,11 +103,32 @@ public sealed partial class MainViewModel
             records.Add(new WatchRecord(Now.LocalDateTime, t.Username, key, mode, outcome));
         }
 
+        RecordWatchLikes(targets, likes);
         AddHistory(records);
 
         AppLog.Info($"Watch done: {ok}/{targets.Count} ok; outcomes " +
                     string.Join(", ", records.GroupBy(r => r.Outcome).Select(g => $"{g.Key}={g.Count()}")));
         return ok;
+    }
+
+    /// <summary>Likes given while watching: counted in the daily like limit, remembered, and written to the history.</summary>
+    private void RecordWatchLikes(IReadOnlyList<WatchTarget> targets, Dictionary<int, LikeOutcome> likes)
+    {
+        if (likes.Count == 0) return;
+        var records = new List<WatchRecord>();
+        foreach (var (i, outcome) in likes)
+        {
+            var t = targets[i];
+            var key = t.Item.Pk ?? t.Item.Id ?? "";
+            records.Add(new WatchRecord(Now.LocalDateTime, t.Username, key, WatchMode.AutoLike,
+                outcome is LikeOutcome.Liked or LikeOutcome.AlreadyLiked ? WatchOutcome.Verified : WatchOutcome.Failed));
+        }
+        var liked = likes.Count(l => l.Value == LikeOutcome.Liked);
+        _settings.AutoLikeCount.Add(liked, Now);
+        _history.MarkHandled(likes.Keys.Select(i => targets[i].Item.Pk ?? "").Where(pk => pk.Length > 0));
+        SaveSettings();
+        AddHistory(records);
+        AppLog.Info($"Liked while watching: {liked} of {likes.Count}");
     }
 
     /// <summary>

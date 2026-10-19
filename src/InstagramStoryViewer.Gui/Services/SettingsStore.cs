@@ -37,6 +37,9 @@ public sealed class AppSettings
 
     public int AutoWatchDailyLimit { get; set; } = 200;
 
+    /// <summary>Like every story the app watches (counted in the daily like limit).</summary>
+    public bool LikeWhileWatching { get; set; } = true;
+
     /// <summary>Stories watched automatically today.</summary>
     public DailyCount AutoWatchCount { get; set; } = new();
 

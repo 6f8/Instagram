@@ -118,6 +118,8 @@
                             <!-- one-click auto-watch: watches every new story without any interaction -->
                             <CheckBox IsChecked="{Binding AutoWatchNew}" Content="مشاهدة تلقائية" VerticalAlignment="Center" Margin="0,0,16,0"
                                       ToolTip="عند التفعيل يشاهد البرنامج كل الستوريات الجديدة لمن تتابعهم تلقائياً، ثم يكمل مع كل جديد" />
+                            <CheckBox IsChecked="{Binding LikeWhileWatching}" Content="مع إعجاب" VerticalAlignment="Center" Margin="0,0,16,0"
+                                      ToolTip="يعجب بكل ستوري يشاهده (ضمن حد الإعجاب اليومي)" />
                             <TextBox x:Name="SearchBox" Style="{StaticResource SearchBox}" Width="300" Tag="ابحث عن مستخدم واضغط Enter" ToolTip="بحث (Ctrl+F)"
                                      AutomationProperties.Name="ابحث عن مستخدم"
                                      Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}">

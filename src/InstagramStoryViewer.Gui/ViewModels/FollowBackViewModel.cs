@@ -174,6 +174,12 @@ public sealed partial class FollowBackViewModel : ObservableObject
     public int UnfollowersCount => Events.Count(e => !e.Event.Gained);
     public int NewFollowersCount => Events.Count(e => e.Event.Gained);
 
+    // Tab and option labels as single strings (mixed Arabic + number runs inside the chips measured wrongly).
+    public string TabNotFollowingText => $"لا يتابعونك ({Accounts.Count})";
+    public string TabUnfollowersText => $"ألغوا متابعتك ({UnfollowersCount})";
+    public string TabNewFollowersText => $"متابعون جدد ({NewFollowersCount})";
+    public string ShowIgnoredText => $"إظهار المستثناة ({IgnoredCount})";
+
     public string Summary => Snapshot is not { } s
         ? Strings.FollowBackNotChecked
         : UnconfirmedCount is var unconfirmed and > 0
@@ -515,6 +521,7 @@ public sealed partial class FollowBackViewModel : ObservableObject
         if (row.IsIgnored) list.Add(new AccountRef { UserId = row.Pk, Username = row.Username });
         _settings.Save();
         OnPropertyChanged(nameof(IgnoredCount));
+        OnPropertyChanged(nameof(ShowIgnoredText));
         View.Refresh();
     }
 
@@ -575,6 +582,7 @@ public sealed partial class FollowBackViewModel : ObservableObject
         var ignored = _settings.Current.FollowBackIgnored.Select(a => a.UserId).ToHashSet();
         Accounts.Clear();
         foreach (var e in snapshot.Accounts) Accounts.Add(new FollowBackRowViewModel(e) { IsIgnored = ignored.Contains(e.Pk) });
+        OnPropertyChanged(nameof(TabNotFollowingText));
     }
 
     private void RecordCheck(List<FollowerEvent> events, CheckPoint point)
@@ -601,6 +609,8 @@ public sealed partial class FollowBackViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(UnfollowersCount));
         OnPropertyChanged(nameof(NewFollowersCount));
+        OnPropertyChanged(nameof(TabUnfollowersText));
+        OnPropertyChanged(nameof(TabNewFollowersText));
     }
 
     private void LoadSnapshot()

@@ -28,7 +28,7 @@ public interface IDialogService
     /// <returns>For each URL, whether the story was actually shown.</returns>
     /// <param name="onShown">Called after each story is shown, with the number shown so far in this batch.</param>
     Task<IReadOnlyList<bool>> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls, bool background,
-        Action<int>? onShown = null);
+        Action<int>? onShown = null, bool like = false, Action<int, LikeOutcome>? onLiked = null);
 
     /// <summary>Stops the watch batch that is currently playing.</summary>
     void StopWatching();
@@ -97,6 +97,7 @@ public sealed partial class MainViewModel : ObservableObject, IMainContext, IDis
         _autoPlayVideos = _settings.AutoPlayVideos;
         _autoWatchOnPreview = _settings.AutoWatchOnPreview;
         _autoWatchNew = _settings.AutoWatchNew;
+        _likeWhileWatching = _settings.LikeWhileWatching;
         _autoWatchDailyLimit = Math.Clamp(_settings.AutoWatchDailyLimit, AutoWatchLimitMin, AutoWatchLimitMax);
         _maxRequestsPerHour = Math.Clamp(_settings.MaxRequestsPerHour, RequestsPerHourMin, RequestsPerHourMax);
         _quietHoursEnabled = _settings.QuietHoursEnabled;
@@ -221,6 +222,9 @@ public sealed partial class MainViewModel : ObservableObject, IMainContext, IDis
     [ObservableProperty] private bool _autoPlayVideos;
     [ObservableProperty] private bool _autoWatchOnPreview;
     [ObservableProperty] private bool _autoWatchNew;
+
+    /// <summary>Press like on every story the app watches (manual and automatic), within the daily like limit.</summary>
+    [ObservableProperty] private bool _likeWhileWatching;
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(AutoWatchStatus))] private int _autoWatchDailyLimit;
     [ObservableProperty] private int _maxRequestsPerHour;
     [ObservableProperty] [NotifyPropertyChangedFor(nameof(AutoWatchStatus))] private bool _isAutoWatching;
@@ -290,6 +294,12 @@ public sealed partial class MainViewModel : ObservableObject, IMainContext, IDis
     // Typed freely by the user in Settings; only zero is pulled back up to 1 (the box allows up to 6 digits).
     public const int AutoWatchLimitMin = 1, AutoWatchLimitMax = 999_999;
     public const int RequestsPerHourMin = 1, RequestsPerHourMax = 999_999;
+
+    partial void OnLikeWhileWatchingChanged(bool value)
+    {
+        _settings.LikeWhileWatching = value;
+        SaveSettings();
+    }
 
     partial void OnAutoWatchDailyLimitChanged(int value)
     {

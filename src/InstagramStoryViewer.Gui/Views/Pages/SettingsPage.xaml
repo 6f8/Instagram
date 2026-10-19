@@ -56,6 +56,8 @@
                            Text="تُعرض الستوريات في نافذة صغيرة بزاوية الشاشة لثوانٍ فيسجّلها إنستجرام كمشاهَدة. سيظهر اسمك لأصحابها." />
                 <CheckBox IsChecked="{Binding AutoWatchOnPreview}" Content="شاهِد الستوري تلقائياً عند معاينته (بعد ثانيتين)" />
                 <CheckBox IsChecked="{Binding AutoWatchNew}" Content="شاهِد الستوريات الجديدة لمن أتابعهم في الخلفية" Margin="0,12,0,0" />
+                <CheckBox IsChecked="{Binding LikeWhileWatching}" Content="أعجب بكل ستوري يشاهده البرنامج (ضمن حد الإعجاب اليومي)" Margin="0,12,0,0"
+                          ToolTip="يضغط زر القلب في الستوري نفسه بعد مشاهدته، يدوياً أو تلقائياً، ويُحسب من حد الإعجاب اليومي في قسم الإعجاب التلقائي" />
                 <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
                     <TextBlock Text="الحد اليومي:" VerticalAlignment="Center" Margin="0,0,10,0" />
                     <TextBox Style="{StaticResource FieldBox}" Width="90" FlowDirection="LeftToRight" HorizontalContentAlignment="Center"

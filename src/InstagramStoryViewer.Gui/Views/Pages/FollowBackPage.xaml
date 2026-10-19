@@ -101,17 +101,11 @@
         <!-- tabs -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,14,0,0">
             <RadioButton Style="{StaticResource Chip}" GroupName="fbTab"
-                         IsChecked="{Binding Tab, Converter={StaticResource ValueBool}, ConverterParameter=NotFollowing}">
-                <TextBlock><Run Text="لا يتابعونك " /><Run Text="{Binding Accounts.Count, Mode=OneWay}" /></TextBlock>
-            </RadioButton>
+                         IsChecked="{Binding Tab, Converter={StaticResource ValueBool}, ConverterParameter=NotFollowing}" Content="{Binding TabNotFollowingText}" />
             <RadioButton Style="{StaticResource Chip}" GroupName="fbTab"
-                         IsChecked="{Binding Tab, Converter={StaticResource ValueBool}, ConverterParameter=Unfollowers}">
-                <TextBlock><Run Text="ألغوا متابعتك " /><Run Text="{Binding UnfollowersCount, Mode=OneWay}" /></TextBlock>
-            </RadioButton>
+                         IsChecked="{Binding Tab, Converter={StaticResource ValueBool}, ConverterParameter=Unfollowers}" Content="{Binding TabUnfollowersText}" />
             <RadioButton Style="{StaticResource Chip}" GroupName="fbTab"
-                         IsChecked="{Binding Tab, Converter={StaticResource ValueBool}, ConverterParameter=NewFollowers}">
-                <TextBlock><Run Text="متابعون جدد " /><Run Text="{Binding NewFollowersCount, Mode=OneWay}" /></TextBlock>
-            </RadioButton>
+                         IsChecked="{Binding Tab, Converter={StaticResource ValueBool}, ConverterParameter=NewFollowers}" Content="{Binding TabNewFollowersText}" />
             <RadioButton Style="{StaticResource Chip}" GroupName="fbTab" Content="سجل الفحوصات"
                          IsChecked="{Binding Tab, Converter={StaticResource ValueBool}, ConverterParameter=History}" />
         </StackPanel>
@@ -133,28 +127,32 @@
                     </StackPanel>
                 </Button>
             </StackPanel>
-            <WrapPanel VerticalAlignment="Center">
-                <TextBox Style="{StaticResource SearchBox}" Tag="ابحث بالاسم..." Width="220" Margin="0,0,10,6"
-                         AutomationProperties.Name="ابحث في القائمة" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
-                <RadioButton Style="{StaticResource Chip}" Content="الكل" GroupName="fbFilter" Margin="0,0,6,6"
-                             IsChecked="{Binding FilterMode, Converter={StaticResource ValueBool}, ConverterParameter=All}" />
-                <RadioButton Style="{StaticResource Chip}" Content="غير مؤكَّد" GroupName="fbFilter" Margin="0,0,6,6"
-                             IsChecked="{Binding FilterMode, Converter={StaticResource ValueBool}, ConverterParameter=Unconfirmed}" />
-                <RadioButton Style="{StaticResource Chip}" Content="خاص" GroupName="fbFilter" Margin="0,0,6,6"
-                             IsChecked="{Binding FilterMode, Converter={StaticResource ValueBool}, ConverterParameter=Private}" />
-                <RadioButton Style="{StaticResource Chip}" Content="عام" GroupName="fbFilter" Margin="0,0,14,6"
-                             IsChecked="{Binding FilterMode, Converter={StaticResource ValueBool}, ConverterParameter=Public}" />
-                <RadioButton Style="{StaticResource Chip}" Content="ترتيب إنستجرام" GroupName="fbSort" Margin="0,0,6,6"
-                             IsChecked="{Binding SortMode, Converter={StaticResource ValueBool}, ConverterParameter=Default}" />
-                <RadioButton Style="{StaticResource Chip}" Content="أبجدي" GroupName="fbSort" Margin="0,0,14,6"
-                             IsChecked="{Binding SortMode, Converter={StaticResource ValueBool}, ConverterParameter=Name}" />
-                <CheckBox IsChecked="{Binding HideVerified}" Content="إخفاء الموثّقة" VerticalAlignment="Center" Margin="0,0,12,6"
-                          ToolTip="المشاهير والصفحات الرسمية نادراً ما يتابعون أحداً" />
-                <CheckBox IsChecked="{Binding ShowIgnored}" VerticalAlignment="Center" Margin="0,0,0,6"
-                          ToolTip="الحسابات التي استثنيتها (تتابعها عمداً) مخفية؛ فعّل هذا لإظهارها">
-                    <TextBlock><Run Text="إظهار المستثناة (" /><Run Text="{Binding IgnoredCount, Mode=OneWay}" /><Run Text=")" /></TextBlock>
-                </CheckBox>
-            </WrapPanel>
+            <StackPanel>
+                <StackPanel Orientation="Horizontal">
+                    <TextBox Style="{StaticResource SearchBox}" Tag="ابحث بالاسم..." Width="240" Margin="0,0,14,0"
+                             AutomationProperties.Name="ابحث في القائمة" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged}" />
+                    <CheckBox IsChecked="{Binding HideVerified}" Content="إخفاء الموثّقة" VerticalAlignment="Center" Margin="0,0,14,0"
+                              ToolTip="المشاهير والصفحات الرسمية نادراً ما يتابعون أحداً" />
+                    <CheckBox IsChecked="{Binding ShowIgnored}" Content="{Binding ShowIgnoredText}" VerticalAlignment="Center"
+                              ToolTip="الحسابات التي استثنيتها (تتابعها عمداً) مخفية؛ فعّل هذا لإظهارها" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                    <TextBlock Text="عرض:" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <RadioButton Style="{StaticResource Chip}" Content="الكل" GroupName="fbFilter"
+                                 IsChecked="{Binding FilterMode, Converter={StaticResource ValueBool}, ConverterParameter=All}" />
+                    <RadioButton Style="{StaticResource Chip}" Content="غير مؤكَّد" GroupName="fbFilter"
+                                 IsChecked="{Binding FilterMode, Converter={StaticResource ValueBool}, ConverterParameter=Unconfirmed}" />
+                    <RadioButton Style="{StaticResource Chip}" Content="خاص" GroupName="fbFilter"
+                                 IsChecked="{Binding FilterMode, Converter={StaticResource ValueBool}, ConverterParameter=Private}" />
+                    <RadioButton Style="{StaticResource Chip}" Content="عام" GroupName="fbFilter"
+                                 IsChecked="{Binding FilterMode, Converter={StaticResource ValueBool}, ConverterParameter=Public}" />
+                    <TextBlock Text="ترتيب:" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="18,0,8,0" />
+                    <RadioButton Style="{StaticResource Chip}" Content="كما في إنستجرام" GroupName="fbSort"
+                                 IsChecked="{Binding SortMode, Converter={StaticResource ValueBool}, ConverterParameter=Default}" />
+                    <RadioButton Style="{StaticResource Chip}" Content="أبجدي" GroupName="fbSort"
+                                 IsChecked="{Binding SortMode, Converter={StaticResource ValueBool}, ConverterParameter=Name}" />
+                </StackPanel>
+            </StackPanel>
         </DockPanel>
 
         <Border Grid.Row="4" Style="{StaticResource Card}" Margin="0,8,0,0" Padding="12,10,12,8">

@@ -377,8 +377,8 @@ public partial class MainWindow : Window, IDialogService
     /// minimised.
     /// </summary>
     public Task<IReadOnlyList<bool>> WatchStoriesAsync(string cookieHeader, IReadOnlyList<string> storyUrls, bool background,
-        Action<int>? onShown = null) =>
-        RunInWatcherAsync(w => w.PlayAsync(cookieHeader, storyUrls, onShown), background);
+        Action<int>? onShown = null, bool like = false, Action<int, LikeOutcome>? onLiked = null) =>
+        RunInWatcherAsync(w => w.PlayAsync(cookieHeader, storyUrls, onShown, like, onLiked), background);
 
     public void StopWatching()
     {

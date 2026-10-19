@@ -242,7 +242,9 @@ public partial class StoryWatchWindow : Window
 
     /// <summary>Plays the given stories in order. Returns, per URL, whether it was shown.</summary>
     /// <param name="onShown">Called after each story is shown, with the number shown so far (live progress).</param>
-    public async Task<IReadOnlyList<bool>> PlayAsync(string cookieHeader, IReadOnlyList<string> urls, Action<int>? onShown = null)
+    /// <param name="like">Also press the story's like button once it has played (onLiked reports each result).</param>
+    public async Task<IReadOnlyList<bool>> PlayAsync(string cookieHeader, IReadOnlyList<string> urls, Action<int>? onShown = null,
+        bool like = false, Action<int, LikeOutcome>? onLiked = null)
     {
         _batchCts = new CancellationTokenSource();
         var ct = _batchCts.Token;
@@ -275,6 +277,12 @@ public partial class StoryWatchWindow : Window
                 await Task.Delay(ViewDuration + TimeSpan.FromMilliseconds(Random.Shared.Next(0, 1500)), ct);
                 shown[i] = true;
                 onShown?.Invoke(shown.Count(x => x));
+                if (like)
+                {
+                    var liked = await ClickLikeAsync(core, ct);
+                    onLiked?.Invoke(i, liked);
+                    await Task.Delay(TimeSpan.FromMilliseconds(500 + Random.Shared.Next(0, 800)), ct);
+                }
             }
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or InvalidOperationException
