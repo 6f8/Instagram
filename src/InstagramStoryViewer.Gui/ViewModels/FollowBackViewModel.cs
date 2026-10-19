@@ -248,7 +248,14 @@ public sealed partial class FollowBackViewModel : ObservableObject
     // ================================================================== full check
 
     [RelayCommand(CanExecute = nameof(CanCheck))]
-    private Task CheckAsync() => RunGuardedAsync(async (client, me) =>
+    private async Task CheckAsync()
+    {
+        await RunFullCheckAsync();
+        // Whatever the quick pass could not confirm is confirmed slowly in the background, without a click.
+        if (HasUnconfirmed && _ctx.Client is not null) await ContinueAsync();
+    }
+
+    private Task RunFullCheckAsync() => RunGuardedAsync(async (client, me) =>
     {
         var previous = Snapshot?.FollowerList;
         var r = await _dialogs.WithInstagramPageAsync(client.Cookies.ToHeader(),
@@ -332,7 +339,7 @@ public sealed partial class FollowBackViewModel : ObservableObject
         var candidates = FollowBack.NotFollowingBack(following.Users, followers.Users);
         var check = await FollowBack.ConfirmAsync(me, candidates, fetch, Task.Delay,
             new Progress<int>(n => Status = string.Format(CultureInfo.CurrentCulture, Strings.FollowBackVerifying, n, candidates.Count)),
-            ct, budget, followers.Users);
+            ct, Math.Min(budget, 24), followers.Users); // the rest is confirmed slowly afterwards (ContinueAsync)
         budget -= check.Requests;
 
         // Followers found only by the search still follow; add them so the next comparison knows them.
@@ -398,19 +405,55 @@ public sealed partial class FollowBackViewModel : ObservableObject
 
     // ================================================================== continue / recheck
 
-    /// <summary>Confirms only the "unconfirmed" accounts of the last check, without reading the lists again.</summary>
+    /// <summary>
+    /// Confirms the "unconfirmed" accounts of the last check slowly and by itself until none is left: small
+    /// batches with a long gap between searches, and when Instagram asks to slow down it waits out the pause
+    /// and carries on instead of stopping. Each batch is saved, so stopping or closing loses nothing.
+    /// </summary>
     [RelayCommand(CanExecute = nameof(CanContinue))]
     private Task ContinueAsync() => RunGuardedAsync(async (client, me) =>
     {
-        if (Snapshot is not { } snap) return;
-        var pending = snap.Accounts.Where(a => !a.Confirmed).ToList();
-        var check = await _dialogs.WithInstagramPageAsync(client.Cookies.ToHeader(), (fetch, pageToken) =>
-            ConfirmEntriesAsync(client, me, pending, snap, fetch, pageToken, Strings.FollowBackVerifying));
-        ApplyConfirmation(pending.Select(p => p.Pk).ToList(), check);
-        var left = Snapshot?.Accounts.Count(a => !a.Confirmed) ?? 0;
-        SetStatus(string.Format(CultureInfo.CurrentCulture, Strings.FollowBackContinued,
-            check.NotFollowingBack.Count, check.FoundFollowing, left), error: left > 0);
-    });
+        const int Batch = 12;
+        var ct = _cts!.Token;
+        if (_pausedUntil > DateTime.Now)
+        {
+            SetStatus($"طلب إنستجرام التمهّل. سيبدأ التحقق تلقائياً الساعة {_pausedUntil:HH:mm}. لا تغلق البرنامج.", error: false);
+            await Task.Delay(_pausedUntil - DateTime.Now, ct);
+        }
+        int confirmedTotal = 0, foundTotal = 0;
+        while (Snapshot is { } snap && snap.Accounts.Where(a => !a.Confirmed).Take(Batch).ToList() is { Count: > 0 } pending)
+        {
+            var left = snap.Accounts.Count(a => !a.Confirmed);
+            try
+            {
+                var check = await _dialogs.WithInstagramPageAsync(client.Cookies.ToHeader(), (fetch, pageToken) =>
+                    ConfirmEntriesAsync(client, me, pending, snap, fetch, pageToken, Strings.FollowBackVerifying, SlowDelay, Batch * 2));
+                ApplyConfirmation(pending.Select(p => p.Pk).ToList(), check);
+                confirmedTotal += check.NotFollowingBack.Count;
+                foundTotal += check.FoundFollowing;
+                if (check.Unverified.Count == pending.Count) throw new InstagramApiException(InstagramErrorKind.RateLimited, "no progress");
+                left = Snapshot?.Accounts.Count(a => !a.Confirmed) ?? 0;
+                SetStatus($"تحقق تلقائي بطيء: تأكد {confirmedTotal} لا يتابعونك، و{foundTotal} يتابعونك فعلاً. بقي {left}. اترك البرنامج يعمل، أو اضغط إيقاف.", error: false);
+                if (left > 0) await Task.Delay(TimeSpan.FromSeconds(60 + Random.Shared.Next(0, 60)), ct);
+            }
+            catch (InstagramApiException ex) when (ex.Kind == InstagramErrorKind.RateLimited)
+            {
+                var until = DateTime.Now + PauseAfterLimit;
+                AppLog.Warn($"Follow-back slow verify: paused until {until:HH:mm}, {left} left");
+                SetStatus($"طلب إنستجرام التمهّل. سيكمل التحقق تلقائياً الساعة {until:HH:mm} (بقي {left}). لا تغلق البرنامج.", error: false);
+                await Task.Delay(PauseAfterLimit, ct);
+            }
+            catch (PageBudgetExceededException)
+            {
+                SetStatus($"انتهت طلبات هذه الساعة. سيكمل التحقق تلقائياً بعد قليل (بقي {left}).", error: false);
+                await Task.Delay(TimeSpan.FromMinutes(10), ct);
+            }
+        }
+        SetStatus($"اكتمل التحقق: {Snapshot?.Accounts.Count ?? 0} لا يتابعونك (مؤكَّد)، و{foundTotal} تبيّن أنهم يتابعونك.", error: false);
+    }, waitsOutPause: true);
+
+    /// <summary>Gap between searches of the slow verification (the normal one is 1.5–3.5 s, which hits the limit).</summary>
+    private static Task SlowDelay(TimeSpan _, CancellationToken ct) => Task.Delay(TimeSpan.FromSeconds(8 + Random.Shared.Next(0, 8)), ct);
 
     /// <summary>Searches for one account again (two requests: the account and a control).</summary>
     [RelayCommand(CanExecute = nameof(CanRecheck))]
@@ -437,13 +480,15 @@ public sealed partial class FollowBackViewModel : ObservableObject
     });
 
     private async Task<FollowBackCheck> ConfirmEntriesAsync(InstagramClient client, string me, IReadOnlyList<FollowBackEntry> entries,
-        FollowBackSnapshot snap, Func<string, CancellationToken, Task<PageResult>> fetch, CancellationToken pageToken, string progressFormat)
+        FollowBackSnapshot snap, Func<string, CancellationToken, Task<PageResult>> fetch, CancellationToken pageToken, string progressFormat,
+        Func<TimeSpan, CancellationToken, Task>? delay = null, int? maxRequests = null)
     {
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(pageToken, _cts!.Token);
         var budget = Math.Max(0, client.MaxRequestsPerHour - client.RequestsLastHour);
+        if (maxRequests is { } m) budget = Math.Min(budget, m);
         var users = entries.Select(e => new StoryUser { Pk = e.Pk, Username = e.Username }).ToList();
         var known = (snap.FollowerList ?? []).Select(f => new StoryUser { Pk = f.Pk, Username = f.Username }).ToList();
-        return await FollowBack.ConfirmAsync(me, users, fetch, Task.Delay,
+        return await FollowBack.ConfirmAsync(me, users, fetch, delay ?? Task.Delay,
             new Progress<int>(n => Status = string.Format(CultureInfo.CurrentCulture, progressFormat, n, users.Count)),
             linked.Token, budget, known);
     }
@@ -470,10 +515,10 @@ public sealed partial class FollowBackViewModel : ObservableObject
     }
 
     /// <summary>Common guard, error handling and status for every action that reads from Instagram.</summary>
-    private async Task RunGuardedAsync(Func<InstagramClient, string, Task> action)
+    private async Task RunGuardedAsync(Func<InstagramClient, string, Task> action, bool waitsOutPause = false)
     {
         if (_ctx.Client is not { } client || client.ViewerId is not { } me) return;
-        if (_pausedUntil > DateTime.Now)
+        if (_pausedUntil > DateTime.Now && !waitsOutPause)
         {
             // Instagram asked to slow down: say until when, without sending anything.
             SetStatus(string.Format(CultureInfo.CurrentCulture, Strings.FollowBackPaused, _pausedUntil), error: true);

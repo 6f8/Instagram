@@ -17,7 +17,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- WFAC010 is the WinForms advice to set DPI in code instead; this is a WPF app (WinForms is only the tray icon). -->
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
-    <Version>2.7.0</Version>
+    <Version>2.7.1</Version>
     <Product>IG Story Viewer Pro</Product>
     <!-- File metadata shown in Explorer's Properties; unsigned binaries without it look more suspicious to AV/SmartScreen. -->
     <Company>IG Story Viewer Pro</Company>
