@@ -138,13 +138,18 @@ public partial class StoryWatchWindow : Window
           const claim = sessionStorage.getItem('www-claim-v2') || '0';
           const abort = new AbortController();
           setTimeout(() => abort.abort(), 30000); // a stalled request must not block the batch
-          const r = await fetch(path, {
-            signal: abort.signal,
-            credentials: 'include',
-            headers: { 'X-IG-App-ID': '936619743392459', 'X-Requested-With': 'XMLHttpRequest',
-                       'X-CSRFToken': csrf, 'X-IG-WWW-Claim': claim, 'X-ASBD-ID': '129477' }
-          });
-          return JSON.stringify({ status: r.status, body: await r.text() });
+          try {
+            const r = await fetch(path, {
+              signal: abort.signal,
+              credentials: 'include',
+              headers: { 'X-IG-App-ID': '936619743392459', 'X-Requested-With': 'XMLHttpRequest',
+                         'X-CSRFToken': csrf, 'X-IG-WWW-Claim': claim, 'X-ASBD-ID': '129477' }
+            });
+            return JSON.stringify({ status: r.status, body: await r.text() });
+          } catch (e) {
+            // "Failed to fetch": Instagram cut the request (usually its rate limit redirecting away). Status 0.
+            return JSON.stringify({ status: 0, body: String(e) });
+          }
         })(__PATH__)
         """;
 

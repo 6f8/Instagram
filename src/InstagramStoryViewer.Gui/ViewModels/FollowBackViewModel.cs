@@ -322,8 +322,8 @@ public sealed partial class FollowBackViewModel : ObservableObject
         var ct = linked.Token;
         var budget = Math.Max(0, client.MaxRequestsPerHour - client.RequestsLastHour);
 
-        var (profileFollowers, profileFollowing, used) = await ReadProfileCountsAsync(fetch, ct);
-        budget -= used;
+        // The profile counts come with the GraphQL list read (web_profile_info is the first thing to get a 429).
+        int? profileFollowers = null, profileFollowing = null;
 
         AppLog.Info($"Follow-back check (in browser), budget {budget} requests");
         var (following, followingTotal) = await ReadListAsync(me, false, fetch,
@@ -377,27 +377,6 @@ public sealed partial class FollowBackViewModel : ObservableObject
     /// The follower and following counts shown on the profile (the website's settings form gives the username,
     /// the profile endpoint the counts). Best effort: two requests, and nothing breaks without them.
     /// </summary>
-    private static async Task<(int? Followers, int? Following, int Requests)> ReadProfileCountsAsync(
-        Func<string, CancellationToken, Task<PageResult>> fetch, CancellationToken ct)
-    {
-        var requests = 0;
-        try
-        {
-            requests++;
-            var form = FollowListReader.Parse<AccountFormResponse>(await fetch(FollowListReader.AccountFormPath, ct), FollowListReader.AccountFormPath);
-            if (form.FormData?.Username is not { Length: > 0 } username) return (null, null, requests);
-            var path = FollowListReader.ProfilePath(username);
-            requests++;
-            var profile = FollowListReader.Parse<WebProfileInfoResponse>(await fetch(path, ct), path);
-            return (profile.Data?.User?.EdgeFollowedBy?.Count, profile.Data?.User?.EdgeFollow?.Count, requests);
-        }
-        catch (InstagramApiException ex) when (ex.Kind is not InstagramErrorKind.RateLimited and not InstagramErrorKind.LoginRequired)
-        {
-            AppLog.Warn($"Profile counts unavailable: {ex.Kind} {ex.Message}");
-            return (null, null, requests);
-        }
-    }
-
     private void Report(string what, int read, int? total) =>
         Status = total is > 0
             ? string.Format(CultureInfo.CurrentCulture, Strings.FollowBackReadingOfTotal, what, read, total)

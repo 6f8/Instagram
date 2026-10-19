@@ -106,7 +106,8 @@ public static class FollowListReader
         InstagramApiException Fail(InstagramErrorKind kind, string text) =>
             new(kind, text, (HttpStatusCode)result.Status) { ResponseBody = Truncate(result.Body), RequestPath = path };
 
-        if (result.Status == 429 || msg.Contains("wait a few minutes", StringComparison.OrdinalIgnoreCase) || parsed?.Spam == true)
+        // Status 0: the page's fetch itself failed ("Failed to fetch"), which happens when Instagram throttles.
+        if (result.Status is 429 or 0 || msg.Contains("wait a few minutes", StringComparison.OrdinalIgnoreCase) || parsed?.Spam == true)
             throw Fail(InstagramErrorKind.RateLimited, "طلب إنستجرام التمهّل قبل قراءة المزيد من القائمة.");
         if (msg.Contains("checkpoint", StringComparison.OrdinalIgnoreCase) || parsed?.CheckpointUrl is not null)
             throw Fail(InstagramErrorKind.Checkpoint, "إنستجرام يطلب التحقق من الحساب. افتح إنستجرام في المتصفح وأكمل التحقق.");
