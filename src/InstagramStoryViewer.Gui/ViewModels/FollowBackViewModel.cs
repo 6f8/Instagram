@@ -322,61 +322,26 @@ public sealed partial class FollowBackViewModel : ObservableObject
         var ct = linked.Token;
         var budget = Math.Max(0, client.MaxRequestsPerHour - client.RequestsLastHour);
 
-        // The profile counts come with the GraphQL list read (web_profile_info is the first thing to get a 429).
-        int? profileFollowers = null, profileFollowing = null;
-
-        AppLog.Info($"Follow-back check (in browser), budget {budget} requests");
+        // Only the accounts you follow are read and checked: the followers list is not read at all (it is the
+        // long, throttled part). Each followed account is then looked up in your followers, slowly (ContinueAsync).
+        AppLog.Info($"Follow-back check (following only), budget {budget} requests");
         var (following, followingTotal) = await ReadListAsync(me, false, fetch,
-            n => Report(Strings.FollowBackListFollowing, n, profileFollowing), ct, budget);
-        profileFollowing ??= followingTotal;
-        var (followers, followersTotal) = await ReadListAsync(me, true, fetch,
-            n => Report(Strings.FollowBackListFollowers, n, profileFollowers), ct, budget - following.Requests);
-        profileFollowers ??= followersTotal;
-        budget -= following.Requests + followers.Requests;
-        AppLog.Info($"Follow-back lists read: {following.Users.Count} following, {followers.Users.Count} followers " +
-                    $"(profile: {profileFollowing?.ToString(CultureInfo.InvariantCulture) ?? "?"} / {profileFollowers?.ToString(CultureInfo.InvariantCulture) ?? "?"})");
+            n => Report(Strings.FollowBackListFollowing, n, null), ct, budget);
+        AppLog.Info($"Follow-back: {following.Users.Count} following read (total {followingTotal?.ToString(CultureInfo.InvariantCulture) ?? "?"})");
 
-        var candidates = FollowBack.NotFollowingBack(following.Users, followers.Users);
-        var check = await FollowBack.ConfirmAsync(me, candidates, fetch, Task.Delay,
-            new Progress<int>(n => Status = string.Format(CultureInfo.CurrentCulture, Strings.FollowBackVerifying, n, candidates.Count)),
-            ct, Math.Min(budget, 24), followers.Users); // the rest is confirmed slowly afterwards (ContinueAsync)
-        budget -= check.Requests;
-
-        // Followers found only by the search still follow; add them so the next comparison knows them.
-        var found = candidates.Except(check.NotFollowingBack).Except(check.Unverified);
-        var followerList = followers.Users.Concat(found)
-            .Where(u => u.Pk is not null)
-            .Select(u => new FollowerRef(u.Pk!, u.Username ?? "", u.FullName, u.ProfilePicUrl))
-            .GroupBy(f => f.Pk).Select(g => g.First())
-            .ToList();
-
-        var events = new List<FollowerEvent>();
-        if (previous is not null)
-        {
-            var (lost, gained) = FollowerChanges.Compare(previous, followerList);
-            var now = DateTime.Now;
-            events.AddRange(gained.Select(g => new FollowerEvent(now, g, Gained: true)));
-            if (lost.Count > 0)
-            {
-                // Missing now is not proof: only those the followers search does not find stopped following.
-                var lostUsers = lost.Select(l => new StoryUser { Pk = l.Pk, Username = l.Username }).ToList();
-                var confirmLost = await FollowBack.ConfirmAsync(me, lostUsers, fetch, Task.Delay,
-                    new Progress<int>(n => Status = string.Format(CultureInfo.CurrentCulture, Strings.FollowBackVerifyingLost, n, lost.Count)),
-                    ct, budget, followers.Users);
-                var lostIds = confirmLost.NotFollowingBack.Select(u => u.Pk).ToHashSet();
-                events.AddRange(lost.Where(l => lostIds.Contains(l.Pk)).Select(l => new FollowerEvent(now, l, Gained: false)));
-                // Found by the search, or not searched (budget ran out): kept as followers, so the next check asks again.
-                followerList.AddRange(lost.Where(l => !lostIds.Contains(l.Pk)));
-            }
-        }
-        return new CheckResult(following.Users.Count, followers.Users.Count + check.FoundFollowing, check, followerList,
-            profileFollowers, profileFollowing, events);
+        // Already known from earlier checks: followers are skipped, confirmed non-followers stay confirmed.
+        var knownFollowers = (previous ?? []).Select(f => f.Pk).ToHashSet();
+        var confirmedBefore = (Snapshot?.Accounts ?? []).Where(a => a.Confirmed).Select(a => a.Pk).ToHashSet();
+        var toCheck = following.Users.Where(u => u.Pk is not null && !knownFollowers.Contains(u.Pk)).ToList();
+        var check = new FollowBackCheck(
+            toCheck.Where(u => confirmedBefore.Contains(u.Pk!)).ToList(),
+            toCheck.Where(u => !confirmedBefore.Contains(u.Pk!)).ToList(), 0, following.Requests);
+        // Followers you no longer follow are dropped from the known list.
+        var followed = following.Users.Select(u => u.Pk).ToHashSet();
+        var followerList = (previous ?? []).Where(f => followed.Contains(f.Pk)).ToList();
+        return new CheckResult(following.Users.Count, followerList.Count, check, followerList, null, followingTotal, []);
     }
 
-    /// <summary>
-    /// The follower and following counts shown on the profile (the website's settings form gives the username,
-    /// the profile endpoint the counts). Best effort: two requests, and nothing breaks without them.
-    /// </summary>
     private void Report(string what, int read, int? total) =>
         Status = total is > 0
             ? string.Format(CultureInfo.CurrentCulture, Strings.FollowBackReadingOfTotal, what, read, total)
