@@ -282,6 +282,32 @@ public sealed partial class FollowBackViewModel : ObservableObject
     /// every follower of the previous check who is missing now. The searches are what make the result
     /// trustworthy: Instagram does not always hand out the complete followers list.
     /// </summary>
+    /// <summary>
+    /// Reads a follow list with the website's GraphQL query (50 per request, with the total count), then, when
+    /// that read is short of the total or the query is refused, with the friendships endpoint as well, merged.
+    /// </summary>
+    private static async Task<(FollowListResult List, int? Total)> ReadListAsync(string me, bool followers,
+        Func<string, CancellationToken, Task<PageResult>> fetch, Action<int> report, CancellationToken ct, int budget)
+    {
+        GraphFollowReader.GraphList? graph = null;
+        try
+        {
+            graph = await GraphFollowReader.ReadAllAsync(me, followers, fetch, Task.Delay, new Progress<int>(report), ct, budget);
+            AppLog.Info($"GraphQL {(followers ? "followers" : "following")}: {graph.Users.Count} of {graph.Total}");
+            if (graph.Total == 0 || graph.Users.Count >= graph.Total * 0.98)
+                return (new FollowListResult(graph.Users, graph.Requests), graph.Total);
+        }
+        catch (InstagramApiException ex) when (ex.Kind is InstagramErrorKind.InvalidResponse or InstagramErrorKind.NotFound or InstagramErrorKind.Unknown)
+        {
+            AppLog.Warn($"GraphQL follow list unavailable, using the friendships endpoint: {ex.Message}");
+        }
+        var used = graph?.Requests ?? 0;
+        var rest = await FollowListReader.ReadAllAsync(me, followers, fetch, Task.Delay, new Progress<int>(report), ct, budget - used);
+        if (graph is null) return (rest, null);
+        var merged = graph.Users.Concat(rest.Users).Where(u => u.Pk is not null).GroupBy(u => u.Pk).Select(g => g.First()).ToList();
+        return (new FollowListResult(merged, used + rest.Requests), graph.Total);
+    }
+
     private async Task<CheckResult> RunCheckAsync(InstagramClient client, string me, List<FollowerRef>? previous,
         Func<string, CancellationToken, Task<PageResult>> fetch, CancellationToken pageToken)
     {
@@ -293,10 +319,12 @@ public sealed partial class FollowBackViewModel : ObservableObject
         budget -= used;
 
         AppLog.Info($"Follow-back check (in browser), budget {budget} requests");
-        var following = await FollowListReader.ReadAllAsync(me, followers: false, fetch, Task.Delay,
-            new Progress<int>(n => Report(Strings.FollowBackListFollowing, n, profileFollowing)), ct, budget);
-        var followers = await FollowListReader.ReadAllAsync(me, followers: true, fetch, Task.Delay,
-            new Progress<int>(n => Report(Strings.FollowBackListFollowers, n, profileFollowers)), ct, budget - following.Requests);
+        var (following, followingTotal) = await ReadListAsync(me, false, fetch,
+            n => Report(Strings.FollowBackListFollowing, n, profileFollowing), ct, budget);
+        profileFollowing ??= followingTotal;
+        var (followers, followersTotal) = await ReadListAsync(me, true, fetch,
+            n => Report(Strings.FollowBackListFollowers, n, profileFollowers), ct, budget - following.Requests);
+        profileFollowers ??= followersTotal;
         budget -= following.Requests + followers.Requests;
         AppLog.Info($"Follow-back lists read: {following.Users.Count} following, {followers.Users.Count} followers " +
                     $"(profile: {profileFollowing?.ToString(CultureInfo.InvariantCulture) ?? "?"} / {profileFollowers?.ToString(CultureInfo.InvariantCulture) ?? "?"})");

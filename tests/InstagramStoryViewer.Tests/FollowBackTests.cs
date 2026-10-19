@@ -211,3 +211,36 @@ public class FollowBackControlTests
         Assert.Equal(["1", "2"], users.Users.Select(u => u.Pk));
     }
 }
+
+public class GraphFollowReaderTests
+{
+    private static string Page(string ids, bool next, string? cursor, int count = 3)
+    {
+        var edges = string.Join(",", ids.Split(',').Select(i => "{\"node\":{\"id\":\"" + i + "\",\"username\":\"u" + i + "\",\"is_verified\":false,\"is_private\":true}}"));
+        var c = cursor is null ? "null" : "\"" + cursor + "\"";
+        return "{\"data\":{\"user\":{\"edge_followed_by\":{\"count\":" + count + ",\"page_info\":{\"has_next_page\":" + (next ? "true" : "false") + ",\"end_cursor\":" + c + "},\"edges\":[" + edges + "]}}},\"status\":\"ok\"}";
+    }
+
+    [Fact]
+    public async Task Reads_all_pages_with_the_total_count()
+    {
+        var list = await GraphFollowReader.ReadAllAsync("me", true, (path, _) => Task.FromResult(new PageResult(200,
+                path.Contains("%22after%22%3A%22c1%22") ? Page("3", false, null) : Page("1,2", true, "c1"))),
+            (_, _) => Task.CompletedTask, null, default, 10);
+        Assert.Equal(["1", "2", "3"], list.Users.Select(u => u.Pk));
+        Assert.Equal(3, list.Total);
+        Assert.True(list.Users[0].IsPrivate);
+        Assert.Equal(2, list.Requests);
+    }
+
+    [Fact]
+    public async Task Rate_limit_and_bad_answers_are_errors()
+    {
+        var ex = await Assert.ThrowsAsync<InstagramStoryViewer.Api.InstagramApiException>(() => GraphFollowReader.ReadAllAsync("me", true,
+            (_, _) => Task.FromResult(new PageResult(429, "")), (_, _) => Task.CompletedTask, null, default, 10));
+        Assert.Equal(InstagramStoryViewer.Api.InstagramErrorKind.RateLimited, ex.Kind);
+        var bad = await Assert.ThrowsAsync<InstagramStoryViewer.Api.InstagramApiException>(() => GraphFollowReader.ReadAllAsync("me", true,
+            (_, _) => Task.FromResult(new PageResult(200, """{"data":{"user":null},"status":"ok"}""")), (_, _) => Task.CompletedTask, null, default, 10));
+        Assert.Equal(InstagramStoryViewer.Api.InstagramErrorKind.InvalidResponse, bad.Kind);
+    }
+}
