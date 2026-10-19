@@ -244,3 +244,20 @@ public class GraphFollowReaderTests
         Assert.Equal(InstagramStoryViewer.Api.InstagramErrorKind.InvalidResponse, bad.Kind);
     }
 }
+
+public class FollowExportReaderTests
+{
+    [Fact]
+    public void Reads_old_and_new_export_formats()
+    {
+        const string followers = """[{"title":"","string_list_data":[{"href":"https://www.instagram.com/ali","value":"ali","timestamp":1}]},{"title":"","string_list_data":[{"href":"https://www.instagram.com/Sara","value":"Sara","timestamp":1}]}]""";
+        const string following = """{"relationships_following":[{"title":"ali","string_list_data":[{"href":"https://www.instagram.com/_u/ali","timestamp":1}]},{"title":"","string_list_data":[{"href":"https://www.instagram.com/_u/omar","timestamp":1}]},{"title":"sara","string_list_data":[]}]}""";
+        var lists = FollowExportReader.Read([("followers_1.json", followers), ("following.json", following)]);
+        Assert.Equal(["ali", "omar", "sara"], lists.Following);
+        Assert.Equal(["omar"], lists.Following.Where(u => !lists.Followers.Contains(u)));
+    }
+
+    [Fact]
+    public void Missing_file_is_an_error() =>
+        Assert.Throws<InvalidDataException>(() => FollowExportReader.Read([("followers_1.json", "[]")]));
+}

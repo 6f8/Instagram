@@ -49,6 +49,7 @@ public interface IDialogService
 
     /// <summary>Asks where to save a file; null when cancelled.</summary>
     string? PickSaveFile(string suggestedName, string filter);
+    string? PickOpenFile(string filter);
 
     /// <summary>
     /// Runs <paramref name="work"/> with a function that fetches Instagram API paths from inside the logged-in

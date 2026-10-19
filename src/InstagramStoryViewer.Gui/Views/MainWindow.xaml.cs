@@ -413,6 +413,12 @@ public partial class MainWindow : Window, IDialogService
         return dialog.ShowDialog(this) == true ? dialog.FileName : null;
     }
 
+    public string? PickOpenFile(string filter)
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = filter };
+        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
+    }
+
     public void CopyToClipboard(string text)
     {
         try { Clipboard.SetText(text); }

@@ -563,6 +563,40 @@ public sealed partial class FollowBackViewModel : ObservableObject
         _ctx.ShowToast(string.Format(CultureInfo.CurrentCulture, Strings.FollowBackCopied, names.Count));
     }
 
+    /// <summary>
+    /// Builds the list from Instagram's "Download your information" export (JSON): complete and exact, and no
+    /// request to Instagram at all, so no rate limit.
+    /// </summary>
+    [RelayCommand]
+    private void ImportExport()
+    {
+        var path = _dialogs.PickOpenFile("Instagram export (*.zip;*.json)|*.zip;*.json");
+        if (path is null) return;
+        FollowExportReader.ExportLists lists;
+        try
+        {
+            lists = FollowExportReader.ReadPath(path);
+        }
+        catch (InvalidDataException ex)
+        {
+            SetStatus($"الملف لا يحتوي على {ex.Message}. اطلب من إنستجرام تنزيل \"المتابعون ومن تتابعهم\" بصيغة JSON.", error: true);
+            return;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException)
+        {
+            SetStatus($"تعذّرت قراءة الملف: {ex.Message}", error: true);
+            return;
+        }
+        var entries = lists.Following.Where(u => !lists.Followers.Contains(u))
+            .Select(u => new FollowBackEntry("u:" + u, u, null, null, false, Confirmed: true))
+            .ToList();
+        Apply(new FollowBackSnapshot(DateTime.Now, lists.Following.Count, lists.Followers.Count, entries, Snapshot?.FollowerList));
+        SaveSnapshot();
+        RecordCheck([], new CheckPoint(DateTime.Now, lists.Followers.Count, lists.Following.Count, entries.Count));
+        AppLog.Info($"Follow-back from export: {lists.Following.Count} following, {lists.Followers.Count} followers, {entries.Count} not following back");
+        SetStatus($"من ملف إنستجرام: تتابع {lists.Following.Count} · يتابعك {lists.Followers.Count} · لا يتابعونك {entries.Count} (نتيجة دقيقة بدون أي طلبات).", error: false);
+    }
+
     /// <summary>Saves the shown list as a CSV file (opens in Excel; UTF-8 with BOM so Arabic names display).</summary>
     [RelayCommand]
     private void ExportCsv()
