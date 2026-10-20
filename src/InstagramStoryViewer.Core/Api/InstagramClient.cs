@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using InstagramStoryViewer.Json;
 using InstagramStoryViewer.Models;
@@ -63,6 +64,7 @@ public sealed class InstagramClient : IDisposable
     private readonly Action<string>? _log;
     private readonly TimeProvider _time;
     private readonly ResiliencePipeline<HttpResponseMessage> _apiRetry;
+    private readonly ResiliencePipeline<HttpResponseMessage> _apiRetryNo5xx;
     private readonly ResiliencePipeline _downloadRetry;
     private DateTime _coolDownUntil = DateTime.MinValue;
 
@@ -87,7 +89,8 @@ public sealed class InstagramClient : IDisposable
         _time = time;
         // Downloads stream large videos; the per-call timeout is applied separately for API requests.
         _http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
-        _apiRetry = BuildApiRetry();
+        _apiRetry = BuildApiRetry(retryServerErrors: true);
+        _apiRetryNo5xx = BuildApiRetry(retryServerErrors: false);
         _downloadRetry = BuildDownloadRetry();
     }
 
@@ -97,7 +100,8 @@ public sealed class InstagramClient : IDisposable
     /// API calls: network errors, per-attempt timeouts and 5xx are retried twice with exponential
     /// backoff and jitter (Retry-After wins when Instagram sends it). Anything else is final.
     /// </summary>
-    private ResiliencePipeline<HttpResponseMessage> BuildApiRetry() =>
+    /// <param name="retryServerErrors">False for calls that handle a 5xx themselves (see GetStoriesForUsersAsync).</param>
+    private ResiliencePipeline<HttpResponseMessage> BuildApiRetry(bool retryServerErrors) =>
         new ResiliencePipelineBuilder<HttpResponseMessage> { TimeProvider = _time }
             .AddRetry(new RetryStrategyOptions<HttpResponseMessage>
             {
@@ -111,7 +115,7 @@ public sealed class InstagramClient : IDisposable
                     .Handle<AttemptTimeoutException>()
                     // 429 is not retried: asking again seconds after "too many requests" only makes it worse.
                     // It goes straight to the cool-down instead (see SendWithProfileAsync).
-                    .HandleResult(r => (int)r.StatusCode >= 500),
+                    .HandleResult(r => retryServerErrors && (int)r.StatusCode >= 500),
                 DelayGenerator = args => new ValueTask<TimeSpan?>(RetryAfter(args.Outcome.Result)),
                 OnRetry = args =>
                 {
@@ -255,21 +259,50 @@ public sealed class InstagramClient : IDisposable
     }
 
     /// <summary>Current stories of several users in one request (up to 20 ids per call).</summary>
+    /// <remarks>
+    /// Instagram sometimes answers a whole batch with HTTP 500 ("something went wrong"), because of one account
+    /// in it or because the batch is too large; sending the same batch again gives the same answer. Such a batch
+    /// is split in halves instead, and an account that still fails on its own is skipped, so one account cannot
+    /// stop the stories of all the others. A general outage still fails the call after a few attempts.
+    /// </remarks>
     public async Task<List<Reel>> GetStoriesForUsersAsync(IEnumerable<string> userIds, CancellationToken ct = default)
     {
         var result = new List<Reel>();
+        var failures = new StrongBox<int>();
         foreach (var chunk in userIds.Distinct().Chunk(20))
-        {
-            var query = string.Join("&", chunk.Select(id => "reel_ids=" + Uri.EscapeDataString(id)));
-            var res = await SendAsync<ReelsMediaResponse>(HttpMethod.Get, "/api/v1/feed/reels_media/?" + query, null, ct).ConfigureAwait(false);
-            var reels = res.ReelsMedia ?? res.Reels?.Values.ToList() ?? new List<Reel>();
-            foreach (var reel in reels.Where(r => r.Items is { Count: > 0 }))
-            {
-                reel.Items!.Sort((a, b) => a.TakenAt.CompareTo(b.TakenAt));
-                result.Add(reel);
-            }
-        }
+            await ReadReelsAsync(chunk, result, failures, ct).ConfigureAwait(false);
         return result;
+    }
+
+    private const int MaxReelsFailures = 8;
+
+    private async Task ReadReelsAsync(string[] ids, List<Reel> result, StrongBox<int> failures, CancellationToken ct)
+    {
+        var query = string.Join("&", ids.Select(id => "reel_ids=" + Uri.EscapeDataString(id)));
+        ReelsMediaResponse res;
+        try
+        {
+            res = await SendAsync<ReelsMediaResponse>(HttpMethod.Get, "/api/v1/feed/reels_media/?" + query, null, ct,
+                retryServerErrors: false).ConfigureAwait(false);
+        }
+        catch (InstagramApiException ex) when ((int?)ex.StatusCode >= 500 && ++failures.Value < MaxReelsFailures)
+        {
+            if (ids.Length == 1)
+            {
+                Diagnostics.AppLog.Warn($"reels_media: skipped account {ids[0]} (HTTP {(int?)ex.StatusCode})");
+                return;
+            }
+            var half = ids.Length / 2;
+            await ReadReelsAsync(ids[..half], result, failures, ct).ConfigureAwait(false);
+            await ReadReelsAsync(ids[half..], result, failures, ct).ConfigureAwait(false);
+            return;
+        }
+        var reels = res.ReelsMedia ?? res.Reels?.Values.ToList() ?? new List<Reel>();
+        foreach (var reel in reels.Where(r => r.Items is { Count: > 0 }))
+        {
+            reel.Items!.Sort((a, b) => a.TakenAt.CompareTo(b.TakenAt));
+            result.Add(reel);
+        }
     }
 
     /// <summary>
@@ -387,7 +420,8 @@ public sealed class InstagramClient : IDisposable
 
     /// <summary>Sends a request, falling back to the other host profiles when one answers with HTML.</summary>
     /// <param name="contentFactory">Builds a fresh body per attempt (a sent HttpContent is disposed and cannot be reused).</param>
-    private async Task<T> SendAsync<T>(HttpMethod method, string path, Func<HttpContent>? contentFactory, CancellationToken ct)
+    private async Task<T> SendAsync<T>(HttpMethod method, string path, Func<HttpContent>? contentFactory, CancellationToken ct,
+        bool retryServerErrors = true)
         where T : ApiResponseBase
     {
         var attempts = new List<string>();
@@ -398,7 +432,8 @@ public sealed class InstagramClient : IDisposable
             var index = (_preferredProfile + i) % Profiles.Length;
             try
             {
-                var result = await SendWithProfileAsync<T>(Profiles[index], method, path, contentFactory, ct).ConfigureAwait(false);
+                var result = await SendWithProfileAsync<T>(Profiles[index], method, path, contentFactory, ct,
+                    retryServerErrors: retryServerErrors).ConfigureAwait(false);
                 if (index != _preferredProfile)
                 {
                     _log?.Invoke($"تم التبديل إلى مسار الاتصال: {Profiles[index].Name}");
@@ -425,12 +460,13 @@ public sealed class InstagramClient : IDisposable
     }
 
     private async Task<T> SendWithProfileAsync<T>(EndpointProfile profile, HttpMethod method, string path,
-        Func<HttpContent>? contentFactory, CancellationToken ct, string? referer = null) where T : ApiResponseBase
+        Func<HttpContent>? contentFactory, CancellationToken ct, string? referer = null, bool retryServerErrors = true)
+        where T : ApiResponseBase
     {
         HttpResponseMessage res;
         try
         {
-            res = await _apiRetry.ExecuteAsync(async token =>
+            res = await (retryServerErrors ? _apiRetry : _apiRetryNo5xx).ExecuteAsync(async token =>
             {
                 ThrowIfRevoked();
                 await ThrottleAsync(token).ConfigureAwait(false);

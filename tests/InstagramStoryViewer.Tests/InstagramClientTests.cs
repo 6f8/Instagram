@@ -179,4 +179,47 @@ public class UserPostsTests
         Assert.Contains("/api/v1/feed/user/5/", handler.Requests[0].RequestUri!.AbsolutePath);
         Assert.Contains("count=3", handler.Requests[0].RequestUri!.Query);
     }
+
+    private static HttpResponseMessage Fail500() =>
+        FakeHandler.Json("""{"message":"We're sorry, but something went wrong. Please try again.","status":"fail"}""",
+            System.Net.HttpStatusCode.InternalServerError);
+
+    private static HttpResponseMessage Reels(IEnumerable<string> ids) => FakeHandler.Json(
+        "{\"reels_media\":[" + string.Join(",", ids.Select(id =>
+            "{\"id\":\"" + id + "\",\"user\":{\"pk\":\"" + id + "\",\"username\":\"u" + id + "\"},\"items\":[{\"pk\":\"m" + id + "\",\"taken_at\":1,\"media_type\":1}]}")) + "],\"status\":\"ok\"}");
+
+    private static List<string> Ids(HttpRequestMessage r) =>
+        System.Text.RegularExpressions.Regex.Matches(r.RequestUri!.Query, "reel_ids=([^&]+)").Select(m => m.Groups[1].Value).ToList();
+
+    [Fact]
+    public async Task One_account_that_breaks_the_batch_is_skipped_without_retrying_the_same_batch()
+    {
+        var handler = new FakeHandler(r => Ids(r).Contains("3") ? Fail500() : Reels(Ids(r)));
+        var reels = await TestClient.Create(handler).GetStoriesForUsersAsync(["1", "2", "3", "4"]);
+
+        Assert.Equal(["1", "2", "4"], reels.Select(r => r.User!.Pk).Order());
+        // [1,2,3,4] fails, [1,2] ok, [3,4] fails, [3] fails and is skipped, [4] ok: no request is sent twice.
+        Assert.Equal(5, handler.Requests.Count);
+        Assert.Equal(handler.Requests.Count, handler.Requests.Select(r => r.RequestUri!.Query).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task An_outage_still_fails_after_a_few_requests()
+    {
+        var handler = new FakeHandler(_ => Fail500());
+        var ex = await Assert.ThrowsAsync<InstagramStoryViewer.Api.InstagramApiException>(() =>
+            TestClient.Create(handler).GetStoriesForUsersAsync(Enumerable.Range(1, 20).Select(i => i.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        Assert.Equal(System.Net.HttpStatusCode.InternalServerError, ex.StatusCode);
+        Assert.True(handler.Requests.Count <= 8, $"{handler.Requests.Count} requests");
+    }
+
+    [Fact]
+    public async Task Other_calls_still_retry_a_500()
+    {
+        var calls = 0;
+        var handler = new FakeHandler(_ => ++calls < 3 ? Fail500()
+            : FakeHandler.Json("""{"tray":[],"status":"ok"}"""));
+        await TestClient.Create(handler).GetHighlightsAsync("1");
+        Assert.Equal(3, calls);
+    }
 }
