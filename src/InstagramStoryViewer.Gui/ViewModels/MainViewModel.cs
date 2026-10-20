@@ -179,6 +179,7 @@ public sealed partial class MainViewModel : ObservableObject, IMainContext, IDis
     {
         Comments.Refresh();
         FollowBack.Refresh();
+        WatchTopicCommand.NotifyCanExecuteChanged();
     }
 
     [ObservableProperty] private bool _isLoggingIn;

@@ -263,13 +263,29 @@ public sealed class InstagramClient : IDisposable
     }
 
     /// <summary>Current stories of several users in one request (up to 20 ids per call).</summary>
-    public async Task<List<Reel>> GetStoriesForUsersAsync(IEnumerable<string> userIds, CancellationToken ct = default)
+    /// <param name="chunkSize">Ids per request (at most 20).</param>
+    /// <param name="onChunkFailed">
+    /// When set, a request that fails with a server error (5xx: Instagram sometimes refuses a batch of accounts you
+    /// do not follow) is reported here and skipped, instead of failing the whole call. Rate limits and session
+    /// errors still throw.
+    /// </param>
+    public async Task<List<Reel>> GetStoriesForUsersAsync(IEnumerable<string> userIds, CancellationToken ct = default,
+        int chunkSize = 20, Action<IReadOnlyList<string>, InstagramApiException>? onChunkFailed = null)
     {
         var result = new List<Reel>();
-        foreach (var chunk in userIds.Distinct().Chunk(20))
+        foreach (var chunk in userIds.Distinct().Chunk(Math.Clamp(chunkSize, 1, 20)))
         {
             var query = string.Join("&", chunk.Select(id => "reel_ids=" + Uri.EscapeDataString(id)));
-            var res = await SendAsync<ReelsMediaResponse>(HttpMethod.Get, "/api/v1/feed/reels_media/?" + query, null, ct).ConfigureAwait(false);
+            ReelsMediaResponse res;
+            try
+            {
+                res = await SendAsync<ReelsMediaResponse>(HttpMethod.Get, "/api/v1/feed/reels_media/?" + query, null, ct).ConfigureAwait(false);
+            }
+            catch (InstagramApiException ex) when (onChunkFailed is not null && (int?)ex.StatusCode >= 500)
+            {
+                onChunkFailed(chunk, ex);
+                continue;
+            }
             var reels = res.ReelsMedia ?? res.Reels?.Values.ToList() ?? new List<Reel>();
             foreach (var reel in reels.Where(r => r.Items is { Count: > 0 }))
             {
