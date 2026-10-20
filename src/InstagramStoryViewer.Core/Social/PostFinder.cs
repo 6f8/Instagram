@@ -4,7 +4,7 @@ namespace InstagramStoryViewer.Social;
 
 /// <summary>A post found by a search, enough to show it and to comment on it.</summary>
 public sealed record PostSummary(string Pk, string Code, string Username, string? Caption, string? ThumbnailUrl,
-    long TakenAt, int Likes, int Comments, bool IsVideo)
+    long TakenAt, int Likes, int Comments, bool IsVideo, string? UserPk = null)
 {
     public string Url => $"https://www.instagram.com/p/{Code}/";
     public DateTimeOffset TakenAtTime => DateTimeOffset.FromUnixTimeSeconds(TakenAt);
@@ -61,12 +61,14 @@ public static class PostFinder
         var takenAt = taken.ValueKind == JsonValueKind.Number ? taken.GetInt64()
             : long.TryParse(taken.GetString(), out var t) ? t : 0;
         var pk = Str(e, "pk") ?? Str(e, "id") ?? code.GetString()!;
-        var user = e.TryGetProperty("user", out var u) && u.ValueKind == JsonValueKind.Object ? Str(u, "username") : null;
+        var hasUser = e.TryGetProperty("user", out var u) && u.ValueKind == JsonValueKind.Object;
+        var user = hasUser ? Str(u, "username") : null;
+        var userPk = hasUser ? Str(u, "pk") ?? Str(u, "id") : null;
         string? caption = null;
         if (e.TryGetProperty("caption", out var c))
             caption = c.ValueKind == JsonValueKind.Object ? Str(c, "text") : c.ValueKind == JsonValueKind.String ? c.GetString() : null;
         return new PostSummary(pk, code.GetString()!, user ?? "", caption, Thumbnail(e), takenAt,
-            Int(e, "like_count"), Int(e, "comment_count"), Int(e, "media_type") == 2);
+            Int(e, "like_count"), Int(e, "comment_count"), Int(e, "media_type") == 2, userPk);
     }
 
     /// <summary>The smallest image at least 150 px wide (carousels: the first item).</summary>

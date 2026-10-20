@@ -261,3 +261,10 @@ public class FollowExportReaderTests
     public void Missing_file_is_an_error() =>
         Assert.Throws<InvalidDataException>(() => FollowExportReader.Read([("followers_1.json", "[]")]));
 }
+
+public class PostFinderOwnerTests
+{
+    [Fact]
+    public void Reads_the_post_owner_id() =>
+        Assert.Equal("42", PostFinder.Extract("""{"sections":[{"media":{"code":"abc","taken_at":5,"user":{"pk":"42","username":"dev"}}}]}""")[0].UserPk);
+}

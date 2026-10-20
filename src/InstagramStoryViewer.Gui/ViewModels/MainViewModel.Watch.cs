@@ -71,7 +71,7 @@ public sealed partial class MainViewModel
     /// Every attempt is written to the watch history. Returns how many were shown and not contradicted
     /// by Instagram (verified, or unknown when Instagram gave no "seen" marker).
     /// </summary>
-    private async Task<int> WatchAsync(IReadOnlyList<WatchTarget> targets, WatchMode mode, Action<int>? onShown = null)
+    private async Task<int> WatchAsync(IReadOnlyList<WatchTarget> targets, WatchMode mode, Action<int>? onShown = null, bool allowLike = true)
     {
         if (_client is null || targets.Count == 0) return 0;
         var urls = targets.Select(t => Planner.StoryUrl(t.Username, t.Item)).ToList();
@@ -79,7 +79,7 @@ public sealed partial class MainViewModel
 
         // "Like every story I watch": the like is pressed in the same visit, within the daily like limit.
         var likes = new Dictionary<int, LikeOutcome>();
-        var likeBudget = LikeWhileWatching ? _settings.AutoLikeCount.Remaining(AutoLike.DailyLimit, Now) : 0;
+        var likeBudget = allowLike && LikeWhileWatching ? _settings.AutoLikeCount.Remaining(AutoLike.DailyLimit, Now) : 0;
         var shown = await _dialogs.WatchStoriesAsync(_client.Cookies.ToHeader(), urls, background: mode != WatchMode.Manual, onShown,
             like: likeBudget > 0, onLiked: (i, r) => likes[i] = r);
         var verified = await VerifySeenAsync(targets.Where((_, i) => i < shown.Count && shown[i]).ToList());
