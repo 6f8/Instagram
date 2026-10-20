@@ -35,25 +35,6 @@ public sealed class ProfileUser
     [JsonPropertyName("full_name")] public string? FullName { get; set; }
     [JsonPropertyName("is_private")] public bool IsPrivate { get; set; }
     [JsonPropertyName("followed_by_viewer")] public bool FollowedByViewer { get; set; }
-    [JsonPropertyName("edge_followed_by")] public EdgeCount? EdgeFollowedBy { get; set; }
-    [JsonPropertyName("edge_follow")] public EdgeCount? EdgeFollow { get; set; }
-}
-
-public sealed class EdgeCount
-{
-    [JsonPropertyName("count")] public int Count { get; set; }
-}
-
-// ---------- /api/v1/accounts/edit/web_form_data/ (the website's own settings form) ----------
-
-public sealed class AccountFormResponse : ApiResponseBase
-{
-    [JsonPropertyName("form_data")] public AccountFormData? FormData { get; set; }
-}
-
-public sealed class AccountFormData
-{
-    [JsonPropertyName("username")] public string? Username { get; set; }
 }
 
 // ---------- /api/v1/users/{id}/info/ ----------
@@ -173,19 +154,6 @@ public sealed class StoryUser
 
     /// <summary>Only in users/{id}/info.</summary>
     [JsonPropertyName("following_count")] public int? FollowingCount { get; set; }
-}
-
-// ---------- /api/v1/friendships/{id}/following/ and /followers/ ----------
-
-/// <summary>One page of a follow list.</summary>
-public sealed class FriendshipListResponse : ApiResponseBase
-{
-    [JsonPropertyName("users")] public List<StoryUser>? Users { get; set; }
-
-    /// <summary>Cursor of the next page; empty or missing on the last page.</summary>
-    [JsonPropertyName("next_max_id")]
-    [JsonConverter(typeof(FlexibleStringConverter))]
-    public string? NextMaxId { get; set; }
 }
 
 public sealed class StoryItem

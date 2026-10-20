@@ -130,7 +130,26 @@ public sealed partial class MainViewModel
             _currentUserId = userId;
             NotifyCurrentAccountFlags();
 
-            var reel = await _client!.GetUserStoriesAsync(userId, ct);
+            Models.Reel? reel;
+            try
+            {
+                reel = await _client!.GetUserStoriesAsync(userId, ct);
+            }
+            catch (InstagramApiException ex) when ((int?)ex.StatusCode >= 500)
+            {
+                // Instagram's server refuses this account's stories through the API, while its story page may
+                // still show them: read them from the page instead.
+                await HandleErrorAsync(ex, silent: true);
+                EmptyMessage = string.Format(CultureInfo.CurrentCulture, Strings.StoriesReadingPage, username);
+                reel = await ReadStoriesFromPageAsync(username, userId);
+                ct.ThrowIfCancellationRequested();
+                if (reel is null)
+                {
+                    EmptyMessage = string.Format(CultureInfo.CurrentCulture, Strings.StoriesServerError, username);
+                    return;
+                }
+                EmptyMessage = null;
+            }
             ct.ThrowIfCancellationRequested();
             if (reel?.Items is null)
             {
@@ -144,12 +163,6 @@ public sealed partial class MainViewModel
         {
             // a newer load replaced this one
         }
-        catch (InstagramApiException ex) when ((int?)ex.StatusCode >= 500)
-        {
-            // Instagram's own server failed for this account: nothing the user can fix, so no error dialog.
-            EmptyMessage = string.Format(CultureInfo.CurrentCulture, Strings.StoriesServerError, CurrentUsername);
-            await HandleErrorAsync(ex, silent: true);
-        }
         catch (InstagramApiException ex)
         {
             EmptyMessage = ex.Message;
@@ -159,6 +172,16 @@ public sealed partial class MainViewModel
         {
             if (!ct.IsCancellationRequested) IsLoadingStories = false;
         }
+    }
+
+    /// <summary>The account's stories as its story page loaded them; null when the page did not give them.</summary>
+    private async Task<Models.Reel?> ReadStoriesFromPageAsync(string username, string userId)
+    {
+        if (_client is null) return null;
+        var texts = await _dialogs.ReadStoryPageAsync(_client.Cookies.ToHeader(), username);
+        var reel = StoryPageReader.FindReel(texts, username, userId);
+        AppLog.Info($"Story page fallback for {username}: {texts.Count} answers read, {reel?.Items?.Count ?? 0} stories found");
+        return reel;
     }
 
     /// <summary>Fills the table with a reel's items (current stories or one highlight).</summary>

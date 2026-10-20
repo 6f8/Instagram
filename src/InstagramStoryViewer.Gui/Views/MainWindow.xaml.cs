@@ -385,6 +385,9 @@ public partial class MainWindow : Window, IDialogService
         if (_watcher is { IsAlive: true }) _watcher.StopCurrent();
     }
 
+    public Task<IReadOnlyList<string>> ReadStoryPageAsync(string cookieHeader, string username) =>
+        RunInWatcherAsync(w => w.ReadStoryPageAsync(cookieHeader, username), background: true);
+
     public Task<IReadOnlyList<LikeOutcome>> LikeAsync(string cookieHeader, IReadOnlyList<LikeRequest> requests) =>
         RunInWatcherAsync(w => w.LikeAsync(cookieHeader, requests), background: true);
 

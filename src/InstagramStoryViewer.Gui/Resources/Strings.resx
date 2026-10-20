@@ -92,5 +92,6 @@
   <data name="UpdateVerifiedRestarting" xml:space="preserve"><value>تم التحقق من التحديث، جاري إعادة التشغيل...</value></data>
   <data name="UpdateFailedStatus" xml:space="preserve"><value>تعذّر التحديث التلقائي: {0}</value></data>
   <data name="UpdateFailedToast" xml:space="preserve"><value>تعذّر التحديث التلقائي ({0}). سيُفتح رابط التنزيل لتنزيله يدوياً.</value></data>
-  <data name="StoriesServerError" xml:space="preserve"><value>خادم إنستجرام لم يُرجع ستوري {0} الآن (خطأ من عنده، وليس من البرنامج). جرّب بعد قليل.</value></data>
+  <data name="StoriesServerError" xml:space="preserve"><value>خادم إنستجرام لم يُرجع ستوري {0} الآن، ولم تظهر في صفحة الستوري أيضاً. جرّب بعد قليل، أو افتحها في المتصفح.</value></data>
+  <data name="StoriesReadingPage" xml:space="preserve"><value>خادم إنستجرام رفض الطلب المعتاد لستوري {0}؛ جاري قراءتها من صفحة الستوري...</value></data>
 </root>

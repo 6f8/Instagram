@@ -57,6 +57,13 @@ public partial class StoryWatchWindow : Window
         })(__CFG__, __MODE__)
         """;
 
+    // The story data the page embedded in its HTML (server-rendered JSON), when it is there.
+    private const string EmbeddedStoryDataScript = """
+        (() => [...document.querySelectorAll('script[type="application/json"]')]
+          .map(s => s.textContent || '')
+          .filter(t => t.includes('taken_at') && (t.includes('reels_media') || t.includes('image_versions2'))))()
+        """;
+
     private readonly PageSelectors _selectors;
 
     /// <summary>
@@ -252,6 +259,88 @@ public partial class StoryWatchWindow : Window
             catch (InvalidOperationException) { }
         }
         return results;
+    }
+
+    /// <summary>
+    /// Opens the account's story page without pressing "View story" (so nothing is marked as seen) and returns
+    /// the JSON the page loaded: what it embedded in its HTML and the answers of its own data requests. Used
+    /// when Instagram refuses the stories endpoint for an account whose stories the page still shows.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> ReadStoryPageAsync(string cookieHeader, string username)
+    {
+        _batchCts = new CancellationTokenSource();
+        var ct = _batchCts.Token;
+        var captured = new List<string>();
+        CoreWebView2? core = null;
+
+        async void OnResponse(object? sender, CoreWebView2WebResourceResponseReceivedEventArgs e)
+        {
+            try
+            {
+                var uri = e.Request.Uri;
+                if (!uri.Contains("/graphql", StringComparison.Ordinal) && !uri.Contains("reels_media", StringComparison.Ordinal)) return;
+                using var stream = await e.Response.GetContentAsync();
+                if (stream is null) return;
+                using var reader = new StreamReader(stream);
+                var text = await reader.ReadToEndAsync(ct);
+                if (text.Contains("taken_at", StringComparison.Ordinal)) lock (captured) captured.Add(text);
+            }
+            catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException
+                                           or ObjectDisposedException or IOException or OperationCanceledException)
+            {
+                // the body was not available (redirect, aborted request) or the window closed
+            }
+        }
+
+        try
+        {
+            _init ??= InitializeBrowserAsync();
+            await _init;
+            if (_closed) return captured;
+
+            core = Web.CoreWebView2;
+            ApplySessionCookies(core, cookieHeader);
+            StatusText.Text = "جاري فتح صفحة الستوري...";
+            Progress.IsIndeterminate = true;
+            core.WebResourceResponseReceived += OnResponse;
+
+            var opened = await OpenPageAsync(core, $"https://www.instagram.com/stories/{Uri.EscapeDataString(username)}/", ct);
+            if (opened == "login") return captured;
+
+            // The data arrives with the page or a moment later; wait for it, at most a few seconds.
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(12);
+            while (DateTime.UtcNow < deadline)
+            {
+                if (await RunAsync<string[]>(core, EmbeddedStoryDataScript) is { Length: > 0 } embedded)
+                    lock (captured) captured.AddRange(embedded);
+                lock (captured) if (captured.Count > 0) break;
+                await Task.Delay(800, ct);
+            }
+            // Answers still arriving get a short moment more.
+            await Task.Delay(1000, ct);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or InvalidOperationException
+                                       or System.Runtime.InteropServices.COMException or WebView2RuntimeNotFoundException
+                                       or UnauthorizedAccessException or IOException)
+        {
+            AppLog.Warn($"Story page read for {username} stopped: {ex.GetType().Name} {ex.Message}");
+        }
+        finally
+        {
+            if (core is not null)
+            {
+                try { core.WebResourceResponseReceived -= OnResponse; }
+                catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException) { }
+            }
+            if (!_closed)
+            {
+                Progress.IsIndeterminate = false;
+                StatusText.Text = "انتهى";
+                try { Web.CoreWebView2?.Navigate("about:blank"); }
+                catch (InvalidOperationException) { }
+            }
+        }
+        lock (captured) return captured.ToList();
     }
 
     /// <summary>Waits for the like button, clicks it if needed, and verifies the result.</summary>

@@ -33,6 +33,12 @@ public interface IDialogService
     /// <summary>Stops the watch batch that is currently playing.</summary>
     void StopWatching();
 
+    /// <summary>
+    /// Opens an account's story page in the corner window without playing it and returns the JSON the page
+    /// loaded (for accounts whose stories Instagram refuses through the API).
+    /// </summary>
+    Task<IReadOnlyList<string>> ReadStoryPageAsync(string cookieHeader, string username);
+
     /// <summary>Likes stories/posts in the small corner window (background, never steals focus).</summary>
     Task<IReadOnlyList<LikeOutcome>> LikeAsync(string cookieHeader, IReadOnlyList<LikeRequest> requests);
 
