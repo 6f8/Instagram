@@ -222,4 +222,25 @@ public class UserPostsTests
         await TestClient.Create(handler).GetHighlightsAsync("1");
         Assert.Equal(3, calls);
     }
+
+    [Fact]
+    public async Task One_account_answered_with_500_falls_back_to_its_story_endpoint()
+    {
+        var handler = new FakeHandler(r => r.RequestUri!.AbsolutePath.EndsWith("/feed/user/7/story/", StringComparison.Ordinal)
+            ? FakeHandler.Json("""{"reel":{"id":"7","user":{"pk":"7","username":"u7"},"items":[{"pk":"b","taken_at":2,"media_type":1},{"pk":"a","taken_at":1,"media_type":1}]},"status":"ok"}""")
+            : Fail500());
+        var reel = await TestClient.Create(handler).GetUserStoriesAsync("7");
+
+        Assert.Equal(["a", "b"], reel!.Items!.Select(i => i.Pk));
+        Assert.Equal(2, handler.Requests.Count); // reels_media once (no retry), then the fallback once
+    }
+
+    [Fact]
+    public async Task When_the_fallback_fails_too_the_original_500_is_reported()
+    {
+        var handler = new FakeHandler(_ => Fail500());
+        var ex = await Assert.ThrowsAsync<InstagramStoryViewer.Api.InstagramApiException>(() => TestClient.Create(handler).GetUserStoriesAsync("7"));
+        Assert.Contains("reels_media", ex.RequestPath);
+        Assert.Equal(2, handler.Requests.Count);
+    }
 }

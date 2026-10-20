@@ -227,11 +227,39 @@ public sealed class InstagramClient : IDisposable
         return res.Tray?.Where(r => r.User?.Username is not null).ToList() ?? new List<Reel>();
     }
 
-    /// <summary>Current (non-expired) stories of a user. Returns null when the user has none.</summary>
+    /// <summary>Current (non-expired) stories of a user, or a highlight. Returns null when there are none.</summary>
+    /// <remarks>
+    /// Instagram answers reels_media for some accounts with HTTP 500 every time, so the same request is not sent
+    /// again; for an account (not a highlight) the per-account story endpoint is asked once instead. When that
+    /// fails too, the original error is reported.
+    /// </remarks>
     public async Task<Reel?> GetUserStoriesAsync(string userId, CancellationToken ct = default)
     {
-        var res = await SendAsync<ReelsMediaResponse>(
-            HttpMethod.Get, $"/api/v1/feed/reels_media/?reel_ids={Uri.EscapeDataString(userId)}", null, ct).ConfigureAwait(false);
+        ReelsMediaResponse res;
+        try
+        {
+            res = await SendAsync<ReelsMediaResponse>(
+                HttpMethod.Get, $"/api/v1/feed/reels_media/?reel_ids={Uri.EscapeDataString(userId)}", null, ct,
+                retryServerErrors: false).ConfigureAwait(false);
+        }
+        catch (InstagramApiException ex) when ((int?)ex.StatusCode >= 500 && userId.All(char.IsAsciiDigit))
+        {
+            UserStoryResponse story;
+            try
+            {
+                story = await SendAsync<UserStoryResponse>(
+                    HttpMethod.Get, $"/api/v1/feed/user/{userId}/story/", null, ct, retryServerErrors: false).ConfigureAwait(false);
+            }
+            catch (InstagramApiException fallback) when (fallback.Kind is not (InstagramErrorKind.RateLimited
+                                                             or InstagramErrorKind.LoginRequired or InstagramErrorKind.Checkpoint))
+            {
+                Diagnostics.AppLog.Warn($"Story fallback for {userId} failed too: HTTP {(int?)fallback.StatusCode}");
+                throw ex;
+            }
+            if (story.Reel?.Items is not { Count: > 0 } items) return null;
+            items.Sort((a, b) => a.TakenAt.CompareTo(b.TakenAt));
+            return story.Reel;
+        }
 
         Reel? reel = null;
         if (res.Reels is not null && res.Reels.TryGetValue(userId, out var r)) reel = r;

@@ -144,6 +144,12 @@ public sealed partial class MainViewModel
         {
             // a newer load replaced this one
         }
+        catch (InstagramApiException ex) when ((int?)ex.StatusCode >= 500)
+        {
+            // Instagram's own server failed for this account: nothing the user can fix, so no error dialog.
+            EmptyMessage = string.Format(CultureInfo.CurrentCulture, Strings.StoriesServerError, CurrentUsername);
+            await HandleErrorAsync(ex, silent: true);
+        }
         catch (InstagramApiException ex)
         {
             EmptyMessage = ex.Message;

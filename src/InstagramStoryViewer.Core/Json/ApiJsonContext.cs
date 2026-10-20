@@ -20,4 +20,5 @@ namespace InstagramStoryViewer.Json;
 [JsonSerializable(typeof(HighlightsTrayResponse))]
 [JsonSerializable(typeof(ReelsTrayResponse))]
 [JsonSerializable(typeof(ReelsMediaResponse))]
+[JsonSerializable(typeof(UserStoryResponse))]
 internal sealed partial class ApiJsonContext : JsonSerializerContext;

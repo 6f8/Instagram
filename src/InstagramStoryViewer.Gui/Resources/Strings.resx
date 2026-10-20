@@ -92,4 +92,5 @@
   <data name="UpdateVerifiedRestarting" xml:space="preserve"><value>تم التحقق من التحديث، جاري إعادة التشغيل...</value></data>
   <data name="UpdateFailedStatus" xml:space="preserve"><value>تعذّر التحديث التلقائي: {0}</value></data>
   <data name="UpdateFailedToast" xml:space="preserve"><value>تعذّر التحديث التلقائي ({0}). سيُفتح رابط التنزيل لتنزيله يدوياً.</value></data>
+  <data name="StoriesServerError" xml:space="preserve"><value>خادم إنستجرام لم يُرجع ستوري {0} الآن (خطأ من عنده، وليس من البرنامج). جرّب بعد قليل.</value></data>
 </root>

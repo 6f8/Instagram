@@ -119,6 +119,13 @@ public sealed class ReelsTrayResponse : ApiResponseBase
     [JsonPropertyName("tray")] public List<Reel>? Tray { get; set; }
 }
 
+// ---------- /api/v1/feed/user/{id}/story/ (fallback for one account) ----------
+
+public sealed class UserStoryResponse : ApiResponseBase
+{
+    [JsonPropertyName("reel")] public Reel? Reel { get; set; }
+}
+
 // ---------- /api/v1/feed/reels_media/?reel_ids=... ----------
 
 public sealed class ReelsMediaResponse : ApiResponseBase
