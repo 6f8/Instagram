@@ -78,30 +78,3 @@ public class PlannerTests
         Assert.Empty(Planner.RoundRobin(Array.Empty<string>(), 3, 2).Batch);
     }
 }
-
-public class PostLinkTests
-{
-    [Theory]
-    [InlineData("A", "0")]
-    [InlineData("B", "1")]
-    [InlineData("BA", "64")]
-    [InlineData("_", "63")]
-    [InlineData("__________", "1152921504606846975")] // 10 × 6 bits = 2^60 - 1
-    public void Shortcode_decodes_to_media_id(string code, string id) =>
-        Assert.Equal(id, new InstagramStoryViewer.Social.PostLink(code, "p").MediaId);
-
-    [Fact]
-    public void Long_private_shortcodes_do_not_decode() =>
-        Assert.Null(new InstagramStoryViewer.Social.PostLink("CxYzAbCdEfGhIjKlMnOp", "p").MediaId);
-
-    [Fact]
-    public async Task Media_info_gives_owner_and_comment_state()
-    {
-        var handler = new FakeHandler(_ => FakeHandler.Json(
-            """{"items":[{"pk":"99","code":"C1","taken_at":1,"comments_disabled":true,"user":{"pk":"5","username":"owner"}}],"status":"ok"}"""));
-        var post = await TestClient.Create(handler).GetMediaInfoAsync("99");
-        Assert.Equal("owner", post!.User!.Username);
-        Assert.True(post.CommentsDisabled);
-        Assert.EndsWith("/api/v1/media/99/info/", handler.Requests[0].RequestUri!.AbsolutePath);
-    }
-}

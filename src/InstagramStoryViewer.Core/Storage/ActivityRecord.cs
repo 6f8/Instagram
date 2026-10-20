@@ -14,6 +14,6 @@ public enum WatchOutcome
 
 /// <param name="Url">Link to the item (posts); null means the story URL built from username + media id.</param>
 /// <param name="IsPost">A post rather than a story.</param>
-/// <param name="Text">Comment text (comments only).</param>
+/// <param name="Text">Comment text (comments recorded by versions that could still post comments).</param>
 public sealed record WatchRecord(DateTime Time, string Username, string MediaPk, WatchMode Mode, WatchOutcome Outcome,
     string? Url = null, bool IsPost = false, string? Text = null);

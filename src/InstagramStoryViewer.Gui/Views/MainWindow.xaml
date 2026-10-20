@@ -17,15 +17,13 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d">
 
-    <!-- keyboard: Ctrl+1…7 pages, F5 refresh, Ctrl+F search -->
+    <!-- keyboard: Ctrl+1…5 pages, F5 refresh, Ctrl+F search -->
     <Window.InputBindings>
         <KeyBinding Modifiers="Control" Key="D1" Command="{Binding NavigateCommand}" CommandParameter="Dashboard" />
         <KeyBinding Modifiers="Control" Key="D2" Command="{Binding NavigateCommand}" CommandParameter="Following" />
         <KeyBinding Modifiers="Control" Key="D3" Command="{Binding NavigateCommand}" CommandParameter="Downloads" />
         <KeyBinding Modifiers="Control" Key="D4" Command="{Binding NavigateCommand}" CommandParameter="History" />
-        <KeyBinding Modifiers="Control" Key="D5" Command="{Binding NavigateCommand}" CommandParameter="Comment" />
-        <KeyBinding Modifiers="Control" Key="D6" Command="{Binding NavigateCommand}" CommandParameter="NotFollowingBack" />
-        <KeyBinding Modifiers="Control" Key="D7" Command="{Binding NavigateCommand}" CommandParameter="Settings" />
+        <KeyBinding Modifiers="Control" Key="D5" Command="{Binding NavigateCommand}" CommandParameter="Settings" />
         <KeyBinding Key="F5" Command="{Binding RefreshTrayCommand}" />
     </Window.InputBindings>
     <Window.CommandBindings>
@@ -70,7 +68,7 @@
                 <!-- navigation rail -->
                 <Border Grid.Column="0" Background="{StaticResource RailBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
                     <DockPanel Margin="0,14">
-                        <RadioButton DockPanel.Dock="Bottom" Style="{StaticResource RailButton}" ToolTip="الإعدادات (Ctrl+7)"
+                        <RadioButton DockPanel.Dock="Bottom" Style="{StaticResource RailButton}" ToolTip="الإعدادات (Ctrl+5)"
                                      IsChecked="{Binding Page, Converter={StaticResource EnumBool}, ConverterParameter=Settings}">
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE8B8;" FontSize="18" />
                         </RadioButton>
@@ -90,14 +88,6 @@
                             <RadioButton Style="{StaticResource RailButton}" ToolTip="سجل المشاهدات (Ctrl+4)"
                                          IsChecked="{Binding Page, Converter={StaticResource EnumBool}, ConverterParameter=History}">
                                 <TextBlock Style="{StaticResource Icon}" Text="&#xE889;" FontSize="18" />
-                            </RadioButton>
-                            <RadioButton Style="{StaticResource RailButton}" ToolTip="تعليق على منشور (Ctrl+5)"
-                                         IsChecked="{Binding Page, Converter={StaticResource EnumBool}, ConverterParameter=Comment}">
-                                <TextBlock Style="{StaticResource Icon}" Text="&#xE0B9;" FontSize="18" />
-                            </RadioButton>
-                            <RadioButton Style="{StaticResource RailButton}" ToolTip="لا يتابعونك (Ctrl+6)"
-                                         IsChecked="{Binding Page, Converter={StaticResource EnumBool}, ConverterParameter=NotFollowingBack}">
-                                <TextBlock Style="{StaticResource Icon}" Text="&#xEF66;" FontSize="18" />
                             </RadioButton>
                         </StackPanel>
                     </DockPanel>
@@ -708,10 +698,6 @@
                 <!-- ==================================================== page: settings -->
                 <pages:HistoryPage Grid.Column="1"
                                  Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=History}" />
-                <pages:CommentPage Grid.Column="1"
-                                 Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=Comment}" />
-                <pages:FollowBackPage Grid.Column="1"
-                                 Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=NotFollowingBack}" />
                 <pages:SettingsPage Grid.Column="1"
                                  Visibility="{Binding Page, Converter={StaticResource PageVis}, ConverterParameter=Settings}" />
 

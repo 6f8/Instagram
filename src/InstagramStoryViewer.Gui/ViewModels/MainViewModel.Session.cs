@@ -153,7 +153,6 @@ public sealed partial class MainViewModel
         _persistSession = false;
         _settings.ProtectedSession = null;
         _settings.ClearBrowserOnNextLogin = reason is null; // explicit logout → forget browser login too
-        if (reason is null) FollowBack.Clear();             // the saved list belongs to the account that logged out
         SaveSettings();
 
         TrayUsers.Clear();

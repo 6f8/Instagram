@@ -34,7 +34,7 @@ public sealed partial class MainViewModel
         SaveSettings();
     }
 
-    /// <summary>Page shortcuts (Ctrl+1 … Ctrl+6).</summary>
+    /// <summary>Page shortcuts (Ctrl+1 … Ctrl+5).</summary>
     [CommunityToolkit.Mvvm.Input.RelayCommand]
     private void Navigate(string? page)
     {

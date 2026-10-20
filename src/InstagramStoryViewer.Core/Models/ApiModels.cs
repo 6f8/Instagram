@@ -83,17 +83,9 @@ public sealed class FeedPost
     [JsonPropertyName("taken_at")] public long TakenAt { get; set; }
     [JsonPropertyName("media_type")] public int MediaType { get; set; }
     [JsonPropertyName("has_liked")] public bool? HasLiked { get; set; }
-    [JsonPropertyName("comments_disabled")] public bool? CommentsDisabled { get; set; }
     [JsonPropertyName("user")] public StoryUser? User { get; set; }
 
     [JsonIgnore] public string? Url => Code is null ? null : $"https://www.instagram.com/p/{Code}/";
-}
-
-// ---------- /api/v1/media/{id}/info/ ----------
-
-public sealed class MediaInfoResponse : ApiResponseBase
-{
-    [JsonPropertyName("items")] public List<FeedPost>? Items { get; set; }
 }
 
 // ---------- /api/v1/highlights/{id}/highlights_tray/ ----------

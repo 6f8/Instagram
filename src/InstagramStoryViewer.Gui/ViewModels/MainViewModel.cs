@@ -36,27 +36,11 @@ public interface IDialogService
     /// <summary>Likes stories/posts in the small corner window (background, never steals focus).</summary>
     Task<IReadOnlyList<LikeOutcome>> LikeAsync(string cookieHeader, IReadOnlyList<LikeRequest> requests);
 
-    /// <summary>Types the user's comment into a post's comment box in the corner window and checks it appeared.</summary>
-    Task<CommentOutcome> CommentAsync(string cookieHeader, string postUrl, string text);
-
     /// <summary>Shows a Windows notification (from the notification-area icon).</summary>
     void Notify(string title, string message);
 
     /// <summary>Opens a link or folder in Windows.</summary>
     void OpenUrl(string target);
-
-    void CopyToClipboard(string text);
-
-    /// <summary>Asks where to save a file; null when cancelled.</summary>
-    string? PickSaveFile(string suggestedName, string filter);
-    string? PickOpenFile(string filter);
-
-    /// <summary>
-    /// Runs <paramref name="work"/> with a function that fetches Instagram API paths from inside the logged-in
-    /// instagram.com page in the embedded browser (for requests Instagram refuses from outside the browser).
-    /// </summary>
-    Task<T> WithInstagramPageAsync<T>(string cookieHeader,
-        Func<Func<string, CancellationToken, Task<Social.PageResult>>, CancellationToken, Task<T>> work);
 
     /// <summary>Quits the app for real (also from the notification area), e.g. to let an update replace it.</summary>
     void ExitApplication();
@@ -108,8 +92,6 @@ public sealed partial class MainViewModel : ObservableObject, IMainContext, IDis
         InitializeAppOptions();
         AutoLike = new AutoLikeViewModel(this, dialogs, settings, history, jobs);
         Updates = new UpdatesViewModel(this, dialogs, settings);
-        Comments = new CommentViewModel(this, dialogs, History);
-        FollowBack = new FollowBackViewModel(this, dialogs, settings);
 
         _trayTimer = new DispatcherTimer();
         _trayTimer.Tick += async (_, _) => await SafeAsync(async () =>
@@ -145,8 +127,6 @@ public sealed partial class MainViewModel : ObservableObject, IMainContext, IDis
 
     public AutoLikeViewModel AutoLike { get; }
     public UpdatesViewModel Updates { get; }
-    public CommentViewModel Comments { get; }
-    public FollowBackViewModel FollowBack { get; }
 
     // ================================================================== IMainContext
 
@@ -175,12 +155,6 @@ public sealed partial class MainViewModel : ObservableObject, IMainContext, IDis
     [NotifyPropertyChangedFor(nameof(SessionText))]
     private bool _isLoggedIn;
 
-    partial void OnIsLoggedInChanged(bool value)
-    {
-        Comments.Refresh();
-        FollowBack.Refresh();
-        WatchTopicCommand.NotifyCanExecuteChanged();
-    }
 
     [ObservableProperty] private bool _isLoggingIn;
     [ObservableProperty] private string? _loginError;

@@ -8,23 +8,6 @@
   <data name="RunningNowSuffix" xml:space="preserve"><value> · جارٍ الآن...</value></data>
   <data name="AutoLikeTitle" xml:space="preserve"><value>إعجاب تلقائي</value></data>
   <data name="AutoLikeDoneMessage" xml:space="preserve"><value>تم الإعجاب بـ {0} من الستوريات والمنشورات الجديدة</value></data>
-  <data name="CommentLinkInvalid" xml:space="preserve"><value>هذا ليس رابط منشور أو ريل. مثال: https://www.instagram.com/p/XXXXXXXX/</value></data>
-  <data name="CommentsDisabledByOwner" xml:space="preserve"><value>صاحب المنشور أوقف التعليقات عليه.</value></data>
-  <data name="CommentDuplicateConfirm" xml:space="preserve"><value>سبق أن نشرت هذا التعليق نفسه على هذا المنشور. نشره مرة أخرى؟</value></data>
-  <data name="CommentTargetOwnerPost" xml:space="preserve"><value>منشور {0}</value></data>
-  <data name="CommentTargetPost" xml:space="preserve"><value>المنشور</value></data>
-  <data name="CommentConfirm" xml:space="preserve"><value>سيُنشر هذا التعليق باسمك على {0}:
-
-«{1}»
-
-متابعة؟</value></data>
-  <data name="CommentPosting" xml:space="preserve"><value>جاري فتح المنشور ونشر التعليق...</value></data>
-  <data name="CommentPosted" xml:space="preserve"><value>تم نشر التعليق ✓</value></data>
-  <data name="CommentUnconfirmed" xml:space="preserve"><value>أُرسل التعليق، لكن لم يظهر في الصفحة بعد. افتح المنشور للتأكد.</value></data>
-  <data name="CommentCommentsOff" xml:space="preserve"><value>التعليقات على هذا المنشور متوقفة أو مقيّدة.</value></data>
-  <data name="CommentRejected" xml:space="preserve"><value>رفض إنستجرام نشر التعليق (قد يكون مؤقتاً). حاول لاحقاً.</value></data>
-  <data name="CommentBrowserLoggedOut" xml:space="preserve"><value>المتصفح المدمج غير مسجّل الدخول. سجّل الدخول من جديد.</value></data>
-  <data name="CommentPostUnavailable" xml:space="preserve"><value>تعذّر فتح المنشور (قد يكون محذوفاً أو خاصاً، أو أُوقف).</value></data>
   <data name="TypeVideo" xml:space="preserve"><value>فيديو {0}</value></data>
   <data name="TypeImage" xml:space="preserve"><value>صورة</value></data>
   <data name="SeenVerifiedTooltip" xml:space="preserve"><value>شوهد (أكّد إنستجرام ذلك)</value></data>
@@ -109,32 +92,4 @@
   <data name="UpdateVerifiedRestarting" xml:space="preserve"><value>تم التحقق من التحديث، جاري إعادة التشغيل...</value></data>
   <data name="UpdateFailedStatus" xml:space="preserve"><value>تعذّر التحديث التلقائي: {0}</value></data>
   <data name="UpdateFailedToast" xml:space="preserve"><value>تعذّر التحديث التلقائي ({0}). سيُفتح رابط التنزيل لتنزيله يدوياً.</value></data>
-  <data name="FollowBackNotChecked" xml:space="preserve"><value>لم يُفحص بعد. اضغط "فحص الآن".</value></data>
-  <data name="FollowBackSummary" xml:space="preserve"><value>تتابع {0:N0} · يتابعك {1:N0} · لا يتابعونك {2:N0}</value></data>
-  <data name="FollowBackCheckedAt" xml:space="preserve"><value>آخر فحص: {0:yyyy/MM/dd HH:mm}</value></data>
-  <data name="FollowBackListFollowing" xml:space="preserve"><value>من تتابعهم</value></data>
-  <data name="FollowBackListFollowers" xml:space="preserve"><value>من يتابعونك</value></data>
-  <data name="FollowBackStopped" xml:space="preserve"><value>توقف الفحص: {0}</value></data>
-  <data name="FollowBackCancelled" xml:space="preserve"><value>أُوقف الفحص.</value></data>
-  <data name="FollowBackReading" xml:space="preserve"><value>جاري قراءة {0}: {1:N0}</value></data>
-  <data name="FollowBackCopied" xml:space="preserve"><value>تم نسخ {0} اسم مستخدم</value></data>
-  <data name="FollowBackPaused" xml:space="preserve"><value>طلب إنستجرام من البرنامج التمهّل، فأوقف البرنامج كل الطلبات مؤقتاً لحماية حسابك (هذا ليس حظراً). اضغط "فحص الآن" بعد الساعة {0:HH:mm}. لا تُعرض نتيجة ناقصة لأنها قد تكون خاطئة.</value></data>
-  <data name="FollowBackOpening" xml:space="preserve"><value>جاري فتح إنستجرام في النافذة الصغيرة...</value></data>
-  <data name="FollowBackOverBudget" xml:space="preserve"><value>القائمتان أطول مما يسمح به المتبقي من حد الساعة ({0} طلباً، كل طلب = 12 حساباً). ارفع "طلبات في الساعة" من الإعدادات ثم أعد الفحص.</value></data>
-  <data name="FollowBackDone" xml:space="preserve"><value>تم الفحص: {0:N0} حساباً لا يتابعونك، وتم التحقق من كل واحد منها بالبحث في قائمة متابعيك. (استُبعد {1:N0} حساباً لم تُرجعها إنستجرام في القائمة لكنها تتابعك فعلاً.)</value></data>
-  <data name="FollowBackDoneUnconfirmed" xml:space="preserve"><value>تم: {0:N0} حساباً مؤكَّداً لا يتابعونك (واستُبعد {1:N0} تبيّن أنها تتابعك). بقي {2:N0} حساباً "غير مؤكَّد" لنفاد حد الطلبات في هذه الساعة؛ ارفع "طلبات في الساعة" من الإعدادات وأعد الفحص لاحقاً.</value></data>
-  <data name="FollowBackSummaryUnconfirmed" xml:space="preserve"><value>تتابع {0:N0} · يتابعك {1:N0} · لا يتابعونك {2:N0} · غير مؤكَّد {3:N0}</value></data>
-  <data name="FollowBackVerifying" xml:space="preserve"><value>جاري التحقق من كل حساب في قائمة متابعيك: {0:N0} من {1:N0}</value></data>
-  <data name="FollowBackProfileCounts" xml:space="preserve"><value>في ملفك الشخصي: {0:N0} متابِع · قرأ البرنامج منهم {1:N0}</value></data>
-  <data name="FollowBackReadingOfTotal" xml:space="preserve"><value>جاري قراءة {0}: {1:N0} من {2:N0}</value></data>
-  <data name="FollowBackVerifyingLost" xml:space="preserve"><value>جاري التحقق ممن اختفوا من قائمة متابعيك: {0:N0} من {1:N0}</value></data>
-  <data name="FollowBackFirstCheck" xml:space="preserve"><value>هذا أول فحص؛ من الفحص القادم سيظهر من ألغى متابعتك ومن تابعك جديداً.</value></data>
-  <data name="FollowBackChanges" xml:space="preserve"><value>منذ الفحص السابق: ألغى {0:N0} متابعتك، وتابعك {1:N0} جديداً.</value></data>
-  <data name="FollowBackContinued" xml:space="preserve"><value>تم التحقق: {0:N0} مؤكَّد، واستُبعد {1:N0} يتابعك. بقي {2:N0} غير مؤكَّد.</value></data>
-  <data name="FollowBackRecheckFollows" xml:space="preserve"><value>{0} يتابعك؛ أُزيل من القائمة.</value></data>
-  <data name="FollowBackRecheckConfirmed" xml:space="preserve"><value>تأكّد: {0} لا يتابعك.</value></data>
-  <data name="FollowBackRecheckUnknown" xml:space="preserve"><value>تعذّر التحقق من {0} الآن (البحث لا يعمل حالياً أو نفد حد الطلبات).</value></data>
-  <data name="FollowBackExported" xml:space="preserve"><value>تم حفظ {0} حساباً في الملف</value></data>
-  <data name="FollowBackExportFailed" xml:space="preserve"><value>تعذّر حفظ الملف: {0}</value></data>
-  <data name="FollowBackClearChangesConfirm" xml:space="preserve"><value>حذف سجل من ألغى متابعتك ومن تابعك جديداً؟</value></data>
 </root>

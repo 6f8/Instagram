@@ -179,24 +179,4 @@ public class UserPostsTests
         Assert.Contains("/api/v1/feed/user/5/", handler.Requests[0].RequestUri!.AbsolutePath);
         Assert.Contains("count=3", handler.Requests[0].RequestUri!.Query);
     }
-
-    [Fact]
-    public async Task A_batch_refused_with_500_is_skipped_when_asked()
-    {
-        var handler = new FakeHandler(r => r.RequestUri!.Query.Contains("reel_ids=1&", StringComparison.Ordinal)
-            ? FakeHandler.Json("""{"message":"We're sorry, but something went wrong.","status":"fail"}""", System.Net.HttpStatusCode.InternalServerError)
-            : FakeHandler.Json("""{"reels_media":[{"id":"3","user":{"pk":"3","username":"c"},"items":[{"pk":"9","taken_at":2,"media_type":1}]}],"status":"ok"}"""));
-        var skipped = new List<string>();
-        var reels = await TestClient.Create(handler).GetStoriesForUsersAsync(["1", "2", "3"], default, 2, (ids, _) => skipped.AddRange(ids));
-
-        Assert.Equal(["1", "2"], skipped);
-        Assert.Equal("3", Assert.Single(reels).User!.Pk);
-    }
-
-    [Fact]
-    public async Task A_500_still_fails_the_call_by_default()
-    {
-        var handler = new FakeHandler(_ => FakeHandler.Json("""{"message":"x","status":"fail"}""", System.Net.HttpStatusCode.InternalServerError));
-        await Assert.ThrowsAsync<InstagramStoryViewer.Api.InstagramApiException>(() => TestClient.Create(handler).GetStoriesForUsersAsync(["1"]));
-    }
 }

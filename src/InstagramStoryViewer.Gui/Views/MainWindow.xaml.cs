@@ -388,10 +388,6 @@ public partial class MainWindow : Window, IDialogService
     public Task<IReadOnlyList<LikeOutcome>> LikeAsync(string cookieHeader, IReadOnlyList<LikeRequest> requests) =>
         RunInWatcherAsync(w => w.LikeAsync(cookieHeader, requests), background: true);
 
-    /// <summary>Comments are typed into the page, so the corner window comes to the front for them.</summary>
-    public Task<CommentOutcome> CommentAsync(string cookieHeader, string postUrl, string text) =>
-        RunInWatcherAsync(w => w.CommentAsync(cookieHeader, postUrl, text), background: false);
-
     public void OpenUrl(string target)
     {
         try { Process.Start(new ProcessStartInfo(target) { UseShellExecute = true }); }
@@ -402,31 +398,6 @@ public partial class MainWindow : Window, IDialogService
     }
 
     public void ExitApplication() => ExitApp();
-
-    public Task<T> WithInstagramPageAsync<T>(string cookieHeader,
-        Func<Func<string, CancellationToken, Task<InstagramStoryViewer.Social.PageResult>>, CancellationToken, Task<T>> work) =>
-        RunInWatcherAsync(w => w.UseInstagramPageAsync(cookieHeader, work), background: true);
-
-    public string? PickSaveFile(string suggestedName, string filter)
-    {
-        var dialog = new Microsoft.Win32.SaveFileDialog { FileName = suggestedName, Filter = filter };
-        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
-    }
-
-    public string? PickOpenFile(string filter)
-    {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Filter = filter };
-        return dialog.ShowDialog(this) == true ? dialog.FileName : null;
-    }
-
-    public void CopyToClipboard(string text)
-    {
-        try { Clipboard.SetText(text); }
-        catch (System.Runtime.InteropServices.COMException ex)
-        {
-            _vm.ShowToast($"تعذّر النسخ: {ex.Message}", isError: true); // clipboard held by another program
-        }
-    }
 
     /// <summary>Runs one batch (watch or like) in the shared corner window; batches queue behind each other.</summary>
     private async Task<T> RunInWatcherAsync<T>(Func<StoryWatchWindow, Task<T>> batch, bool background)

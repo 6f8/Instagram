@@ -66,57 +66,8 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
 - **History:** every like is recorded in the history.
 - Overusing automated likes can get your account restricted.
 
-### Commenting on a post
-- **Comment** page (`Ctrl+5`):
-  1. Paste the link of a post or reel.
-  2. Write your comment.
-  3. Press **Post comment**.
-- The app first checks the comment against Instagram's limits:
-  - At most 2,200 characters.
-  - At most 30 hashtags.
-  - At most 5 mentions.
-- Before posting, it shows you the comment and the post owner and asks you to confirm. It warns you if you already posted the same comment on that post.
-- **How it works:**
-  - The post opens in the embedded browser.
-  - The comment is typed into the post's own comment box and **Post** is pressed.
-  - The app then waits until the comment actually appears on the page: **posted**, **sent but unconfirmed**, or **not posted** (comments off, or an error from Instagram).
-- Every comment is recorded in the history together with its text.
-
-### Not following back
-- The **Not following back** page (`Ctrl+6`) lists the accounts you follow that don't follow you.
-- **How it works:** press **Check now**. The app reads your *following* and *followers* lists and compares them.
-- **Where the lists are read:** from inside the logged-in instagram.com page in the embedded browser, with the same requests the site makes when you scroll the followers dialog. Instagram answers the same requests sent from outside the browser with "please wait a few minutes".
-- **Request cost:**
-  - Every 12 accounts cost one request (the page size the site uses), with a pause of 1.5–3.5 s between requests.
-  - Only the two lists are requested, nothing else. The account's own `users/{id}/info` is not requested: Instagram answers it with 429 when it comes from the website.
-  - The check stays within what is left of the hourly request cap. If the lists are longer than that, it stops and shows no result, because a partial list would give wrong results. Raise the cap in Settings and check again.
-- **On the list:**
-  - Search by name.
-  - Hide verified accounts.
-  - Copy the shown usernames.
-  - Open any profile.
-- The last result is kept (`%AppData%\InstagramStoryViewer\not-following-back.json`) and shown again without new requests. It is deleted when you log out.
-
-#### More on the Not following back page (v2.6)
-- **Profile count:** your follower count from your profile is shown next to the number read, so an incomplete list is easy to spot.
-- **Checking:**
-  - Recheck a single account with one button.
-  - **Continue verifying** checks only the "unconfirmed" ones.
-- **Tabs:**
-  - **Unfollowed you:** confirmed by search before being listed.
-  - **New followers.**
-  - **Check history:** follower counts with the change between checks.
-- **Exclusions:** accounts you follow on purpose stay hidden.
-- **Filters:** unconfirmed / private / public, sorting by name, CSV export.
-
-### Finding a post to comment on
-- The **Comment** page has a search box:
-  - Search a **hashtag** (read inside the instagram.com page).
-  - Or **New posts** from your favorites over the last 3 days.
-- Press **Comment** next to a post to put its link in the box.
-
 ### Keyboard
-- `Ctrl+1` … `Ctrl+7`: switch pages.
+- `Ctrl+1` … `Ctrl+5`: switch pages.
 - `F5`: refresh.
 - `Ctrl+F`: search.
 - `Tab`: moves between controls with a visible focus ring. Icon buttons have names for screen readers.
@@ -145,7 +96,7 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
 - **Storage:**
   - History and the list of already-handled posts live in a small SQLite database. Old rows expire on their own: 180 days for history, 30 days for handled posts.
   - Settings are written once changes settle, not on every click. Older settings files are upgraded automatically.
-- **Page selectors:** the button labels and the comment box the embedded browser looks for are kept in `config/selectors.json`.
+- **Page selectors:** the button labels the embedded browser looks for are kept in `config/selectors.json`.
   - When Instagram changes its page, fixing that file in the repository updates every copy of the app within a day, with no new release.
   - Only data is downloaded, never code.
   - A local override can be placed in `%AppData%\InstagramStoryViewer\selectors.json`.
@@ -169,7 +120,7 @@ The interface is in Arabic (right to left) with a dark "neon dashboard" design.
 | What | Where |
 |---|---|
 | Settings and encrypted session | `%AppData%\InstagramStoryViewer\settings.json` (+ `.bak`) |
-| History (watched, liked, commented) | `%AppData%\InstagramStoryViewer\history.db` (SQLite; the old `watch-history.jsonl` is imported once) |
+| History (watched, liked) | `%AppData%\InstagramStoryViewer\history.db` (SQLite; the old `watch-history.jsonl` is imported once) |
 | Page selectors fetched from GitHub / local override | `%AppData%\InstagramStoryViewer\selectors.remote.json` / `selectors.json` |
 | Last unexpected server response (tokens masked) | `%AppData%\InstagramStoryViewer\last-response.txt` |
 | Daily run log (7 days) and crash reports | `%LocalAppData%\InstagramStoryViewer\logs\` |
@@ -184,12 +135,11 @@ src/
 │   ├── Api/                       # Instagram client (Polly retries, rate-limit cool-down), cookies, errors
 │   ├── Json/                      # source-generated JSON (de)serializers
 │   ├── Automation/                # Planner (what to watch/like), DailyCount, QuietHours, JobQueue
-│   ├── Social/                    # post links, comment rules
 │   ├── Storage/                   # SQLite history + handled media
 │   └── Diagnostics/               # daily log, crash reports, sanitizer
 ├── InstagramStoryViewer.Gui/      # WPF interface (MVVM, dependency injection) → InstagramStoryViewer.exe
 │   ├── Views/                     # main window, Pages/, full-screen viewer, embedded-browser window, login
-│   ├── ViewModels/                # MainViewModel (partials) + AutoLike, Comment and Updates view models
+│   ├── ViewModels/                # MainViewModel (partials) + AutoLike and Updates view models
 │   ├── Services/                  # settings (debounced), history, image cache, page selectors, updater, tray
 │   ├── Resources/                 # Strings.resx (view-model texts), built-in selectors.json
 │   ├── Themes/Theme.xaml          # colors, styles and shared templates
@@ -226,10 +176,7 @@ In both cases, GitHub Actions builds the exe and adds it to Releases.
 | Stories of followed accounts | `GET /api/v1/feed/reels_tray/` |
 | Stories of an account or highlight, or several accounts at once | `GET /api/v1/feed/reels_media/?reel_ids=..` |
 | An account's latest posts (auto-like) | `GET /api/v1/feed/user/{id}/?count=..` |
-| Following / followers (not following back) | `GET /api/v1/friendships/{id}/following/` and `/followers/?count=12&max_id=..`, fetched inside the embedded browser |
 | Like | Presses the like button in the embedded browser |
-| Post info for a comment (owner, comments off) | `GET /api/v1/media/{id}/info/` |
-| Comment | Typed into the post's comment box in the embedded browser |
 | An account's highlights | `GET /api/v1/highlights/{id}/highlights_tray/` |
 | Mark as seen | Plays the story in the embedded browser (the old REST endpoint returns 404) |
 

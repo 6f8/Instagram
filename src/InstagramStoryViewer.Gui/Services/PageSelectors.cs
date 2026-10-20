@@ -8,7 +8,7 @@ using InstagramStoryViewer.Diagnostics;
 namespace InstagramStoryViewer.Gui.Services;
 
 /// <summary>
-/// What the embedded-browser scripts look for on Instagram's page (button labels, the comment box).
+/// What the embedded-browser scripts look for on Instagram's page (button labels).
 /// Instagram changes its page often; keeping these as data means a fix is a one-line change to
 /// config/selectors.json in the repository, picked up by every copy of the app within a day, with no new
 /// release. Only data is downloaded, never script code, and every pattern must compile before it is used.
@@ -22,11 +22,6 @@ public sealed class PageSelectors
     [JsonPropertyName("viewStory")] public string ViewStory { get; set; } = "";
     [JsonPropertyName("liked")] public string Liked { get; set; } = "";
     [JsonPropertyName("like")] public string Like { get; set; } = "";
-    [JsonPropertyName("commentBox")] public string CommentBox { get; set; } = "";
-    [JsonPropertyName("commentIcon")] public string CommentIcon { get; set; } = "";
-    [JsonPropertyName("postButton")] public string PostButton { get; set; } = "";
-    [JsonPropertyName("commentError")] public string CommentError { get; set; } = "";
-    [JsonPropertyName("commentsOff")] public string CommentsOff { get; set; } = "";
 
     /// <summary>The selectors as a JSON object literal, ready to pass into a page script.</summary>
     public string ToScriptArgument() => JsonSerializer.Serialize(this);
@@ -95,8 +90,8 @@ public sealed class PageSelectors
         {
             var s = JsonSerializer.Deserialize<PageSelectors>(json);
             if (s is null) return null;
-            string[] patterns = [s.ViewStory, s.Liked, s.Like, s.CommentIcon, s.PostButton, s.CommentError, s.CommentsOff];
-            if (patterns.Any(string.IsNullOrWhiteSpace) || string.IsNullOrWhiteSpace(s.CommentBox)) return null;
+            string[] patterns = [s.ViewStory, s.Liked, s.Like];
+            if (patterns.Any(string.IsNullOrWhiteSpace)) return null;
             foreach (var p in patterns) _ = new Regex(p, RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1));
             return s;
         }

@@ -1,5 +1,4 @@
 using InstagramStoryViewer.Automation;
-using InstagramStoryViewer.Social;
 
 namespace InstagramStoryViewer.Tests;
 
@@ -94,40 +93,5 @@ public class AutomationTests
         await q.WhenIdleAsync();
         Assert.Equal(["bad: boom"], errors);
         Assert.True(ran);
-    }
-
-    [Theory]
-    [InlineData("https://www.instagram.com/p/C8abc-12_x/", "p", "C8abc-12_x")]
-    [InlineData("instagram.com/p/C8abc12x", "p", "C8abc12x")]
-    [InlineData("https://instagram.com/reel/DAbCdEf123/?igsh=xyz", "reel", "DAbCdEf123")]
-    [InlineData("https://www.instagram.com/reels/DAbCdEf123/", "reel", "DAbCdEf123")]
-    [InlineData("https://www.instagram.com/someone.name/p/C8abc12x/", "p", "C8abc12x")]
-    [InlineData("  https://m.instagram.com/tv/B1234567/  ", "tv", "B1234567")]
-    public void Parses_post_links(string text, string kind, string code)
-    {
-        var link = PostLink.TryParse(text);
-        Assert.NotNull(link);
-        Assert.Equal(kind, link.Kind);
-        Assert.Equal(code, link.Shortcode);
-        Assert.Equal($"https://www.instagram.com/{kind}/{code}/", link.Url);
-    }
-
-    [Theory]
-    [InlineData("")]
-    [InlineData("https://www.instagram.com/someone/")]
-    [InlineData("https://www.instagram.com/stories/someone/123/")]
-    [InlineData("https://evil.example/instagram.com/p/C8abc12x/")]
-    [InlineData("https://www.instagram.com.evil.example/p/C8abc12x/")]
-    public void Rejects_anything_that_is_not_a_single_post(string text) => Assert.Null(PostLink.TryParse(text));
-
-    [Fact]
-    public void Comment_rules()
-    {
-        Assert.Null(CommentRules.Validate("ما شاء الله 👏 @friend #تصوير"));
-        Assert.NotNull(CommentRules.Validate("   "));
-        Assert.NotNull(CommentRules.Validate(new string('a', CommentRules.MaxLength + 1)));
-        Assert.NotNull(CommentRules.Validate(string.Join(' ', Enumerable.Range(0, 31).Select(i => "#t" + i))));
-        Assert.NotNull(CommentRules.Validate(string.Join(' ', Enumerable.Range(0, 6).Select(i => "@u" + i))));
-        Assert.Null(CommentRules.Validate("mail me at a@b.com")); // an e-mail address is not a mention
     }
 }

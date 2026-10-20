@@ -93,9 +93,6 @@ public sealed class AppSettings
     /// <summary>Round-robin position over favorites for the posts check.</summary>
     public int AutoLikePostCursor { get; set; }
 
-    /// <summary>Accounts the user follows on purpose without expecting a follow back (hidden in "Not following back").</summary>
-    public List<AccountRef> FollowBackIgnored { get; set; } = new();
-
     /// <summary>Main window position and size, restored on the next start.</summary>
     public WindowPlacement? Window { get; set; }
 

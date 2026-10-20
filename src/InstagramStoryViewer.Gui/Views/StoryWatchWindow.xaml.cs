@@ -2,7 +2,6 @@ using System.Text.Json;
 using System.Windows;
 using InstagramStoryViewer.Api;
 using InstagramStoryViewer.Diagnostics;
-using InstagramStoryViewer.Social;
 using InstagramStoryViewer.Gui.Services;
 using Microsoft.Web.WebView2.Core;
 
@@ -58,112 +57,17 @@ public partial class StoryWatchWindow : Window
         })(__CFG__, __MODE__)
         """;
 
-    // Shared by the comment scripts: the visible, enabled comment box of the post.
-    private const string FindCommentBox = """
-        const box = [...document.querySelectorAll(cfg.commentBox)]
-          .find(t => t.getBoundingClientRect().width > 0 && !t.disabled && t.getAttribute('aria-disabled') !== 'true');
-        """;
-
-    // Finds the comment box and focuses it so the text can be typed into it.
-    private const string FocusCommentBoxScript = """
-        ((cfg) => {
-          if (location.pathname.startsWith('/accounts/login')) return 'login';
-          if (new RegExp(cfg.commentsOff, 'i').test(document.body.innerText || '')) return 'off';
-          __BOX__
-          if (!box) {
-            // Narrow (mobile) layout: the box only appears after pressing the post's comment icon.
-            const icon = new RegExp(cfg.commentIcon, 'i');
-            const svg = [...document.querySelectorAll('svg[aria-label]')]
-              .find(s => icon.test(s.getAttribute('aria-label').trim()) && s.getBoundingClientRect().width > 0);
-            const btn = svg && (svg.closest('button, [role="button"], a') || svg.parentElement);
-            if (btn && !window.__igsvOpenedComments) { window.__igsvOpenedComments = true; btn.click(); return 'opening'; }
-            return 'missing';
-          }
-          box.scrollIntoView({ block: 'center' });
-          box.focus();
-          box.click();
-          return 'ready';
-        })(__CFG__)
-        """;
-
-    // Returns what the comment box currently holds (null when there is none).
-    private const string CommentBoxValueScript = """
-        ((cfg) => { __BOX__ return box ? box.value : null; })(__CFG__)
-        """;
-
-    // Fallback when typing did not reach the box: set the value the way React expects and announce it.
-    private const string SetCommentValueScript = """
-        ((cfg, text) => {
-          __BOX__
-          if (!box) return false;
-          const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
-          setter.call(box, text);
-          box.dispatchEvent(new Event('input', { bubbles: true }));
-          return box.value === text;
-        })(__CFG__, __TEXT__)
-        """;
-
-    // Presses the "Post" button next to the comment box.
-    private const string SubmitCommentScript = """
-        ((cfg) => {
-          __BOX__
-          if (!box) return 'missing';
-          const re = new RegExp(cfg.postButton, 'i');
-          const scope = box.closest('form') || box.parentElement?.parentElement?.parentElement || document;
-          const btn = [...scope.querySelectorAll('[role="button"], button, div[tabindex]')]
-            .find(b => re.test((b.innerText || '').trim()));
-          if (!btn) return 'nobutton';
-          if (btn.disabled || btn.getAttribute('aria-disabled') === 'true') return 'disabled';
-          btn.click();
-          return 'clicked';
-        })(__CFG__)
-        """;
-
-    // After posting: an error message, the comment shown on the page, or still waiting.
-    private const string CheckCommentScript = """
-        ((cfg, snippet) => {
-          const body = document.body.innerText || '';
-          if (new RegExp(cfg.commentError, 'i').test(body)) return 'error';
-          __BOX__
-          const cleared = !box || box.value.trim() === '';
-          if (cleared && body.includes(snippet)) return 'posted';
-          return cleared ? 'cleared' : 'pending';
-        })(__CFG__, __SNIPPET__)
-        """;
-
-    // A same-origin request from inside instagram.com, with the headers the site's own code sends.
-    private const string PageFetchScript = """
-        (async (path) => {
-          const csrf = (document.cookie.match(/(?:^|; )csrftoken=([^;]+)/) || [])[1] || '';
-          const claim = sessionStorage.getItem('www-claim-v2') || '0';
-          const abort = new AbortController();
-          setTimeout(() => abort.abort(), 30000); // a stalled request must not block the batch
-          try {
-            const r = await fetch(path, {
-              signal: abort.signal,
-              credentials: 'include',
-              headers: { 'X-IG-App-ID': '936619743392459', 'X-Requested-With': 'XMLHttpRequest',
-                         'X-CSRFToken': csrf, 'X-IG-WWW-Claim': claim, 'X-ASBD-ID': '129477' }
-            });
-            return JSON.stringify({ status: r.status, body: await r.text() });
-          } catch (e) {
-            // "Failed to fetch": Instagram cut the request (usually its rate limit redirecting away). Status 0.
-            return JSON.stringify({ status: 0, body: String(e) });
-          }
-        })(__PATH__)
-        """;
-
     private readonly PageSelectors _selectors;
 
     /// <summary>
     /// Fills a script's __NAME__ placeholders with JSON values in a single pass, so text inserted for one
-    /// placeholder (a comment, say) is never scanned for another.
+    /// placeholder is never scanned for another.
     /// </summary>
     private string Script(string template, params (string Name, object? Value)[] args)
     {
         var values = args.ToDictionary(a => a.Name, a => JsonSerializer.Serialize(a.Value));
         values["CFG"] = _selectors.ToScriptArgument();
-        return System.Text.RegularExpressions.Regex.Replace(template.Replace("__BOX__", FindCommentBox), "__([A-Z]+)__",
+        return System.Text.RegularExpressions.Regex.Replace(template, "__([A-Z]+)__",
             m => values.TryGetValue(m.Groups[1].Value, out var v) ? v : m.Value);
     }
 
@@ -174,18 +78,12 @@ public partial class StoryWatchWindow : Window
     private async Task<T?> RunAsync<T>(CoreWebView2 core, string template, params (string Name, object? Value)[] args) =>
         JsonSerializer.Deserialize<T>(await core.ExecuteScriptAsync(Script(template, args)).WaitAsync(_batchCts.Token));
 
-    /// <summary>A DevTools call that, like <see cref="RunAsync{T}"/>, stops waiting when the batch is stopped.</summary>
-    private Task<string> DevToolsAsync(CoreWebView2 core, string method, string json, CancellationToken ct) =>
-        core.CallDevToolsProtocolMethodAsync(method, json).WaitAsync(ct);
-
     /// <summary>Unsubscribes, tolerating a WebView2 that was closed in the meantime.</summary>
     private static void Unsubscribe(CoreWebView2 core, EventHandler<CoreWebView2NavigationCompletedEventArgs> handler)
     {
         try { core.NavigationCompleted -= handler; }
         catch (Exception ex) when (ex is InvalidOperationException or System.Runtime.InteropServices.COMException) { }
     }
-
-    private static string Shorten(string s) => s.Length > 2000 ? s[..2000] : s;
 
     private CancellationTokenSource _batchCts = new();
     private Task? _init;
@@ -211,33 +109,6 @@ public partial class StoryWatchWindow : Window
         var area = SystemParameters.WorkArea;
         Left = area.Left + 16;
         Top = area.Bottom - Height - 16;
-    }
-
-    private Rect? _cornerBounds;
-
-    /// <summary>
-    /// Comments need Instagram's desktop layout (comment box under the post); the 300 px corner window gets the
-    /// mobile one. The window is widened and centred while commenting, then put back in its corner.
-    /// </summary>
-    private void UseWideLayout(bool wide)
-    {
-        if (wide)
-        {
-            _cornerBounds ??= new Rect(Left, Top, Width, Height);
-            var area = SystemParameters.WorkArea;
-            Width = Math.Min(1000, area.Width - 40);
-            Height = Math.Min(760, area.Height - 40);
-            Left = area.Left + (area.Width - Width) / 2;
-            Top = area.Top + (area.Height - Height) / 2;
-        }
-        else if (_cornerBounds is { } r)
-        {
-            Width = r.Width;
-            Height = r.Height;
-            Left = r.Left;
-            Top = r.Top;
-            _cornerBounds = null;
-        }
     }
 
     private void Stop_Click(object sender, RoutedEventArgs e) => _batchCts.Cancel();
@@ -383,96 +254,6 @@ public partial class StoryWatchWindow : Window
         return results;
     }
 
-    /// <summary>
-    /// Opens instagram.com in this window and hands <paramref name="work"/> a function that fetches API paths
-    /// from inside the page — the same requests, cookies and headers as the site itself (Instagram refuses
-    /// some of them, such as follow lists, from outside the browser). The Stop button cancels the work.
-    /// </summary>
-    public async Task<T> UseInstagramPageAsync<T>(string cookieHeader,
-        Func<Func<string, CancellationToken, Task<PageResult>>, CancellationToken, Task<T>> work)
-    {
-        _batchCts = new CancellationTokenSource();
-        var ct = _batchCts.Token;
-        try
-        {
-            _init ??= InitializeBrowserAsync();
-            await _init;
-            if (_closed) throw new OperationCanceledException();
-
-            var core = Web.CoreWebView2;
-            ApplySessionCookies(core, cookieHeader);
-            StatusText.Text = "جاري فتح إنستجرام...";
-            Progress.IsIndeterminate = true;
-            var opened = await OpenPageAsync(core, "https://www.instagram.com/", ct);
-            if (opened == "login")
-                throw new InstagramApiException(InstagramErrorKind.LoginRequired, "المتصفح المدمج غير مسجّل الدخول.");
-            if (opened != "loaded")
-                throw new InstagramApiException(InstagramErrorKind.Network, "تعذّر فتح إنستجرام في المتصفح المدمج.");
-            StatusText.Text = "جاري القراءة من إنستجرام...";
-
-            // Callers may be on any thread: the core library continues on the thread pool after its own awaits
-            // (ConfigureAwait(false)), and CoreWebView2 may only be touched on this window's UI thread.
-            Task<PageResult> FetchAsync(string path, CancellationToken token) =>
-                Dispatcher.CheckAccess()
-                    ? FetchOnUiThreadAsync(path, token)
-                    : Dispatcher.InvokeAsync(() => FetchOnUiThreadAsync(path, token)).Task.Unwrap();
-
-            async Task<PageResult> FetchOnUiThreadAsync(string path, CancellationToken token)
-            {
-                token.ThrowIfCancellationRequested();
-                ct.ThrowIfCancellationRequested();
-                if (_closed) throw new OperationCanceledException(); // window closed mid-check
-                // Runtime.evaluate can wait for the promise; ExecuteScriptAsync cannot.
-                var args = JsonSerializer.Serialize(new
-                {
-                    expression = PageFetchScript.Replace("__PATH__", JsonSerializer.Serialize(path)),
-                    awaitPromise = true,
-                    returnByValue = true
-                });
-                using var both = CancellationTokenSource.CreateLinkedTokenSource(token, ct);
-                var json = await DevToolsAsync(core, "Runtime.evaluate", args, both.Token);
-                try
-                {
-                    using var reply = JsonDocument.Parse(json);
-                    if (reply.RootElement.TryGetProperty("exceptionDetails", out var error))
-                        throw new InstagramApiException(InstagramErrorKind.Network, $"تعذّر الطلب داخل الصفحة: {Shorten(error.GetRawText())}") { RequestPath = path };
-                    using var page = JsonDocument.Parse(reply.RootElement.GetProperty("result").GetProperty("value").GetString()!);
-                    return new PageResult(page.RootElement.GetProperty("status").GetInt32(), page.RootElement.GetProperty("body").GetString() ?? "");
-                }
-                catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or NullReferenceException)
-                {
-                    // e.g. the page navigated away (a challenge) while the request was running
-                    throw new InstagramApiException(InstagramErrorKind.InvalidResponse, "ردّ غير متوقع من الصفحة أثناء القراءة.", inner: ex)
-                    { ResponseBody = Shorten(json), RequestPath = path };
-                }
-            }
-
-            return await work(FetchAsync, ct);
-        }
-        catch (WebView2RuntimeNotFoundException)
-        {
-            throw new InstagramApiException(InstagramErrorKind.Unknown,
-                "مكوّن Microsoft Edge WebView2 غير مثبت. ثبّته من موقع مايكروسوفت (Evergreen Runtime).");
-        }
-        catch (Exception ex) when (ex is ObjectDisposedException or InvalidOperationException or System.Runtime.InteropServices.COMException)
-        {
-            // The window was closed (or the batch stopped) mid-call: a cancellation, not an error.
-            if (_closed || ct.IsCancellationRequested) throw new OperationCanceledException("watch window closed", ex, ct);
-            // Anything else the browser threw is reported like a network problem instead of crashing the app.
-            throw new InstagramApiException(InstagramErrorKind.Network, $"تعذّر استخدام المتصفح المدمج: {ex.Message}", inner: ex);
-        }
-        finally
-        {
-            if (!_closed)
-            {
-                Progress.IsIndeterminate = false;
-                StatusText.Text = "انتهى";
-                try { Web.CoreWebView2?.Navigate("about:blank"); }
-                catch (InvalidOperationException) { }
-            }
-        }
-    }
-
     /// <summary>Waits for the like button, clicks it if needed, and verifies the result.</summary>
     private async Task<LikeOutcome> ClickLikeAsync(CoreWebView2 core, CancellationToken ct)
     {
@@ -494,120 +275,6 @@ public partial class StoryWatchWindow : Window
             if (await RunAsync<string>(core, LikeScript, ("MODE", "check")) == "liked") return LikeOutcome.Liked;
         }
         return LikeOutcome.Failed;
-    }
-
-    /// <summary>
-    /// Opens a post and posts the user's comment: focuses the comment box, types the text (as keyboard input,
-    /// so the page's own handlers see it), presses "Post", then waits until the comment shows on the page.
-    /// </summary>
-    public async Task<CommentOutcome> CommentAsync(string cookieHeader, string postUrl, string text)
-    {
-        _batchCts = new CancellationTokenSource();
-        var ct = _batchCts.Token;
-        var outcome = CommentOutcome.NotShown;
-        try
-        {
-            _init ??= InitializeBrowserAsync();
-            await _init;
-            if (_closed) return outcome;
-
-            var core = Web.CoreWebView2;
-            ApplySessionCookies(core, cookieHeader);
-            UseWideLayout(true);
-            StatusText.Text = "جاري فتح المنشور...";
-            Progress.Value = 0.1;
-
-            var opened = await OpenPageAsync(core, postUrl, ct);
-            if (opened == "login") return outcome = CommentOutcome.LoginRequired;
-            if (opened != "loaded") return outcome;
-
-            outcome = await PostCommentAsync(core, text, ct);
-        }
-        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or InvalidOperationException
-                                       or System.Runtime.InteropServices.COMException)
-        {
-            // stopped by the user, or the window was closed mid-call
-        }
-        catch (Exception ex) when (ex is WebView2RuntimeNotFoundException or UnauthorizedAccessException or IOException)
-        {
-            if (!_closed) // no dialog owned by a window that is already gone
-            {
-                ConfirmDialog.Info(this, ex is WebView2RuntimeNotFoundException
-                    ? "مكوّن Microsoft Edge WebView2 غير مثبت. ثبّته من موقع مايكروسوفت (Evergreen Runtime)."
-                    : $"تعذّر تشغيل المتصفح المدمج: {ex.Message}");
-                Close();
-            }
-        }
-
-        if (!_closed)
-        {
-            UseWideLayout(false);
-            Progress.Value = 1;
-            StatusText.Text = outcome == CommentOutcome.Posted ? "تم نشر التعليق" : "انتهى";
-            try { Web.CoreWebView2?.Navigate("about:blank"); }
-            catch (InvalidOperationException) { }
-        }
-        return outcome;
-    }
-
-    private async Task<CommentOutcome> PostCommentAsync(CoreWebView2 core, string text, CancellationToken ct)
-    {
-        StatusText.Text = "جاري كتابة التعليق...";
-        Progress.Value = 0.35;
-
-        // The comment box renders a moment after the page.
-        var state = "missing";
-        for (var attempt = 0; attempt < 14 && state is "missing" or "opening"; attempt++)
-        {
-            await Task.Delay(attempt == 0 ? 1500 : 700, ct);
-            state = await RunAsync<string>(core, FocusCommentBoxScript) ?? "missing";
-        }
-        switch (state)
-        {
-            case "login": return CommentOutcome.LoginRequired;
-            case "off": return CommentOutcome.CommentsOff;
-            case "missing":
-                AppLog.Warn("Comment: no comment box on the page (comments off, or selectors need an update)");
-                return CommentOutcome.CommentsOff;
-        }
-
-        // Type it like a keyboard would; fall back to setting the value if the page did not take it.
-        await Task.Delay(400 + Random.Shared.Next(0, 500), ct);
-        await DevToolsAsync(core, "Input.insertText", JsonSerializer.Serialize(new { text }), ct);
-        await Task.Delay(500, ct);
-        if (await RunAsync<string>(core, CommentBoxValueScript) != text && !await RunAsync<bool>(core, SetCommentValueScript, ("TEXT", text)))
-        {
-            AppLog.Warn("Comment: the text did not reach the comment box");
-            return CommentOutcome.Rejected;
-        }
-
-        StatusText.Text = "جاري النشر...";
-        Progress.Value = 0.65;
-        await Task.Delay(700 + Random.Shared.Next(0, 700), ct);
-        var submit = await RunAsync<string>(core, SubmitCommentScript);
-        if (submit is "nobutton" or "disabled")
-        {
-            // Enter also posts a comment on Instagram's web page (Shift+Enter is a new line).
-            AppLog.Info($"Comment: post button {submit}, pressing Enter instead");
-            foreach (var type in new[] { "keyDown", "keyUp" })
-                await DevToolsAsync(core, "Input.dispatchKeyEvent", JsonSerializer.Serialize(new
-                {
-                    type, key = "Enter", code = "Enter", windowsVirtualKeyCode = 13, nativeVirtualKeyCode = 13, text = type == "keyDown" ? "\r" : null
-                }), ct);
-        }
-
-        // The comment counts once the box is empty and the text shows on the page.
-        var snippet = text.Split('\n')[0].Trim();
-        if (snippet.Length > 40) snippet = snippet[..40];
-        var last = "pending";
-        for (var attempt = 0; attempt < 20; attempt++)
-        {
-            await Task.Delay(600, ct);
-            last = await RunAsync<string>(core, CheckCommentScript, ("SNIPPET", snippet)) ?? "pending";
-            if (last == "posted") return CommentOutcome.Posted;
-            if (last == "error") return CommentOutcome.Rejected;
-        }
-        return last == "cleared" ? CommentOutcome.Unconfirmed : CommentOutcome.Rejected;
     }
 
     /// <summary>Opens a regular page (a post). Returns "loaded", "login" or "failed".</summary>
