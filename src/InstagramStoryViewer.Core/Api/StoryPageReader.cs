@@ -61,6 +61,19 @@ public static class StoryPageReader
     private static IEnumerable<Reel> Reels(JsonElement e, int depth)
     {
         if (depth > MaxDepth) yield break;
+        if (e.ValueKind == JsonValueKind.String)
+        {
+            // Some preloads carry an answer as a JSON-encoded string.
+            var t = e.GetString();
+            if (t is { Length: > 2 } && t[0] is '{' or '[' && t.Contains("taken_at", StringComparison.Ordinal) && TryParse(t) is { } inner)
+            {
+                using (inner)
+                {
+                    foreach (var r in Reels(inner.RootElement, depth + 1).ToList()) yield return r;
+                }
+            }
+            yield break;
+        }
         if (e.ValueKind == JsonValueKind.Array)
         {
             foreach (var x in e.EnumerateArray())
@@ -89,10 +102,10 @@ public static class StoryPageReader
         {
             var reel = e.Deserialize(ApiJsonContext.Default.Reel);
             if (reel?.Items is null) return null;
-            reel.Items.RemoveAll(i => i.Pk is null && i.Id is null);
+            reel.Items.RemoveAll(i => i is null || (i.Pk is null && i.Id is null));
             return reel.Items.Count > 0 ? reel : null;
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException or NotSupportedException)
         {
             return null;
         }

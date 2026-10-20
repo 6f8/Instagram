@@ -385,8 +385,8 @@ public partial class MainWindow : Window, IDialogService
         if (_watcher is { IsAlive: true }) _watcher.StopCurrent();
     }
 
-    public Task<IReadOnlyList<string>> ReadStoryPageAsync(string cookieHeader, string username) =>
-        RunInWatcherAsync(w => w.ReadStoryPageAsync(cookieHeader, username), background: true);
+    public Task<IReadOnlyList<string>> ReadStoryPageAsync(string cookieHeader, string username, string userId, CancellationToken ct) =>
+        RunInWatcherAsync(w => w.ReadStoryPageAsync(cookieHeader, username, userId, ct), background: true, ct);
 
     public Task<IReadOnlyList<LikeOutcome>> LikeAsync(string cookieHeader, IReadOnlyList<LikeRequest> requests) =>
         RunInWatcherAsync(w => w.LikeAsync(cookieHeader, requests), background: true);
@@ -403,9 +403,10 @@ public partial class MainWindow : Window, IDialogService
     public void ExitApplication() => ExitApp();
 
     /// <summary>Runs one batch (watch or like) in the shared corner window; batches queue behind each other.</summary>
-    private async Task<T> RunInWatcherAsync<T>(Func<StoryWatchWindow, Task<T>> batch, bool background)
+    /// <param name="ct">Stops waiting for the queue (a cancelled wait never takes the window).</param>
+    private async Task<T> RunInWatcherAsync<T>(Func<StoryWatchWindow, Task<T>> batch, bool background, CancellationToken ct = default)
     {
-        await _watchGate.WaitAsync();
+        await _watchGate.WaitAsync(ct);
         try
         {
             if (_watcher is not { IsAlive: true })

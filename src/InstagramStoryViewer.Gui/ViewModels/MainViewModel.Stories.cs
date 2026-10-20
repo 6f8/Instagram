@@ -130,27 +130,13 @@ public sealed partial class MainViewModel
             _currentUserId = userId;
             NotifyCurrentAccountFlags();
 
-            Models.Reel? reel;
-            try
-            {
-                reel = await _client!.GetUserStoriesAsync(userId, ct);
-            }
-            catch (InstagramApiException ex) when ((int?)ex.StatusCode >= 500)
-            {
-                // Instagram's server refuses this account's stories through the API, while its story page may
-                // still show them: read them from the page instead.
-                await HandleErrorAsync(ex, silent: true);
-                EmptyMessage = string.Format(CultureInfo.CurrentCulture, Strings.StoriesReadingPage, username);
-                reel = await ReadStoriesFromPageAsync(username, userId);
-                ct.ThrowIfCancellationRequested();
-                if (reel is null)
-                {
-                    EmptyMessage = string.Format(CultureInfo.CurrentCulture, Strings.StoriesServerError, username);
-                    return;
-                }
-                EmptyMessage = null;
-            }
+            var (reel, refused) = await LoadCurrentReelAsync(username, userId, ct);
             ct.ThrowIfCancellationRequested();
+            if (refused)
+            {
+                EmptyMessage = string.Format(CultureInfo.CurrentCulture, Strings.StoriesServerError, username);
+                return;
+            }
             if (reel?.Items is null)
             {
                 EmptyMessage = string.Format(CultureInfo.CurrentCulture, Strings.NoCurrentStories, username);
@@ -174,11 +160,30 @@ public sealed partial class MainViewModel
         }
     }
 
+    /// <summary>
+    /// An account's current stories. When Instagram's server refuses them through the API (HTTP 5xx), while
+    /// its story page may still show them, they are read from that page instead. Refused = neither gave them.
+    /// </summary>
+    private async Task<(Models.Reel? Reel, bool Refused)> LoadCurrentReelAsync(string username, string userId, CancellationToken ct)
+    {
+        try
+        {
+            return (await _client!.GetUserStoriesAsync(userId, ct), false);
+        }
+        catch (InstagramApiException ex) when ((int?)ex.StatusCode >= 500)
+        {
+            await HandleErrorAsync(ex, silent: true);
+            ShowToast(string.Format(CultureInfo.CurrentCulture, Strings.StoriesReadingPage, username));
+            var reel = await ReadStoriesFromPageAsync(username, userId, ct);
+            return (reel, reel is null);
+        }
+    }
+
     /// <summary>The account's stories as its story page loaded them; null when the page did not give them.</summary>
-    private async Task<Models.Reel?> ReadStoriesFromPageAsync(string username, string userId)
+    private async Task<Models.Reel?> ReadStoriesFromPageAsync(string username, string userId, CancellationToken ct)
     {
         if (_client is null) return null;
-        var texts = await _dialogs.ReadStoryPageAsync(_client.Cookies.ToHeader(), username);
+        var texts = await _dialogs.ReadStoryPageAsync(_client.Cookies.ToHeader(), username, userId, ct);
         var reel = StoryPageReader.FindReel(texts, username, userId);
         AppLog.Info($"Story page fallback for {username}: {texts.Count} answers read, {reel?.Items?.Count ?? 0} stories found");
         return reel;
@@ -210,7 +215,9 @@ public sealed partial class MainViewModel
         if (_client is null) return false;
         try
         {
-            var reel = await _client.GetUserStoriesAsync(row.ReelId, ct);
+            var reel = row.HighlightId is null
+                ? (await LoadCurrentReelAsync(row.Username, row.ReelId, ct)).Reel
+                : await _client.GetUserStoriesAsync(row.ReelId, ct);
             var fresh = reel?.Items?.FirstOrDefault(i => i.Pk == row.Item.Pk);
             if (fresh is null) return false;
             row.ReplaceItem(fresh);

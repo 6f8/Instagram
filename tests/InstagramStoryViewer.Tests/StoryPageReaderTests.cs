@@ -31,4 +31,13 @@ public class StoryPageReaderTests
     [Fact]
     public void Nothing_found_is_null() =>
         Assert.Null(StoryPageReader.FindReel(["""{"data":{"items":[{"pk":"1"}]}}""", ""], "tamerhosny", "7"));
+
+    [Fact]
+    public void Reads_a_reel_carried_as_a_json_string_and_skips_null_items()
+    {
+        var inner = $$$"""{"reels_media":[{"id":"7","user":{"pk":"7","username":"tamerhosny"},"items":[null,{{{Item1}}}]}]}""";
+        var outer = System.Text.Json.JsonSerializer.Serialize(new { result = new { response = inner } });
+        var reel = StoryPageReader.FindReel([outer], "tamerhosny", "7");
+        Assert.Equal("11", Assert.Single(reel!.Items!).Pk);
+    }
 }

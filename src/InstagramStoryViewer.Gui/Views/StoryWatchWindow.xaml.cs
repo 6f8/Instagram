@@ -266,9 +266,10 @@ public partial class StoryWatchWindow : Window
     /// the JSON the page loaded: what it embedded in its HTML and the answers of its own data requests. Used
     /// when Instagram refuses the stories endpoint for an account whose stories the page still shows.
     /// </summary>
-    public async Task<IReadOnlyList<string>> ReadStoryPageAsync(string cookieHeader, string username)
+    public async Task<IReadOnlyList<string>> ReadStoryPageAsync(string cookieHeader, string username, string userId,
+        CancellationToken cancel)
     {
-        _batchCts = new CancellationTokenSource();
+        _batchCts = CancellationTokenSource.CreateLinkedTokenSource(cancel); // Stop, or a newer load / sign-out
         var ct = _batchCts.Token;
         var captured = new List<string>();
         CoreWebView2? core = null;
@@ -285,10 +286,11 @@ public partial class StoryWatchWindow : Window
                 var text = await reader.ReadToEndAsync(ct);
                 if (text.Contains("taken_at", StringComparison.Ordinal)) lock (captured) captured.Add(text);
             }
-            catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or InvalidOperationException
-                                           or ObjectDisposedException or IOException or OperationCanceledException)
+            catch (Exception ex) when (ex is not OutOfMemoryException)
             {
-                // the body was not available (redirect, aborted request) or the window closed
+                // Nothing awaits this handler: any failure (the body was not available, the window closed, an
+                // HRESULT mapped to another exception type) must end here instead of reaching the dispatcher.
+                AppLog.Warn($"Story page: a response body could not be read: {ex.GetType().Name}");
             }
         }
 
@@ -313,11 +315,10 @@ public partial class StoryWatchWindow : Window
             {
                 if (await RunAsync<string[]>(core, EmbeddedStoryDataScript) is { Length: > 0 } embedded)
                     lock (captured) captured.AddRange(embedded);
-                lock (captured) if (captured.Count > 0) break;
+                // Done once the account's own reel is there (other answers may hold other data).
+                lock (captured) if (StoryPageReader.FindReel(captured, username, userId) is not null) break;
                 await Task.Delay(800, ct);
             }
-            // Answers still arriving get a short moment more.
-            await Task.Delay(1000, ct);
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException or InvalidOperationException
                                        or System.Runtime.InteropServices.COMException or WebView2RuntimeNotFoundException

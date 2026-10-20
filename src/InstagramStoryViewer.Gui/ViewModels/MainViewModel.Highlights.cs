@@ -91,7 +91,8 @@ public sealed partial class MainViewModel
         IsLoadingStories = true;
         try
         {
-            var reel = await _client.GetUserStoriesAsync(highlight.Id, _storiesCts.Token);
+            // Supersedes a stories load still running (a slow story-page read would otherwise overwrite this).
+            var reel = await _client.GetUserStoriesAsync(highlight.Id, ResetStoriesCts().Token);
             if (reel?.Items is null)
             {
                 EmptyMessage = string.Format(CultureInfo.CurrentCulture, Strings.HighlightEmpty, highlight.Title);
@@ -127,8 +128,10 @@ public sealed partial class MainViewModel
         IsLoadingStories = true;
         try
         {
-            var reel = await _client.GetUserStoriesAsync(_currentUserId, _storiesCts.Token);
-            if (reel?.Items is null) EmptyMessage = string.Format(CultureInfo.CurrentCulture, Strings.NoCurrentStories, CurrentUsername);
+            var (username, userId) = (CurrentUsername, _currentUserId);
+            var (reel, refused) = await LoadCurrentReelAsync(username, userId, ResetStoriesCts().Token);
+            if (refused) EmptyMessage = string.Format(CultureInfo.CurrentCulture, Strings.StoriesServerError, username);
+            else if (reel?.Items is null) EmptyMessage = string.Format(CultureInfo.CurrentCulture, Strings.NoCurrentStories, CurrentUsername);
             else ShowReelItems(reel.Items, CurrentUsername, _currentUserId, highlightId: null);
         }
         catch (InstagramApiException ex)
