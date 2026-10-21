@@ -210,7 +210,7 @@ public class UserPostsTests
         var ex = await Assert.ThrowsAsync<InstagramStoryViewer.Api.InstagramApiException>(() =>
             TestClient.Create(handler).GetStoriesForUsersAsync(Enumerable.Range(1, 20).Select(i => i.ToString(System.Globalization.CultureInfo.InvariantCulture))));
         Assert.Equal(System.Net.HttpStatusCode.InternalServerError, ex.StatusCode);
-        Assert.True(handler.Requests.Count <= 8, $"{handler.Requests.Count} requests");
+        Assert.True(handler.Requests.Count <= 12, $"{handler.Requests.Count} requests");
     }
 
     [Fact]
@@ -242,5 +242,23 @@ public class UserPostsTests
         var ex = await Assert.ThrowsAsync<InstagramStoryViewer.Api.InstagramApiException>(() => TestClient.Create(handler).GetUserStoriesAsync("7"));
         Assert.Contains("reels_media", ex.RequestPath);
         Assert.Equal(2, handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Several_refused_accounts_do_not_stop_the_others_and_are_left_out_next_time()
+    {
+        var bad = new HashSet<string> { "3", "11" };
+        var handler = new FakeHandler(r => Ids(r).Any(bad.Contains) ? Fail500() : Reels(Ids(r)));
+        var client = TestClient.Create(handler);
+        var all = Enumerable.Range(1, 20).Select(i => i.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToList();
+
+        var reels = await client.GetStoriesForUsersAsync(all);
+        Assert.Equal(18, reels.Count);
+
+        handler.Requests.Clear();
+        reels = await client.GetStoriesForUsersAsync(all);
+        Assert.Equal(18, reels.Count);
+        Assert.Single(handler.Requests); // the refused accounts are no longer asked for
+        Assert.DoesNotContain(Ids(handler.Requests[0]), bad.Contains);
     }
 }

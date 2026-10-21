@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using InstagramStoryViewer.Json;
 using InstagramStoryViewer.Models;
@@ -288,24 +287,44 @@ public sealed class InstagramClient : IDisposable
 
     /// <summary>Current stories of several users in one request (up to 20 ids per call).</summary>
     /// <remarks>
-    /// Instagram sometimes answers a whole batch with HTTP 500 ("something went wrong"), because of one account
-    /// in it or because the batch is too large; sending the same batch again gives the same answer. Such a batch
-    /// is split in halves instead, and an account that still fails on its own is skipped, so one account cannot
-    /// stop the stories of all the others. A general outage still fails the call after a few attempts.
+    /// Instagram answers a batch with HTTP 500 ("something went wrong") whenever one account in it is one it
+    /// refuses; sending the same batch again gives the same answer. Such a batch is split in halves instead, and
+    /// an account that still fails on its own is skipped and remembered for a few hours, so later calls leave it
+    /// out from the start. The stories of all the other accounts are returned. Only when nothing at all could be
+    /// read (an outage) does the call fail, after a bounded number of requests.
     /// </remarks>
     public async Task<List<Reel>> GetStoriesForUsersAsync(IEnumerable<string> userIds, CancellationToken ct = default)
     {
+        var now = _time.GetUtcNow().UtcDateTime;
+        var ids = userIds.Distinct().Where(id => !(_refusedReels.TryGetValue(id, out var until) && until > now)).ToList();
         var result = new List<Reel>();
-        var failures = new StrongBox<int>();
-        foreach (var chunk in userIds.Distinct().Chunk(20))
-            await ReadReelsAsync(chunk, result, failures, ct).ConfigureAwait(false);
+        var state = new ReelsReadState();
+        foreach (var chunk in ids.Chunk(20))
+        {
+            await ReadReelsAsync(chunk, result, state, ct).ConfigureAwait(false);
+        }
+        if (state.LastError is { } error && state.Succeeded == 0) throw error;
+        // Remembered only when other accounts worked: during an outage every account fails alone too.
+        foreach (var id in state.Refused) _refusedReels[id] = now + RefusedReelMemory;
         return result;
     }
 
-    private const int MaxReelsFailures = 8;
+    /// <summary>Accounts whose stories Instagram refused (HTTP 5xx) recently, until when they are left out.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _refusedReels = new();
+    private static readonly TimeSpan RefusedReelMemory = TimeSpan.FromHours(6);
+    private const int MaxReelsFailures = 12;
 
-    private async Task ReadReelsAsync(string[] ids, List<Reel> result, StrongBox<int> failures, CancellationToken ct)
+    private sealed class ReelsReadState
     {
+        public int Failures;
+        public int Succeeded;
+        public InstagramApiException? LastError;
+        public List<string> Refused { get; } = new();
+    }
+
+    private async Task ReadReelsAsync(string[] ids, List<Reel> result, ReelsReadState state, CancellationToken ct)
+    {
+        if (state.Failures >= MaxReelsFailures) return; // gave up for this call
         var query = string.Join("&", ids.Select(id => "reel_ids=" + Uri.EscapeDataString(id)));
         ReelsMediaResponse res;
         try
@@ -313,18 +332,26 @@ public sealed class InstagramClient : IDisposable
             res = await SendAsync<ReelsMediaResponse>(HttpMethod.Get, "/api/v1/feed/reels_media/?" + query, null, ct,
                 retryServerErrors: false).ConfigureAwait(false);
         }
-        catch (InstagramApiException ex) when ((int?)ex.StatusCode >= 500 && ++failures.Value < MaxReelsFailures)
+        catch (InstagramApiException ex) when ((int?)ex.StatusCode >= 500)
         {
+            state.LastError = ex;
+            if (++state.Failures >= MaxReelsFailures)
+            {
+                Diagnostics.AppLog.Warn($"reels_media: gave up on {ids.Length} account(s) for now (HTTP {(int?)ex.StatusCode})");
+                return;
+            }
             if (ids.Length == 1)
             {
-                Diagnostics.AppLog.Warn($"reels_media: skipped account {ids[0]} (HTTP {(int?)ex.StatusCode})");
+                state.Refused.Add(ids[0]);
+                Diagnostics.AppLog.Warn($"reels_media: skipped account {ids[0]} (HTTP {(int?)ex.StatusCode}), left out for {RefusedReelMemory.TotalHours:0} h");
                 return;
             }
             var half = ids.Length / 2;
-            await ReadReelsAsync(ids[..half], result, failures, ct).ConfigureAwait(false);
-            await ReadReelsAsync(ids[half..], result, failures, ct).ConfigureAwait(false);
+            await ReadReelsAsync(ids[..half], result, state, ct).ConfigureAwait(false);
+            await ReadReelsAsync(ids[half..], result, state, ct).ConfigureAwait(false);
             return;
         }
+        state.Succeeded++;
         var reels = res.ReelsMedia ?? res.Reels?.Values.ToList() ?? new List<Reel>();
         foreach (var reel in reels.Where(r => r.Items is { Count: > 0 }))
         {
